@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lanowl"
+version = "0.0.1"
+description = "A watchful, read-only caretaker for home and small-office networks"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Alessandro Matera" }]
+requires-python = ">=3.11"
+keywords = ["network", "monitoring", "homelab", "mikrotik", "openwrt"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Networking :: Monitoring",
+]
