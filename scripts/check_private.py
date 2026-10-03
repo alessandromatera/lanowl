@@ -7,11 +7,15 @@ guards. Point at it with LANOWL_DENYLIST (default ~/.config/lanowl/house-denylis
     python scripts/check_private.py            # exit 1 and list the hits
     python scripts/check_private.py --quiet    # counts per file only
     python scripts/check_private.py DIR        # check another tree instead of this repo
+
+In a git work tree it checks what git would commit (tracked files, and new ones not ignored):
+an ignored file never leaves the machine, so it may name what it likes.
 """
 from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 
 SKIP_DIRS = {".git", ".venv", ".test-logs", "dist", "build", "__pycache__", ".mypy_cache", ".pytest_cache"}
@@ -25,6 +29,16 @@ def load(path: str) -> list:
 
 
 def files(root: str):
+    try:
+        out = subprocess.run(["git", "-C", root, "ls-files", "-z", "--cached", "--others",
+                              "--exclude-standard"], capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        out = None                                     # not a git work tree: every file
+    if out is not None:
+        for rel in out.decode().split("\0"):
+            if rel and os.path.isfile(os.path.join(root, rel)):
+                yield os.path.join(root, rel)
+        return
     for d, dirs, names in os.walk(root):
         dirs[:] = [x for x in dirs if x not in SKIP_DIRS]
         for n in names:

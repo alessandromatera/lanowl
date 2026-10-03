@@ -9,6 +9,9 @@ id_*
 telegram_token
 mikrotik
 
+# --- the maintainer's own notes and plan (they name a real house) ----------------
+.claude/
+
 # --- local state -------------------------------------------------------------
 *.sqlite
 *.sqlite-*
