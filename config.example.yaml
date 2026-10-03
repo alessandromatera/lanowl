@@ -1,0 +1,295 @@
+# lanowl — configuration. Copy to config.yaml and edit.
+#
+# The essentials come first; everything optional is switched off and says what it needs.
+# Secrets never go in this file: device logins live in secrets.yaml (see
+# secrets.example.yaml), the Telegram token in its own file or LANOWL_TG_TOKEN.
+# Inside the container this file is /config/config.yaml; relative paths are under /state.
+
+# --- your network, in your own words ------------------------------------------------------
+# Added to every prompt the model reads: what no inventory says. The links, the sites, what
+# runs where, what matters, what you chose on purpose. Plain sentences; a few lines is plenty.
+network:
+  description: |
+    A home LAN 192.168.88.0/24 behind a MikroTik router (192.168.88.1), one fibre line to the
+    internet. IoT devices share the main LAN on purpose. Guests use their own Wi-Fi.
+
+# --- the model (optional: everything works without it) -----------------------------------
+ollama:
+  url: "http://127.0.0.1:11434"     # or LANOWL_OLLAMA_URL — the model often runs on another machine
+  model: "qwen3:30b"                # any Ollama model with tool calling; bigger reasons better
+  think: true
+  num_ctx: 32768                    # every tool result stays in the prompt: give it room
+  keep_alive: "10m"                 # how long the model stays loaded after a call
+  request_timeout_s: 300
+  max_tool_iters: 10
+  temperature: 0.2
+  persona: "owl"                    # the voice of the model's prose: "owl", or "" for none
+
+# --- Telegram: alerts out, questions in ---------------------------------------------------
+telegram:
+  chat_id: ""                       # your chat with the bot (send it /start, then read getUpdates)
+  bot_token_env: "LANOWL_TG_TOKEN"  # the token from the environment...
+  token_file: "/config/telegram_token"   # ...or from this file (mode 600)
+  outbox_file: "tg_outbox.json"     # what could not be sent during an outage, sent when it is back
+  chat:
+    enabled: true                   # answer questions and /commands
+    allowed_chat_ids: []            # only these chats are answered (put chat_id here)
+    poll_timeout_s: 50
+    answer_max_wall_s: 600
+    max_iters: 16
+
+# --- the dashboard ------------------------------------------------------------------------
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 80                          # or LANOWL_WEB_PORT
+  allowed_hosts: []                 # host names allowed besides IP addresses (DNS-rebinding guard)
+
+# --- how often, and how quiet ---------------------------------------------------------------
+cadence:
+  sweep_interval_s: 60              # every device probed once a minute
+  debounce_fails: 2                 # misses in a row before a device is down
+  recovery_oks: 1
+  llm_mode: "interval"              # the model's audit: "interval" or "times"
+  llm_interval_s: 3600
+  llm_times: ["08:00", "13:00", "20:00"]
+  llm_on_incident: true             # a new critical: the model diagnoses it, edited into the alert
+  llm_incident_cooldown_s: 600
+  llm_max_wall_s: 900
+  digest_when_ok: false             # no digest when there is nothing to say
+
+alerts:                             # one message per incident, never one per flap
+  recovery_confirm_s: 900           # clear this long before "RECOVERED"
+  cooldown_s: 3600                  # the same problem stays quiet this long after it recovers
+  renotify_after_s: 0               # re-ping a problem that never clears (0 = never)
+  digest_repeat_s: 86400            # re-state a still-open problem once a day
+  notify_recovery: true
+  recovery_min_severity: "info"
+
+probes:
+  concurrency: 32
+  icmp_timeout_ms: 1500
+  tcp_timeout_ms: 1500
+  http_timeout_ms: 4000
+  snmp_timeout_s: 2
+  snmp_community: "public"
+
+# --- the internet ---------------------------------------------------------------------------
+wan:
+  targets: ["8.8.8.8", "208.67.222.222", "1.0.0.1"]   # neutral public addresses: "is there internet?"
+  critical: true
+  watch:
+    enabled: true
+    interval_s: 15                  # its own ping loop, faster than the sweep
+    fail_checks: 2
+    ok_checks: 1
+    min_outage_s: 90                # blackouts shorter than this are counted, not paged
+    state_messages: true
+    log_interval_s: 60
+    flap_hold_s: 60
+    flap_severity: "critical"
+    # A failover script's own router-log lines for the main link going down and up. Both, or
+    # neither: without them no link edges come from the log.
+    log_down_match: ""
+    log_up_match: ""
+    routine: []                     # more router-log lines that are just failover chatter
+    log_triage:                     # the model reads router-log lines no rule explains
+      enabled: true
+      cooldown_s: 900
+      timeout_s: 90
+      max_lines: 40
+      notify_severities: ["critical", "warning"]
+  # A BACKUP internet link (dual WAN on a MikroTik). Without route_comment there is one line:
+  # the internet is ok or down, and nothing speaks of a backup.
+  path:
+    route_comment: ""               # the comment on the MAIN default route on the router
+    main: "main link"               # what you call each link, in every message
+    backup: "backup link"
+    severity: "critical"            # being on the backup pages (or "warning": digest only)
+    interval_s: 300
+    main_probe: ""                  # an address the router sends ONLY over each link (link_test)
+    backup_probe: ""
+    backup_standby: false           # the backup switches its uplink on only when chosen
+  # A standby backup's own device (e.g. a MikroTik on LTE whose netwatch enables its uplink when
+  # the main router goes quiet), read only while the main link is down. Optional.
+  # standby: {ip: "192.168.88.2", iface: "lte1", probe: "1.1.1.1", every_s: 30, grace_s: 120}
+
+# --- the main router (MikroTik) ---------------------------------------------------------------
+mikrotik:
+  dhcp_source: "http://192.168.88.1"   # the router's REST base: DHCP leases, routes, the log
+  user: ""                             # or LANOWL_MIKROTIK_USER — a read-only user
+  password: ""                         # or LANOWL_MIKROTIK_PASS
+  secret_file: "/config/mikrotik"      # or a 'user:password' file (mode 600)
+  lanowl_group: "lanowl-ro"            # the router group of that user...
+  lanowl_policy: [read, test, sniff, api, rest-api]   # ...and what you granted it on purpose
+  verify_tls: false
+  discovery_interval_s: 300
+  interface_interval_s: 60
+  api:                                 # one kept api-ssl connection instead of REST polling
+    enabled: false
+    port: 8729
+    fingerprint: ""                    # the router certificate's SHA-256, pinned
+    heartbeat_s: 30
+    timeout_s: 10
+
+discovery:
+  notify_new_devices: true
+  notify_address_changes: true
+  new_window_h: 24
+  guest_nets: []                    # e.g. ["192.168.89.0/24"]: clients marked as guests
+  ignore_macs: []
+  ignore_ips: []
+
+# The networks lanowl looks after. "home" is the main site; add remote ones reached over a VPN.
+sites:
+  dhcp_every_min: 30
+  scan: {enabled: true, at: "05:00", seconds: 30}
+  list:
+    - {key: home, name: "Home", nets: ["192.168.88.0/24"]}
+    # - {key: office, name: "Office", nets: ["10.8.0.9/32", "192.168.0.0/24"], router: "10.8.0.9",
+    #    kind: routeros, criticality: info}
+
+# Sunrise and sunset, for gear that is off at night (solar) or by day (dusk-to-dawn lights).
+site:
+  lat: 48.0                         # rough is fine
+  lon: 11.0
+  sun_margin_min: 60
+  day_margin_min: 45
+  offline_grace_min: 30
+
+observer:                           # lanowl's own host, so its own outage is not "everything is down"
+  enabled: true
+  host_ip: ""                       # or LANOWL_HOST_IP
+  gateway_ip: ""                    # default: the router in mikrotik.dhcp_source
+  min_down_pct: 60
+  min_groups: 3
+
+mqtt:                               # optional: publish results, read existing topics
+  host: ""                          # empty: MQTT off
+  port: 1883
+  tls: false
+  username: ""                      # or LANOWL_MQTT_USER / LANOWL_MQTT_PASS
+  password: ""
+  base_topic: "lanowl"
+  subscribe: []                     # e.g. ["shellies/#"]: last-seen values the model can read
+
+weekly: {enabled: true, day: "sun", time: "10:00"}
+
+state:
+  db_path: "lanowl_state.sqlite"
+  history_days: 30
+logging:
+  level: "INFO"
+  file: "lanowl.log"
+
+# =============================================================================================
+# Optional features. Each is off until you switch it on and tell it where things are.
+# =============================================================================================
+
+# Logins for devices (reboots, updates, backups, config diffs): secrets.yaml.
+access:
+  secrets_file: "/config/secrets.yaml"
+  known_hosts: "known_hosts_devices"
+  hostkey_any: []                   # devices that make a new ssh host key at every boot
+  ha_url: ""                        # Home Assistant, for its updates and restarts
+  ha_token_file: "/config/ha_token"
+
+# Actions the model may PROPOSE and you approve with a button (or the PIN on the dashboard).
+actions:
+  enabled: false
+  mode: "shadow"                    # "shadow": record what WOULD run; "live": it runs
+  expire_min: 15
+  max_pending: 3
+  max_per_day: 20
+  repeat_after_h: 24
+  pin_sha256: ""                    # sha256 of your PIN; empty: no approvals from the dashboard
+  pin_max_failures: 5
+  pin_lockout_min: 30
+  catalog:
+    nmap_scan: {deny_groups: ["security"]}
+    nmap_service: {deny_groups: ["security", "iot"]}
+    shelly_reboot: {}
+    # restart_service: {host: "192.168.88.10", units: ["mosquitto"]}   # needs a NOPASSWD sudoers rule
+    # vps_restart: {host: "203.0.113.10", units: ["wg-quick@wg0"]}
+    # apt_upgrade: {hosts: {"192.168.88.10": {via: password}}}
+    # routeros_upgrade: {hosts: {"192.168.88.1": {}}}
+    # reboot: {hold_min: 5, devices: {"192.168.88.5": {via: routeros}}}
+  session:                          # investigation sessions: the model's own diagnostics
+    minutes: 15
+    max_checks: 10
+    audit_checks: 3
+    max_per_day: 8
+    max_iters: 24
+    turn_max_s: 600
+  checks:
+    lan_subnets: ["192.168.88.0/24"]
+    home_server: ""                 # another LAN host to look from (ssh, as a hostlog host)
+    vps: ""                         # a public server to look from
+    router_dns: ""                  # default: the router
+    router_lan_bridge: "bridge"
+    vps_iface: "eth0"
+
+# Linux hosts whose auth log is read for security events (ssh by key).
+hostlog:
+  enabled: false
+  interval_s: 120
+  ssh:
+    binary: "ssh"
+    connect_timeout_s: 8
+    command_timeout_s: 30
+    control_path: "/tmp/lanowl-hostlog-%C"
+    control_persist: "1h"
+    identity: "/config/id_ed25519"
+  hosts: []
+  # - {name: "Home server", ip: "192.168.88.10", user: "admin"}
+  # - {name: "VPS", ip: "203.0.113.10", user: "root", public: true}
+  burst: {enabled: true, window_s: 300, fail_attempts: 8, repeat_s: 3600}
+  connections: {enabled: true, max_established: 400, confirm_polls: 2, repeat_s: 3600}
+  triage: {enabled: true, cooldown_s: 900, timeout_s: 90, fetch_lines: 400, max_lines: 40,
+           notify_severities: ["critical", "warning"]}
+
+# Updates, pending reboots, and a monthly vulnerability scan.
+updates:
+  enabled: false
+  at: "06:30"
+  hosts: []                         # [{ip, via: key|password|sudo|routeros|openwrt|unifi|esxi|homeassistant}]
+  scan: {enabled: true, day: 1, at: "04:00", top_ports: 1000, deny_groups: ["security", "iot"]}
+cves:
+  after_review: true
+  ssh_facts: {}
+
+# The model's daily security review of what each machine exposes.
+exposure:
+  enabled: false
+  page_from: ""                     # "YYYY-MM-DD": watch what it finds for a while before it pages
+  outside_scan: {top_ports: 1000, max_rate: 20}
+  public_names: []                  # your own host names, looked at from outside
+  hosts: []
+
+# The model's scheduled looks: what is slowly changing, and what changed in configurations.
+drift: {enabled: false, at: "07:30"}
+configwatch: {enabled: false, machines: []}
+fixes: {enabled: false}
+scorecard: {enabled: false, max_per_day: 6}
+
+# Backups of the machines onto a disk of yours (a Linux host lanowl reaches by its ssh key).
+backups:
+  enabled: false
+  day: 1
+  at: "03:00"
+  keep: 6
+  keep_before_days: 90
+  snapshot_days: 7
+  store: {host: "", path: "/srv/lanowl-backups", share: "", group: ""}
+  machines: []                      # [{ip, via: routeros|homeassistant|vps|store|files|esxi|shellies|lanowl}]
+
+# The model's shell, in a sandbox beside lanowl (docker/sandbox). Off until the sandbox runs.
+shell:
+  enabled: false
+  socket: "/run/sandbox/exec.sock"
+  timeout_s: 60
+  timeout_max_s: 300
+  output_max_chars: 6000
+  max_per_answer: 20
+  canary_lan: ""                    # a LAN service that always answers a handshake, e.g. "192.168.88.10:22"
+  audit: {enabled: false, socket: "/run/sandbox-offline/exec.sock", max_per_audit: 4, timeout_max_s: 120}

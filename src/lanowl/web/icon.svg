@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f2a44"/>
+      <stop offset="1" stop-color="#0b1020"/>
+    </linearGradient>
+    <linearGradient id="ok" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- the owl: ear tufts, head and body in one line -->
+  <path d="M140 206 L150 118 L210 168 Q256 154 302 168 L362 118 L372 206 Q392 250 380 298 Q356 392 256 408 Q156 392 132 298 Q120 250 140 206 Z"
+        fill="none" stroke="#fff" stroke-width="24" stroke-linejoin="round"/>
+  <!-- the eyes, open: watching -->
+  <circle cx="204" cy="252" r="48" fill="none" stroke="#fff" stroke-width="20"/>
+  <circle cx="308" cy="252" r="48" fill="none" stroke="#fff" stroke-width="20"/>
+  <circle cx="204" cy="252" r="20" fill="url(#ok)"/>
+  <circle cx="308" cy="252" r="20" fill="url(#ok)"/>
+  <!-- the beak -->
+  <path d="M256 296 L240 320 L256 344 L272 320 Z" fill="#fbbf24"/>
+</svg>

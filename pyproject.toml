@@ -4,18 +4,30 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lanowl"
-version = "0.0.1"
+version = "0.1.0.dev0"
 description = "A watchful, read-only caretaker for home and small-office networks"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Alessandro Matera" }]
 requires-python = ">=3.11"
-keywords = ["network", "monitoring", "homelab", "mikrotik", "openwrt"]
+keywords = ["network", "monitoring", "homelab", "mikrotik", "openwrt", "ollama"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: System Administrators",
     "Programming Language :: Python :: 3",
     "Topic :: System :: Monitoring",
     "Topic :: System :: Networking :: Monitoring",
 ]
+dependencies = [
+    "PyYAML>=6.0",       # config, inventory, secrets
+    "aiohttp>=3.9",      # HTTP checks, the model, MikroTik REST, the dashboard
+    "paho-mqtt>=1.6",    # optional MQTT: publish results, read existing topics
+    "icmplib>=3.0",      # unprivileged ping; falls back to the system's `ping`
+]
+
+[project.scripts]
+lanowl = "lanowl.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lanowl"]

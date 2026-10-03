@@ -1,0 +1,93 @@
+# lanowl — docker compose. From the repository root:
+#
+#   cp config.example.yaml config/config.yaml        # and inventory.example.yaml, secrets.example.yaml
+#   cp docker/env.example docker/.env                 # your host's address, the model's URL, TZ
+#   docker compose -f docker/compose.yaml up -d
+#   docker compose -f docker/compose.yaml --profile shell up -d    # with the model's sandboxed shells
+#
+# Host networking: on Linux, lanowl sees the network as the host does — mtr and traceroute see
+# every hop, ARP and packet captures see the real wire. (Docker Desktop on a Mac or Windows
+# works too, behind its own NAT: per-hop tools then see only the target.)
+# The host must allow unprivileged ping: sysctl net.ipv4.ping_group_range="0 2147483647"
+# (Debian ships it closed, and then every device reads DOWN).
+name: lanowl
+
+services:
+  lanowl:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: lanowl:latest
+    container_name: lanowl
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ../config:/config:ro                    # config.yaml, inventory.yaml, secrets.yaml, tokens, ssh key
+      - lanowl-state:/state                     # the database, the log, the outbox
+      - lanowl-ssh:/root/.ssh                   # known_hosts for the host-log watcher
+      - sandbox-sock:/run/sandbox:ro
+      - sandbox-offline-sock:/run/sandbox-offline:ro
+
+  # The model's shell, for the owner's questions: internet open, the LAN for handshakes only.
+  sandbox:
+    profiles: ["shell"]
+    build:
+      context: ..
+      dockerfile: docker/sandbox/Dockerfile
+    image: lanowl-sandbox:latest
+    container_name: lanowl-sandbox
+    restart: unless-stopped
+    networks: [sandbox]
+    read_only: true
+    tmpfs:
+      - /work:size=64m,mode=1777
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN]   # NET_ADMIN only to set its own firewall, then dropped
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    env_file: .env
+    volumes:
+      - sandbox-sock:/run/sandbox
+
+  # The hourly audit's shell: the same walls, and no internet and no DNS at all.
+  sandbox-offline:
+    profiles: ["shell"]
+    image: lanowl-sandbox:latest
+    pull_policy: never
+    container_name: lanowl-sandbox-offline
+    restart: unless-stopped
+    networks: [sandbox]
+    read_only: true
+    tmpfs:
+      - /work:size=64m,mode=1777
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    env_file: .env
+    environment:
+      SANDBOX_OFFLINE: "1"
+    volumes:
+      - sandbox-offline-sock:/run/sandbox
+
+volumes:
+  lanowl-state:
+  lanowl-ssh:
+  sandbox-sock:
+  sandbox-offline-sock:
+
+networks:
+  sandbox:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-lanowl-sb
+    ipam:
+      config:
+        - subnet: 172.31.99.0/24

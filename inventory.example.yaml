@@ -1,0 +1,100 @@
+# lanowl — the devices it watches. Copy to inventory.yaml and edit.
+#
+# Every address lanowl probes, and every one the model's tools may touch, is here: an
+# address that is not is refused. Start small — the dashboard lists what the router's DHCP
+# sees and nobody watches, with a Watch button.
+#
+# criticality: critical (pages at once) | high | warning | low | info (reported once, never pages)
+# checks:      icmp | tcp (port) | http (port, path) | snmp | arp (the router ARP-pings it) |
+#              link (iface: the router port it hangs off) | lease (its DHCP lease; least reliable)
+#              each may carry timeout_ms (and count for icmp) for gear on weak Wi-Fi
+# optional:    mac (follows it when DHCP moves it) · role · note · depends_on (an address, or
+#              "wan": down because what it is reached through is down — one message, not many)
+#              · expect_offline: sun (off at night) | day (off in daylight) · debounce_fails ·
+#              credentials (a login name in secrets.yaml)
+
+groups:
+  # majority_down_critical: most of a group dark at once is ONE critical (a switch, PoE, power)
+  network:  {majority_down_critical: true}
+  cameras:  {majority_down_critical: true}
+  servers:  {majority_down_critical: false}
+  home:     {majority_down_critical: false}
+  iot:      {majority_down_critical: false}
+  media:    {majority_down_critical: false}
+  vpn:      {majority_down_critical: false}
+
+devices:
+  - ip: 192.168.88.1
+    name: "Router"
+    group: network
+    criticality: critical
+    role: main-router
+    credentials: routers
+    checks:
+      - {type: icmp}
+      - {type: http, port: 80}
+
+  - ip: 192.168.88.2
+    name: "AP Living room"
+    group: network
+    criticality: high
+    role: ap
+    credentials: routers
+    checks:
+      - {type: icmp}
+
+  - ip: 192.168.88.10
+    name: "Home server"
+    group: servers
+    criticality: critical
+    checks:
+      - {type: icmp}
+      - {type: tcp, port: 22}
+      - {type: tcp, port: 1883, name: "MQTT"}        # a named check is a service on the dashboard
+
+  - ip: 192.168.88.20
+    name: "NVR"
+    group: cameras
+    criticality: critical
+    checks:
+      - {type: icmp}
+      - {type: tcp, port: 554}
+
+  - ip: 192.168.88.40
+    name: "Shelly Kitchen"
+    group: home
+    criticality: low
+    checks:
+      - {type: icmp, timeout_ms: 2500, count: 3}     # weak Wi-Fi: more patience, not fewer probes
+
+  - ip: 192.168.88.50
+    name: "Solar inverter"
+    group: home
+    criticality: warning
+    expect_offline: sun                               # powered by the panels: dark at night
+    checks:
+      - {type: icmp}
+
+  - ip: 192.168.88.60
+    name: "TV"
+    group: media
+    criticality: info                                 # off most of the time: told once, never paged
+    checks:
+      - {type: icmp}
+
+  # A remote site, reached through a VPN hub: down with its parent, never on its own.
+  # - ip: 203.0.113.10
+  #   name: "VPS"
+  #   group: vpn
+  #   criticality: warning
+  #   depends_on: wan
+  #   checks:
+  #     - {type: tcp, port: 22}                       # many VPSs drop ping
+  # - ip: 10.8.0.9
+  #   name: "Office router"
+  #   group: vpn
+  #   criticality: info
+  #   depends_on: 203.0.113.10
+  #   debounce_fails: 5                               # a tunnel re-keys after a failover
+  #   checks:
+  #     - {type: icmp}

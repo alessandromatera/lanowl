@@ -1,19 +1,26 @@
-# --- secrets: never commit -------------------------------------------------
+# --- secrets and your own config: never commit ------------------------------
+config/
 secrets.yaml
 *.secrets.yaml
 .env
+docker/.env
 *.key
 id_*
+telegram_token
+mikrotik
 
 # --- local state -------------------------------------------------------------
 *.sqlite
 *.sqlite-*
 *.log
+tg_outbox.json
+known_hosts_devices
 
 # --- generated ---------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .venv/
+.test-logs/
 dist/
 build/
 *.egg-info/
