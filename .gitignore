@@ -1,0 +1,20 @@
+# --- secrets: never commit -------------------------------------------------
+secrets.yaml
+*.secrets.yaml
+.env
+*.key
+id_*
+
+# --- local state -------------------------------------------------------------
+*.sqlite
+*.sqlite-*
+*.log
+
+# --- generated ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+.DS_Store
