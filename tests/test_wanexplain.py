@@ -27,6 +27,8 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+# the router's read-only login, as a deployment may give it: from the environment
+os.environ["LANOWL_MIKROTIK_USER"], os.environ["LANOWL_MIKROTIK_PASS"] = "lanowl", "p"
 
 from lanowl import probes, wanexplain, wanwatch
 from lanowl.state import StateStore
@@ -51,7 +53,7 @@ CFG = {
             "watch": {"enabled": True, "interval_s": 15, "fail_checks": 2, "ok_checks": 1,
                       "min_outage_s": 90, "log_interval_s": 60},
             "path": {"interval_s": 300, "route_comment": "Fiber", "main": "fiber", "backup": "antenna"}},
-    "mikrotik": {"dhcp_source": "http://192.168.10.1", "user": "lanowl", "password": "p"},
+    "mikrotik": {"dhcp_source": "http://192.168.10.1"},
     "probes": {"icmp_timeout_ms": 1500},
     "alerts": {"recovery_confirm_s": 900, "cooldown_s": 3600},
 }

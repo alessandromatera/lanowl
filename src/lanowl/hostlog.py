@@ -48,6 +48,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
 
+from . import access
 from .seclog import rank
 from .wanwatch import verdict_kind
 
@@ -215,7 +216,7 @@ class _Host:
     name: str
     ip: str
     user: str
-    identity: str = ""                # its own key file; "" = hostlog.ssh.identity
+    identity: str = ""                # its own key file; "" = lanowl's (secrets.yaml `ssh_key`)
     # its log is read (`manage: [logs]`); a host lanowl only logs in to by key is listed too,
     # for the shared connection the key's other uses ride (actions._ssh_run)
     watch: bool = True
@@ -387,8 +388,9 @@ class HostLogWatcher:
                 "-o", "ControlMaster=auto",
                 "-o", f"ControlPath={s.get('control_path', '/tmp/lanowl-hostlog-%C')}",
                 "-o", f"ControlPersist={s.get('control_persist', '1h')}"]
-        if h.identity or s.get("identity"):
-            argv += ["-i", str(h.identity or s["identity"])]
+        key = h.identity or access.ssh_key(self.cfg)
+        if key:
+            argv += ["-i", key]
         argv += [f"{h.user}@{h.ip}", remote]
         return argv
 

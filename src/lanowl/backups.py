@@ -51,6 +51,7 @@ import tempfile
 import time
 from typing import Optional
 
+from . import access
 from .checks import _exec
 from .reboot import routeros_field
 from .report import _html, label
@@ -62,12 +63,24 @@ VIAS = ("routeros", "homeassistant", "vps", "store", "files", "esxi", "shellies"
         "profile")
 KINDS = ("monthly", "before-update", "manual")
 _DIR = re.compile(r"^(\d{4}-\d{2}-\d{2}_\d{4})_(monthly|before-update|manual|daily)$")
-# lanowl's own files, as mounted in its container (docker/compose.yaml)
-LANOWL_FILES = ("/state/secrets.yaml", "/state/.tg_token", "/state/.mikrotik", "/state/.ha_token",
-                 "/root/.ssh/id_ed25519", "/root/.ssh/id_ed25519.pub", "/root/.ssh/known_hosts",
-                 "/state/known_hosts_devices", "/app/config.yaml", "/app/inventory.yaml")
 STALE_S = 62 * 86400               # no good backup for two months: worth a message
 Q = shlex.quote
+
+
+def lanowl_files(a) -> list:
+    """lanowl's own files, wherever its config puts them, those that exist: config.yaml,
+    the inventory, secrets.yaml, the profiles folder, its ssh key and the known hosts."""
+    cfg = a.cfg
+    key = access.ssh_key(cfg)               # none named: ssh's own, which lanowl does not own
+    out = []
+    for p in [cfg.get("_path"), getattr(a.inv, "path", ""), access.secrets_path(cfg),
+              (cfg.get("profiles") or {}).get("dir"), key, key and key + ".pub",
+              a.access.known_hosts, os.path.expanduser("~/.ssh/known_hosts")]:
+        p = os.path.abspath(str(p)) if p else ""
+        if p and os.path.exists(p) and p not in out:
+            out.append(p)
+    return out
+
 
 # a server's configuration (`via: vps`), unless the machine lists its own `paths`
 VPS_PATHS = (
@@ -468,7 +481,7 @@ class Backups:
         finally:
             with contextlib.suppress(OSError):
                 os.unlink(tmp)
-        paths = [f for f in LANOWL_FILES if os.path.exists(f)]
+        paths = lanowl_files(self.a)
         files.append(await self._put_stream(d, "lanowl-files.tgz", ["tar", "czf", "-", *paths],
                                             timeout_s=120))
         note = (f"lanowl's own backup, {stamp}.\n"

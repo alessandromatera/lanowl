@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover
 class MqttBridge:
     def __init__(self, cfg: dict):
         self.cfg = cfg.get("mqtt", {})
+        self.root = cfg                    # the whole config: its login is in secrets.yaml
         self.base = self.cfg.get("base_topic", "lanowl")
         # optional: no broker configured, no MQTT (everything else works without it)
         self.enabled = mqtt is not None and bool(self.cfg.get("host"))
@@ -53,9 +54,10 @@ class MqttBridge:
                 self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)  # paho 2.x
             except Exception:
                 self.client = mqtt.Client()                                   # paho 1.x
-            user = self.cfg.get("username") or ""
-            if user:
-                self.client.username_pw_set(user, self.cfg.get("password") or "")
+            from . import access
+            lg = access.service_login(self.root, "mqtt")   # none: an anonymous broker
+            if lg.user:
+                self.client.username_pw_set(lg.user, lg.password)
             if self.cfg.get("tls"):
                 self.client.tls_set()
             self.client.on_connect = self._on_connect
@@ -267,20 +269,10 @@ class TelegramOutbox:
 
 
 def resolve_tg_token(cfg: dict) -> str:
-    """Token from env (LANOWL_TG_TOKEN) first, else from a protected file
-    (telegram.token_file, default `.tg_token` in the working dir)."""
-    tg = cfg.get("telegram", {})
-    tok = os.environ.get(tg.get("bot_token_env", "LANOWL_TG_TOKEN"), "")
-    if tok:
-        return tok.strip()
-    tf = tg.get("token_file", ".tg_token")
-    if tf:
-        try:
-            with open(os.path.expanduser(tf), "r") as f:
-                return f.read().strip()
-        except Exception:
-            pass
-    return ""
+    """The bot's token: LANOWL_TG_TOKEN, its _FILE, else secrets.yaml's `tokens.telegram`
+    (access.py) — read at every use, so a new token needs no restart."""
+    from . import access
+    return access.token(cfg, "telegram")
 
 
 # Telegram's own limit on one message. Longer text is split on line boundaries.

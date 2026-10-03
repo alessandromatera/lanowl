@@ -21,6 +21,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+# the router's read-only login, as a deployment may give it: from the environment
+os.environ["LANOWL_MIKROTIK_USER"], os.environ["LANOWL_MIKROTIK_PASS"] = "lanowl", "p"
 
 from lanowl import probes, wanwatch
 from lanowl.wanwatch import Flap, WanWatcher
@@ -48,9 +50,9 @@ CFG = {
                                  "notify_severities": ["critical", "warning"]}},
         "path": {"interval_s": 300, "route_comment": "Fiber", "main": "fiber", "backup": "antenna"},
     },
-    # the username matters: lanowl's own REST logins are filtered by it (see
-    # WanWatcher._routine_patterns), so the fixtures below use the real one
-    "mikrotik": {"dhcp_source": "http://router", "user": "lanowl", "password": "p"},
+    # the username matters (LANOWL_MIKROTIK_USER above): lanowl's own REST logins are filtered
+    # by it (see WanWatcher._routine_patterns), so the fixtures below use the real one
+    "mikrotik": {"dhcp_source": "http://router"},
     "probes": {"icmp_timeout_ms": 1500},
     "alerts": {"recovery_confirm_s": 900, "cooldown_s": 3600},
 }

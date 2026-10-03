@@ -344,6 +344,17 @@ def test_the_auditor_itself():
         a, bk, disk, sent = _setup(d)
         bk.machines.append({"ip": "192.168.10.95", "via": "lanowl", "name": "VM monitor", "daily": 7})
         a.state.record_event("finding", None, "{}")         # something in the database
+        # the files it runs with, wherever its config says they are
+        for n in ("config.yaml", "inventory.yaml", "id_lanowl", "id_lanowl.pub"):
+            with open(os.path.join(d, n), "w") as f:
+                f.write("x\n")
+        with open(os.path.join(d, "secrets.yaml"), "w") as f:
+            f.write(f"ssh_key: {os.path.join(d, 'id_lanowl')}\n")
+        a.cfg["_path"], a.inv.path = os.path.join(d, "config.yaml"), os.path.join(d, "inventory.yaml")
+        a.cfg["access"] = {**(a.cfg.get("access") or {}), "secrets_file": os.path.join(d, "secrets.yaml")}
+        a.cfg["profiles"] = {"dir": os.path.join(d, "profiles")}       # none: left out
+        out["want"] = [os.path.join(d, n) for n in ("config.yaml", "inventory.yaml", "secrets.yaml",
+                                                    "id_lanowl", "id_lanowl.pub")]
         streamed = []
 
         async def put_stream(dd, fname, argv, env=None, src_stdin=None, timeout_s=900, ok_rcs=(0,)):
@@ -391,8 +402,10 @@ def test_the_auditor_itself():
           f"the database, the files, a note ({r.get('files') or r.get('error')})")
     check(out["events"] == 1, "the database copy is whole and readable (SQLite's own backup)")
     tar = next(a for f, a in out["streamed"] if f == "lanowl-files.tgz")
-    check(tar[:3] == ["tar", "czf", "-"] and all(os.path.exists(x) for x in tar[3:]),
-          "the files: only those that exist in this container")
+    check(tar[:3] == ["tar", "czf", "-"] and tar[3:8] == out["want"]
+          and not any("profiles" in x for x in tar),
+          "the files: config, inventory, secrets and the key, from where the config puts them; "
+          "only those that exist")
     check("restore" in out["note"] and "NOT encrypted" in out["note"], "the note says how to restore, and that it is clear")
     check(out["tmp_left"] == [], "the temporary copy is removed")
     l, gone = out["listing"], out["gone"]

@@ -28,7 +28,7 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 from . import logbook, probes, weekly
-from .access import Access
+from .access import Access, report as secrets_report
 from .kinds import Kinds, report as kinds_report
 from .actions import Actions
 from .backups import Backups
@@ -1812,7 +1812,9 @@ def _check(args) -> int:
     logging.basicConfig(level=logging.ERROR)
     k = Kinds.load(cfg, inv, Access(cfg, inv))
     print(kinds_report(k, inv))
-    return 1 if k.problems or any(p.problems for p in k.plans) else 0
+    text, bad = secrets_report(cfg, inv)
+    print("\n" + text)
+    return 1 if bad or k.problems or any(p.problems for p in k.plans) else 0
 
 
 def main():

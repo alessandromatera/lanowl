@@ -107,7 +107,6 @@ class Rebooter:
         self.hold_s = float(cfg.get("hold_min", 5)) * 60
         ha = (auditor.cfg.get("access") or {})
         self.ha_url = str(ha.get("ha_url") or "").rstrip("/")
-        self.ha_token_file = str(ha.get("ha_token_file") or ".ha_token")
 
     # --- what can be rebooted --------------------------------------------------
     def can(self, ip: str) -> bool:
@@ -426,11 +425,9 @@ class Rebooter:
             return {"error": f"{type(e).__name__} {str(e)[:80]}".strip()}
 
     def _ha_token(self) -> str:
-        try:
-            with open(self.ha_token_file) as f:
-                return f.read().strip()
-        except OSError:
-            return ""
+        """secrets.yaml's `tokens.homeassistant`, or LANOWL_HA_TOKEN (access.py)."""
+        from . import access
+        return access.token(self.a.cfg, "homeassistant")
 
     async def _ha(self, method: str, path: str, body: Optional[dict] = None,
                   timeout_s: float = 10) -> tuple:

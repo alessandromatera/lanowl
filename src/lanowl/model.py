@@ -25,6 +25,7 @@ class Device:
 class Inventory:
     devices: list = field(default_factory=list)
     groups: dict = field(default_factory=dict)    # group -> {majority_down_critical: bool}
+    path: str = ""                                 # the file it was read from
 
     def __post_init__(self):
         self.by_ip = {d.ip: d for d in self.devices}
@@ -103,19 +104,13 @@ def load_inventory(path: str) -> Inventory:
             note=d.get("note", ""),
             attrs=attrs,
         ))
-    return Inventory(devices=devices, groups=raw.get("groups", {}))
+    return Inventory(devices=devices, groups=raw.get("groups", {}), path=os.path.abspath(path))
 
 
 def _env_override(cfg: dict) -> dict:
-    """Let a few secrets come from the environment instead of the file."""
-    cfg.setdefault("mqtt", {})
-    cfg["mqtt"]["username"] = os.environ.get("LANOWL_MQTT_USER", cfg["mqtt"].get("username", ""))
-    cfg["mqtt"]["password"] = os.environ.get("LANOWL_MQTT_PASS", cfg["mqtt"].get("password", ""))
-    cfg.setdefault("mikrotik", {})
-    cfg["mikrotik"]["user"] = os.environ.get("LANOWL_MIKROTIK_USER", cfg["mikrotik"].get("user", ""))
-    cfg["mikrotik"]["password"] = os.environ.get("LANOWL_MIKROTIK_PASS", cfg["mikrotik"].get("password", ""))
-    # Not secrets: what differs between deployments of the same config.yaml, so one file
-    # serves all of them instead of forked copies that drift.
+    """What differs between deployments of the same config.yaml, so one file serves all of
+    them instead of forked copies that drift. (Secrets are not here: access.py reads them,
+    from secrets.yaml or the environment, when they are used.)"""
     # The model server: a GPU model often runs on another machine than the monitor (a Mac's
     # Metal is out of a container's reach, for one), so each deployment names the road to it.
     if os.environ.get("LANOWL_OLLAMA_URL"):
@@ -141,8 +136,14 @@ def load_config(path: str) -> dict:
         cfg = yaml.safe_load(f) or {}
     # the owner's own device kinds (kinds.py): a `profiles` folder beside config.yaml
     pr = cfg.get("profiles") if isinstance(cfg.get("profiles"), dict) else {}
-    pr.setdefault("dir", os.path.join(os.path.dirname(os.path.abspath(path)), "profiles"))
+    here = os.path.dirname(os.path.abspath(path))
+    pr.setdefault("dir", os.path.join(here, "profiles"))
     cfg["profiles"] = pr
+    # ...and every secret in secrets.yaml beside it (access.py)
+    ac = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+    ac.setdefault("secrets_file", os.path.join(here, "secrets.yaml"))
+    cfg["access"] = ac
+    cfg["_path"] = os.path.abspath(path)          # where it was read from (lanowl's own backup)
     return _env_override(cfg)
 
 

@@ -657,8 +657,7 @@ class ToolExecutor:
             r = await probes.snmp_get(ip, str(args.get("oid") or probes.OID_SYSUPTIME),
                                       community, p.get("snmp_timeout_s", 2))
         elif name == "mikrotik_read":
-            # The credentials usually live in the secret file (`mikrotik.secret_file`), not in
-            # config — so not mk["user"]: resolve_mikrotik, as discovery and wanwatch use.
+            # the router's read-only login, from secrets.yaml (resolve_mikrotik)
             from . import routeros
             from .discovery import resolve_mikrotik
             mk = self.cfg.get("mikrotik", {})

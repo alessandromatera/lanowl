@@ -23,7 +23,7 @@ services:
     network_mode: host
     env_file: .env
     volumes:
-      - ../config:/config:ro                    # config.yaml, inventory.yaml, secrets.yaml, tokens, ssh key
+      - ../config:/config:ro                    # config.yaml, inventory.yaml, secrets.yaml, profiles, ssh key
       - lanowl-state:/state                     # the database, the log, the outbox
       - lanowl-ssh:/root/.ssh                   # known_hosts for the host-log watcher
       - sandbox-sock:/run/sandbox:ro

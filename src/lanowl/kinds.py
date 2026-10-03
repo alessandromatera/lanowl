@@ -38,6 +38,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .access import token as secret_token
+
 log = logging.getLogger("lanowl.kinds")
 
 FEATURES = {
@@ -295,7 +297,7 @@ def _how(f: str, kind: str, dev, lg, prof: Optional[Profile], ctx: dict) -> tupl
 def derive(cfg: dict, inv, access, profiles: dict) -> list:
     """[DevicePlan] for every device with a `kind` or `manage`."""
     ctx = {"store": str(((cfg.get("backups") or {}).get("store") or {}).get("host") or ""),
-           "ha": bool((cfg.get("access") or {}).get("ha_url"))}
+           "ha": bool((cfg.get("access") or {}).get("ha_url") and secret_token(cfg, "homeassistant"))}
     plans = []
     for d in inv.devices:
         kind = str(d.attrs.get("kind") or "").strip().lower()

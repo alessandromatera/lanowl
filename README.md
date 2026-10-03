@@ -42,6 +42,7 @@ mkdir config
 cp config.example.yaml config/config.yaml        # then edit: network, Telegram, the router
 cp inventory.example.yaml config/inventory.yaml  # the devices to watch
 cp secrets.example.yaml config/secrets.yaml && chmod 600 config/secrets.yaml
+ssh-keygen -t ed25519 -N '' -C lanowl -f config/id_ed25519   # lanowl's key, for logins by key
 cp docker/env.example docker/.env                # this host's address, the model's URL, TZ
 docker compose -f docker/compose.yaml up -d
 ```
@@ -69,7 +70,7 @@ Three files, all under `config/`:
 |---|---|---|
 | `config.yaml` | everything lanowl does, with every optional feature off | yes |
 | `inventory.yaml` | the devices: how each is watched, and what lanowl does with it | yes |
-| `secrets.yaml` | device logins, by name; mode 600, mounted read-only | **never** |
+| `secrets.yaml` | every secret: device logins, tokens, lanowl's ssh key; mode 600, read-only | **never** |
 | `profiles/` | device kinds of your own (optional) | yes |
 
 Two settings shape how the owl thinks:
@@ -129,6 +130,14 @@ Any device can be rebooted through a Home Assistant button (a smart plug):
 **Logins** (`secrets.yaml`) are a user with a password, lanowl's ssh key (`key: true`), or both
 (the key logs in, the password is what sudo asks for). A user other than root needs sudo for
 what reads or changes the system.
+
+**Every secret** is in `secrets.yaml`, read again when it changes: the device logins, the
+Telegram and Home Assistant tokens (`tokens:`), the logins lanowl reads the router and the
+MQTT broker with (named by `mikrotik.credentials` and `mqtt.credentials`), and lanowl's ssh key
+(`ssh_key:`). A deployment may give lanowl's own secrets in the environment instead
+(`LANOWL_TG_TOKEN`, `LANOWL_HA_TOKEN`, `LANOWL_MIKROTIK_USER`/`_PASS`, `LANOWL_MQTT_USER`/`_PASS`,
+`LANOWL_SSH_KEY`), or as Docker secrets through `<name>_FILE`. `lanowl --check` says where
+each one comes from, never its value.
 
 **A kind of your own** is a profile: `config/profiles/<kind>.yaml`, a command per operation
 and a fixed parser for what it prints, never code. lanowl ships `macos` as one; copy it:

@@ -54,6 +54,8 @@ logins:
   vps-key:    {user: root, key: true}
   nothing:    {user: x}
   box:        {user: admin, password: "box-pw"}
+tokens:
+  homeassistant: "ha-token"
 """
 
 INVENTORY = {"devices": [
@@ -425,6 +427,13 @@ def test_check():
         cfg.pop("updates")
         cfg["actions"]["catalog"] = {}
         os.remove(os.path.join(d, "profiles", "broken.yaml"))
+        key = os.path.join(d, "id_lanowl")                  # every key file there, mode 600
+        with open(key, "w") as f:
+            f.write("k\n")
+        os.chmod(key, 0o600)
+        with open(cfg["access"]["secrets_file"], "w") as f:
+            f.write(SECRETS.replace("/config/id_mac", key) + f"ssh_key: {key}\n")
+        os.chmod(cfg["access"]["secrets_file"], 0o600)
         with open(cp, "w") as f:
             yaml.safe_dump(cfg, f)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -435,7 +444,12 @@ def test_check():
     check("✗ unknown kind 'toaster'" in text
           and "○ config    tells what changed in its configuration — off: configwatch.enabled" in text,
           "problems and switched-off features, in words")
-    check("r0uter-pw" not in text and "st-pw" not in text, "no password in it")
+    check("✗ secrets.yaml    others can read it: chmod 600" in text
+          and "login 'mac-key': its key /config/id_mac does not exist" in text
+          and "✓ Home Assistant  from secrets.yaml" in text,
+          "the secrets: where each comes from, a file others can read, a key that is not there")
+    check("r0uter-pw" not in text and "st-pw" not in text and "ha-token" not in text,
+          "no password or token in it")
 
 
 if __name__ == "__main__":

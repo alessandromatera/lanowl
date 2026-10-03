@@ -1,8 +1,9 @@
 # lanowl — configuration. Copy to config.yaml and edit.
 #
 # The essentials come first; everything optional is switched off and says what it needs.
-# Secrets never go in this file: device logins live in secrets.yaml (see
-# secrets.example.yaml), the Telegram token in its own file or LANOWL_TG_TOKEN.
+# Secrets never go in this file: every one of them (device logins, tokens, the router's and
+# the broker's logins, lanowl's ssh key) lives in secrets.yaml beside it — see
+# secrets.example.yaml — or in the environment.
 # Inside the container this file is /config/config.yaml; relative paths are under /state.
 
 # --- your network, in your own words ------------------------------------------------------
@@ -28,8 +29,7 @@ ollama:
 # --- Telegram: alerts out, questions in ---------------------------------------------------
 telegram:
   chat_id: ""                       # your chat with the bot (send it /start, then read getUpdates)
-  bot_token_env: "LANOWL_TG_TOKEN"  # the token from the environment...
-  token_file: "/config/telegram_token"   # ...or from this file (mode 600)
+                                    # the bot's token: secrets.yaml `tokens.telegram`, or LANOWL_TG_TOKEN
   outbox_file: "tg_outbox.json"     # what could not be sent during an outage, sent when it is back
   chat:
     enabled: true                   # answer questions and /commands
@@ -117,9 +117,7 @@ wan:
 # --- the main router (MikroTik) ---------------------------------------------------------------
 mikrotik:
   dhcp_source: "http://192.168.88.1"   # the router's REST base: DHCP leases, routes, the log
-  user: ""                             # or LANOWL_MIKROTIK_USER — a read-only user
-  password: ""                         # or LANOWL_MIKROTIK_PASS
-  secret_file: "/config/mikrotik"      # or a 'user:password' file (mode 600)
+  credentials: "router-read"           # its read-only user: a login in secrets.yaml
   lanowl_group: "lanowl-ro"            # the router group of that user...
   lanowl_policy: [read, test, sniff, api, rest-api]   # ...and what you granted it on purpose
   verify_tls: false
@@ -168,8 +166,7 @@ mqtt:                               # optional: publish results, read existing t
   host: ""                          # empty: MQTT off
   port: 1883
   tls: false
-  username: ""                      # or LANOWL_MQTT_USER / LANOWL_MQTT_PASS
-  password: ""
+  credentials: "mqtt"               # its login in secrets.yaml, if the broker wants one
   base_topic: "lanowl"
   subscribe: []                     # e.g. ["shellies/#"]: last-seen values the model can read
 
@@ -191,11 +188,11 @@ logging:
 # Device logins: secrets.yaml. Device kinds of your own: a profiles folder beside this file.
 # profiles: {dir: "/config/profiles"}
 access:
-  secrets_file: "/config/secrets.yaml"
+  # secrets_file: "/config/secrets.yaml"   # the default: beside this file
   known_hosts: "known_hosts_devices"
   hostkey_any: []                   # devices that make a new ssh host key at every boot
-  ha_url: ""                        # Home Assistant, for its updates and restarts
-  ha_token_file: "/config/ha_token"
+  ha_url: ""                        # Home Assistant, for its updates and restarts; its token:
+                                    # secrets.yaml `tokens.homeassistant`
 
 # Actions the model may PROPOSE and you approve with a button (or the PIN on the dashboard).
 actions:
@@ -232,7 +229,7 @@ actions:
     vps_iface: "eth0"
 
 # The auth logs of the devices that `manage: [logs]` (Linux, by lanowl's ssh key), read for
-# security events. The key below is also how every key login in secrets.yaml connects.
+# security events. lanowl's ssh key (secrets.yaml `ssh_key`) is how every key login connects.
 hostlog:
   enabled: false
   interval_s: 120
@@ -242,7 +239,6 @@ hostlog:
     command_timeout_s: 30
     control_path: "/tmp/lanowl-hostlog-%C"
     control_persist: "1h"
-    identity: "/config/id_ed25519"
   burst: {enabled: true, window_s: 300, fail_attempts: 8, repeat_s: 3600}
   connections: {enabled: true, max_established: 400, confirm_polls: 2, repeat_s: 3600}
   triage: {enabled: true, cooldown_s: 900, timeout_s: 90, fetch_lines: 400, max_lines: 40,

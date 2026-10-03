@@ -26,6 +26,8 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+# the router's read-only login, as a deployment may give it: from the environment
+os.environ["LANOWL_MIKROTIK_USER"], os.environ["LANOWL_MIKROTIK_PASS"] = "lanowl", "p"
 
 from lanowl import probes, routeros
 from lanowl.routeros import ApiError, Connection, Router
@@ -143,7 +145,7 @@ def cfg_for(port, **api):
     a = {"enabled": True, "host": "127.0.0.1", "port": port, "tls": False,
          "heartbeat_s": 0.2, "timeout_s": 1, "retry_s": 0.1}
     a.update(api)
-    return {"mikrotik": {"user": "lanowl", "password": "p", "dhcp_source": "http://127.0.0.1",
+    return {"mikrotik": {"dhcp_source": "http://127.0.0.1",
                          "api": a},
             "wan": {"targets": ["8.8.8.8"],
                     "watch": {"enabled": True, "interval_s": 15, "fail_checks": 2,
@@ -347,7 +349,7 @@ def test_api_down_falls_back_to_rest():
     rest_stub(calls)
 
     async def disabled():
-        r = Router({"mikrotik": {"user": "lanowl", "password": "p"}})
+        r = Router({"mikrotik": {}})
         x = await r.read("log")
         return x, r.status()
 

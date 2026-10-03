@@ -692,7 +692,7 @@ def test_router_outputs():
 
 # --- 9. mikrotik_read ------------------------------------------------------------------------
 def test_mikrotik_read_credentials():
-    print("\n-- mikrotik_read reads the router's credentials from the secret file --")
+    print("\n-- mikrotik_read reads the router's login from secrets.yaml --")
     from lanowl import probes
     seen = {}
 
@@ -703,12 +703,13 @@ def test_mikrotik_read_credentials():
     probes.mikrotik_rest = fake
     try:
         with tempfile.TemporaryDirectory() as d:
-            sf = os.path.join(d, ".mikrotik")
+            sf = os.path.join(d, "secrets.yaml")
             with open(sf, "w") as f:
-                f.write("lanowl:s3cret\n")
+                f.write("logins:\n  router-ro: {user: lanowl, password: s3cret}\n")
 
             async def go():
-                a = _auditor(d, extra={"mikrotik": {"user": "", "password": "", "secret_file": sf}})
+                a = _auditor(d, extra={"mikrotik": {"credentials": "router-ro"},
+                                       "access": {"secrets_file": sf}})
                 a.inv.devices.append(Device("192.168.10.1", "Router", "network", "critical"))
                 a.inv.by_ip["192.168.10.1"] = a.inv.devices[-1]
                 return await a.executor.call("mikrotik_read", {"ip": "192.168.10.1", "path": "interface"})
@@ -716,7 +717,7 @@ def test_mikrotik_read_credentials():
     finally:
         probes.mikrotik_rest = real
     check(seen.get("user") == "lanowl" and seen.get("pw") == "s3cret",
-          "the user and password come from the file (they were '' before, on every call)")
+          "the user and password: the login mikrotik.credentials names")
 
 
 

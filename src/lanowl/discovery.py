@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-import os
 
+from . import access
 from .oui import vendor
 from .model import Inventory
 
@@ -17,23 +17,11 @@ log = logging.getLogger("lanowl.discovery")
 
 
 def resolve_mikrotik(cfg: dict) -> tuple[str, str]:
-    """Credentials from config/env first, else a 'user:pass' secret file (chmod 600).
-    Prefer a dedicated read-only RouterOS user (group=read)."""
-    mk = cfg.get("mikrotik", {})
-    user, pw = (mk.get("user") or ""), (mk.get("password") or "")
-    if user and pw:
-        return user, pw
-    sf = mk.get("secret_file")
-    if sf:
-        try:
-            with open(os.path.expanduser(sf), "r") as f:
-                line = f.read().strip()
-            if ":" in line:
-                u, p = line.split(":", 1)
-                return u.strip(), p.strip()
-        except Exception:
-            pass
-    return user, pw
+    """(user, password) of the router's read-only user: the login `mikrotik.credentials`
+    names in secrets.yaml, or the environment (access.py). Give it a group of its own with
+    read rights only (`mikrotik.lanowl_group`)."""
+    lg = access.service_login(cfg, "mikrotik")
+    return lg.user, lg.password
 
 
 def _router(cfg: dict):
