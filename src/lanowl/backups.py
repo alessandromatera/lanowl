@@ -20,13 +20,16 @@ How each one is taken (`via`):
     routeros       /export (show-sensitive on RouterOS 7) + a binary /system backup, copied
                    off with scp and deleted from the device (small APs have ~3 MB of flash free)
     homeassistant  `ha backups new` over ssh, streamed across, then `ha backups remove`
-    vps            a server reached by lanowl's ssh KEY (a hostlog host): its configuration
-                   files as one tar (`paths`, or VPS_PATHS), + a state.txt
+    vps            a server reached by lanowl's ssh KEY: its configuration files as one tar
+                   (`paths`, or VPS_PATHS), + a state.txt — as root (sudo when the key's user
+                   is not root)
     store          the store host itself: `paths` (or STORE_PATHS) tarred ON it, straight onto
                    its own disk — nothing crosses the network
     files          a few paths as a tar, with the machine's login from secrets.yaml
     esxi           the host's configuration bundle + every VM's .vmx
     shellies       every Shelly's settings, scripts, schedules and webhooks, one JSON
+    profile        a kind of the owner's own (kinds.py): its profile's `backup` command, its
+                   output streamed into one file
     lanowl         lanowl ITSELF: a consistent copy of its database (SQLite's own backup,
                    while it runs), gzipped — history, logbook, memory, actions, conversations,
                    dismissals, Known and Watched, pauses, the update and review records — and a
@@ -55,7 +58,8 @@ from .report import _html, label
 log = logging.getLogger("lanowl.backups")
 
 RECORD = "backups"
-VIAS = ("routeros", "homeassistant", "vps", "store", "files", "esxi", "shellies", "lanowl")
+VIAS = ("routeros", "homeassistant", "vps", "store", "files", "esxi", "shellies", "lanowl",
+        "profile")
 KINDS = ("monthly", "before-update", "manual")
 _DIR = re.compile(r"^(\d{4}-\d{2}-\d{2}_\d{4})_(monthly|before-update|manual|daily)$")
 # lanowl's own files, as mounted in its container (docker/compose.yaml)
@@ -340,8 +344,16 @@ class Backups:
         paths = " ".join(Q(p.lstrip("/")) for p in m.get("paths") or []) or VPS_PATHS
         tar = (f"for p in {paths}; do [ -e \"/$p\" ] && echo \"$p\"; done "
                "| tar czf - -C / -T -")
-        files = [await self._put_stream(d, "vps-files.tgz", hl._ssh_argv(h, tar), timeout_s=300)]
-        rc, out, _ = await self.a.actions._ssh_run(m["ip"], VPS_STATE, 60)
+        pw = None
+        if h.user != "root":                 # ssh host keys and root's files: as root
+            lg = self.a.access.login(m["ip"])
+            if lg is not None and lg.password:
+                tar, pw = "sudo -S -p '' sh -c " + Q(tar), (lg.password + "\n").encode()
+            else:
+                tar = "sudo -n sh -c " + Q(tar)
+        files = [await self._put_stream(d, "vps-files.tgz", hl._ssh_argv(h, tar), src_stdin=pw,
+                                        timeout_s=300)]
+        rc, out, _ = await self.a.actions._ssh_run(m["ip"], VPS_STATE, 60, root=True)
         if rc == 0:
             files.append(await self._put_bytes(d, "state.txt", out.encode()))
         return files
@@ -352,11 +364,13 @@ class Backups:
         out_f = f"{d}/{fname}"
         paths = " ".join(Q(p.lstrip("/")) for p in m.get("paths") or []) or STORE_PATHS
         grp = f"chgrp -R {Q(self.group)} {Q(d)}; " if self.group else ""
-        rc, out, err = await self.a.access.ssh(
-            m["ip"], "sudo -S -p '' sh -c " + Q(
-                f"umask 007; {STORE_TAR.format(out=Q(out_f), paths=paths)} 2>/tmp/lanowl-tar.err; "
-                f"rc=$?; {grp}echo RC=$rc; stat -c %s {Q(out_f)}"),
-            sudo_pw=True, timeout_s=1800)
+        script = (f"umask 007; {STORE_TAR.format(out=Q(out_f), paths=paths)} 2>/tmp/lanowl-tar.err; "
+                  f"rc=$?; {grp}echo RC=$rc; stat -c %s {Q(out_f)}")
+        if self.a.access.by_key(m["ip"]):
+            rc, out, err = await self.a.actions._ssh_run(m["ip"], script, 1800, root=True)
+        else:
+            rc, out, err = await self.a.access.ssh(m["ip"], "sudo -S -p '' sh -c " + Q(script),
+                                                   sudo_pw=True, timeout_s=1800)
         rcm = re.search(r"RC=(\d+)", out or "")
         if rc is None or not rcm or rcm.group(1) not in ("0", "1"):      # 1 = files changed
             raise BackupError(f"tar on the store failed: {_last(err) or (rcm and 'rc ' + rcm.group(1))}")
@@ -395,8 +409,11 @@ class Backups:
     async def _shellies(self, m, d, stamp) -> list:
         from .actions import _get_json
         out, answered, total = {}, 0, 0
+        listed = {str(x) for x in m["devices"]} if m.get("devices") is not None else None
         for dev in self.a.inv.devices:
-            if not dev.name.lower().startswith("shelly"):
+            if listed is not None and dev.ip not in listed:
+                continue
+            if listed is None and not dev.name.lower().startswith("shelly"):
                 continue
             total += 1
             ip = dev.ip
@@ -422,6 +439,14 @@ class Backups:
         data = json.dumps({"taken": stamp, "answered": answered, "of": total, "shellies": out},
                           indent=1, ensure_ascii=False)
         return [await self._put_bytes(d, "shellies.json", data.encode())]
+
+    async def _profile(self, m, d, stamp) -> list:
+        got = self.a.kinds.stream_argv(self.a, m["ip"], "backup")
+        if got is None:
+            raise BackupError("no way to log in to it (its login in secrets.yaml)")
+        argv, env, stdin, fname, timeout_s = got
+        return [await self._put_stream(d, fname, argv, env, src_stdin=stdin,
+                                       timeout_s=max(timeout_s, 60))]
 
     async def _lanowl(self, m, d, stamp) -> list:
         """lanowl itself: its database, then its secrets, known hosts and config."""

@@ -37,8 +37,7 @@ checks it wants listed; every further call in that turn joins the list. Approvin
 session for `session.minutes` / `session.max_checks` and starts a model turn of its own
 (Chat.investigate) that runs them, reads each output and reports back where the request came
 from. While it is open, questions may run checks too. An End button closes it early. Anything
-that CHANGES something stays a proposal with its own button, session or not — now including
-`vps_restart` (the VPN daemon on the VPN hub, as root: no sudoers rule needed there).
+that CHANGES something stays a proposal with its own button, session or not.
 
 The owner's question is the approval, as with an agent. A turn answering the owner — Telegram or the dashboard,
 `source(..., asked=True)` — runs its checks at once (`_run_asked`), up to
@@ -89,25 +88,28 @@ CATALOG = {
     "nmap_service": "Identify the services",
     "restart_service": "Restart a service",
     "shelly_reboot": "Reboot the Shelly",
-    "vps_restart": "Restart a VPS service",
     "reboot": "Reboot the device",
     "apt_upgrade": "Update the system",
     "routeros_upgrade": "Update RouterOS",
     "investigate": "Investigation session",
 }
-PROPOSABLE = ("nmap_scan", "nmap_service", "restart_service", "vps_restart", "shelly_reboot",
+PROPOSABLE = ("nmap_scan", "nmap_service", "restart_service", "shelly_reboot",
               "reboot", "apt_upgrade", "routeros_upgrade")
-# What a VPS restart interrupts, said on the button's message.
-VPS_RISK = {
-    "wg-quick@wg0": "every WireGuard tunnel through the hub drops until it is back — the main "
-                    "site, the remote ones, the phones (seconds, if it comes back up)",
-}
+
+
+def unit_risk(unit: str) -> str:
+    """What restarting a service interrupts, said on the button's message."""
+    if unit.startswith("wg-quick@"):
+        return ("every WireGuard tunnel it carries drops until it is back (seconds, if it "
+                "comes back up)")
+    return f"{unit} is interrupted while it restarts"
+
 # After an action that CHANGED something ran on a device, the same action on it is refused
 # for this long (catalog.<action>.cooldown_min overrides): no reboot loops, from anyone.
-COOLDOWN_MIN = {"restart_service": 30, "shelly_reboot": 30, "vps_restart": 30, "reboot": 30,
+COOLDOWN_MIN = {"restart_service": 30, "shelly_reboot": 30, "reboot": 30,
                 "apt_upgrade": 60, "routeros_upgrade": 60}
-RUN_TIMEOUT_S = {"nmap_scan": 180, "nmap_service": 240, "restart_service": 60,
-                 "shelly_reboot": 120, "vps_restart": 100, "reboot": 780, "apt_upgrade": 3300,
+RUN_TIMEOUT_S = {"nmap_scan": 180, "nmap_service": 240, "restart_service": 100,
+                 "shelly_reboot": 120, "reboot": 780, "apt_upgrade": 3300,
                  "routeros_upgrade": 2000}          # both include the backup taken first;
                                                     # RouterOS + firmware = two reboots
 STEPS_SHOWN = 12           # checks listed on a session's Telegram message
@@ -308,19 +310,32 @@ class Actions:
     def _cfg(self, action: str) -> dict:
         return self.cat.get(action) or {}
 
-    def _units(self) -> list:
-        return [str(u) for u in (self._cfg("restart_service").get("units") or [])
-                if _UNIT.match(str(u))]
+    def _restartable(self) -> dict:
+        """ip -> [units]: the devices whose listed services may be restarted (`manage:
+        [restart]` with `restart: {units: [...]}` in the inventory, kinds.py)."""
+        out = {}
+        for ip, v in (self._cfg("restart_service").get("hosts") or {}).items():
+            units = [str(u).removesuffix(".service") for u in ((v or {}).get("units") or [])
+                     if _UNIT.match(str(u))]
+            if units:
+                out[str(ip)] = units
+        return out
 
-    def _service_host(self) -> str:
-        return str(self._cfg("restart_service").get("host") or "")
+    def _restart_listing(self) -> str:
+        out = []
+        for ip, units in self._restartable().items():
+            dev = self.a.inv.get(ip)
+            out.append(f"{dev.name if dev else ip} {ip} ({', '.join(units)})")
+        return "; ".join(out) or "none"
 
-    def _vps_units(self) -> list:
-        return [str(u) for u in (self._cfg("vps_restart").get("units") or [])
-                if _UNIT.match(str(u))]
-
-    def _vps_host(self) -> str:
-        return str(self._cfg("vps_restart").get("host") or "")
+    def _shelly_ok(self, dev) -> bool:
+        """A Shelly whose controller may be restarted: `kind: shelly` with `manage: [reboot]`
+        (kinds.py). A device with no kind is judged by its name, as before kinds."""
+        allowed = self._cfg("shelly_reboot").get("devices")
+        kind = str(dev.attrs.get("kind") or "")
+        if allowed is not None:
+            return dev.ip in {str(x) for x in allowed}
+        return kind == "shelly" or (not kind and dev.name.lower().startswith("shelly"))
 
     def _cooldown_s(self, action: str) -> float:
         return float(self._cfg(action).get("cooldown_min", COOLDOWN_MIN.get(action, 0))) * 60
@@ -328,7 +343,6 @@ class Actions:
     def spec(self) -> dict:
         """The tool as the model sees it. The catalog is spelt out in the description because
         a local model reads descriptions far more reliably than enums."""
-        units = ", ".join(self._units()) or "none"
         return {"type": "function", "function": {
             "name": "propose_action",
             "description": (
@@ -337,11 +351,8 @@ class Actions:
                 "result in this turn. Actions: "
                 "nmap_scan — which TCP ports are open on a device (top 100); "
                 "nmap_service — what software answers on 1 to 10 given ports of a device; "
-                f"restart_service — restart one service on the service host {self._service_host() or '(none configured)'} "
-                f"({units}); "
-                f"vps_restart — restart one VPN service on the VPN hub {self._vps_host() or '(none configured)'} "
-                f"({', '.join(self._vps_units()) or 'none'}) — it drops the tunnels it carries "
-                "for a moment; "
+                f"restart_service — restart one listed service, only on: {self._restart_listing()} "
+                "(a WireGuard unit drops the tunnels it carries for a moment); "
                 "shelly_reboot — restart a Shelly's controller (it never switches what the "
                 "Shelly powers; refused when a restart would change a relay); "
                 "reboot — restart a whole device, only one of: "
@@ -351,24 +362,22 @@ class Actions:
                 "routeros_upgrade — install MikroTik's newer RouterOS on "
                 f"{', '.join(self.a.updates.ros_upgradable()) or 'none'} (downloads, then "
                 "reboots it; its alerts are held). "
-                "Only for devices in the inventory (the main LAN; the VPN hub for vps_restart "
-                "and reboot). "
+                "Only for devices in the inventory. "
                 "Propose only when it would clearly settle or fix something. To LOOK at "
                 "anything (ping, mtr, DNS, certificates, scans, a host's health, the tunnels) "
                 "use run_check instead."),
             "parameters": {"type": "object", "properties": {
                 "action": {"type": "string", "enum": list(PROPOSABLE)},
                 "ip": {"type": "string",
-                       "description": "the device it applies to (restart_service: the home "
-                                      "server's address)"},
+                       "description": "the device it applies to"},
                 "reason": {"type": "string",
                            "description": "one sentence for the owner: what you expect it to "
                                           "show or fix"},
                 "ports": {"type": "array", "items": {"type": "integer"},
                           "description": "nmap_service only: the ports to identify"},
                 "service": {"type": "string",
-                            "description": f"restart_service: {units}; vps_restart: "
-                                           f"{', '.join(self._vps_units()) or 'none'}"},
+                            "description": "restart_service only: one of that device's "
+                                           "listed services"},
             }, "required": ["action", "ip", "reason"]}}}
 
     # --- proposing ------------------------------------------------------------
@@ -481,29 +490,11 @@ class Actions:
         action, ip = p["action"], p["ip"]
         if action not in PROPOSABLE or not self._cfg(action).get("enabled", True):
             return f"unknown action {action!r}; the catalog is: {', '.join(PROPOSABLE)}"
-        if action == "vps_restart":
-            host = self._vps_host()
-            if not host:
-                return "vps_restart: no actions.catalog.vps_restart.host is configured"
-            if ip.lower() in ("", "vps"):
-                ip = p["ip"] = host
-            if ip != host:
-                return f"vps_restart only applies to the VPS {host}"
-            dev = self.a.inv.get(ip)
-            p["name"] = dev.name if dev else "VPS"
-            unit = str(args.get("service") or "").strip().removesuffix(".service")
-            if unit not in self._vps_units():
-                return (f"service {unit!r} is not in the list; it can be one of: "
-                        f"{', '.join(self._vps_units()) or 'none'}")
-            p["args"] = {"service": unit}
-            p["command"] = f"ssh {self._ssh_user(host)}@{host} systemctl restart {unit}.service"
-            p["risk"].append(VPS_RISK.get(unit, f"{unit} is interrupted while it restarts"))
-            return ""
         dev = self.a.inv.get(ip)
         if dev is None or not _IPV4.match(ip):
             return f"{ip or 'that'} is not a device in the inventory"
         p["name"] = dev.name
-        if action == "reboot" and not self.reboot.can(ip) and dev.name.lower().startswith("shelly"):
+        if action == "reboot" and not self.reboot.can(ip) and self._shelly_ok(dev):
             # a Shelly has its own reboot, whose check protects what its relays power
             action = p["action"] = "shelly_reboot"
         if action == "routeros_upgrade":
@@ -528,8 +519,25 @@ class Actions:
             if hosts[ip].get("risk"):
                 p["risk"].append(str(hosts[ip]["risk"]))
             return ""
+        if action == "restart_service":
+            # its own allow-list decides (the inventory's `restart: {units}`), a VPS included
+            units = self._restartable().get(ip)
+            if not units:
+                return (f"{dev.name} has no service lanowl may restart; it can restart: "
+                        f"{self._restart_listing()}")
+            if ip == str((self.a.cfg.get("observer") or {}).get("host_ip") or ""):
+                return f"{dev.name} is lanowl's own machine"
+            unit = str(args.get("service") or "").strip().removesuffix(".service")
+            if unit not in units:
+                return (f"service {unit!r} is not in {dev.name}'s list; it can be one of: "
+                        f"{', '.join(units)}")
+            p["args"] = {"service": unit}
+            p["command"] = f"systemctl restart {unit}.service on {dev.name}"
+            p["risk"].append(unit_risk(unit))
+            return ""
         if action == "reboot":
-            # the allow-list in config.yaml decides, the VPS included; never this machine
+            # the allow-list decides (the inventory's `manage: [reboot]`), the VPS included;
+            # never this machine
             if not self.reboot.can(ip):
                 return (f"{dev.name} is not a device lanowl can reboot; it can reboot: "
                         f"{self.reboot.listing()}")
@@ -543,7 +551,8 @@ class Actions:
                             "homeassistant": "Home Assistant: hassio.host_reboot",
                             "ha_button": "Home Assistant: button.press "
                                          f"{(self.reboot.devices.get(ip) or {}).get('entity', '')}",
-                            }[via]
+                            "profile": f"ssh {ip}: its {dev.attrs.get('kind', '')} profile's reboot",
+                            }.get(via, f"{via}: reboot")
             if dev.criticality == "critical":
                 p["risk"].append(f"{dev.name} is a CRITICAL device: it is down while it restarts")
             return ""
@@ -568,22 +577,9 @@ class Actions:
                 return "nmap_service needs 1 to 10 ports (1-65535)"
             p["args"] = {"ports": ports}
             p["command"] = " ".join(self._nmap_argv(p))
-        elif action == "restart_service":
-            host = self._service_host()
-            if not host:
-                return "restart_service: no actions.catalog.restart_service.host is configured"
-            if ip != host:
-                return f"restart_service only applies to the service host {host}"
-            unit = str(args.get("service") or "").strip().removesuffix(".service")
-            if unit not in self._units():
-                return (f"service {unit!r} is not in the list; it can be one of: "
-                        f"{', '.join(self._units()) or 'none'}")
-            p["args"] = {"service": unit}
-            p["command"] = (f"ssh {self._ssh_user(host)}@{host} sudo -n systemctl restart "
-                            f"{unit}.service")
         elif action == "shelly_reboot":
-            if not dev.name.lower().startswith("shelly"):
-                return f"{dev.name} is not a Shelly"
+            if not self._shelly_ok(dev):
+                return f"{dev.name} is not a Shelly lanowl may restart"
             p["command"] = f"GET http://{ip}/reboot"      # the generation is read by _check
             if dev.criticality == "critical":
                 p["risk"].append(f"{dev.name} is a CRITICAL device: what it powers may drop "
@@ -629,12 +625,6 @@ class Actions:
                         f"{self._status_words(prev)} — not again today")
         return ""
 
-    def _ssh_user(self, ip: str) -> str:
-        for h in ((self.a.cfg.get("hostlog") or {}).get("hosts") or []):
-            if h.get("ip") == ip:
-                return str(h.get("user") or "root")
-        return "pi"
-
     # --- the read-only check --------------------------------------------------
     async def _check(self, p: dict) -> dict:
         """Is it still worth doing, and is it safe? Read-only, a few seconds at most. Run when
@@ -649,24 +639,24 @@ class Actions:
                     + (f" ({r.latency_ms:.0f} ms)" if r.latency_ms is not None else "")}
         if action == "restart_service":
             unit = p["args"]["service"]
-            # is it running, and may this account restart it without a password? `sudo -l`
-            # lists what is allowed; only a NOPASSWD line for exactly this restart counts —
-            # a general sudo needs a password nobody is there to type.
-            out = await self._ssh(ip, f"systemctl is-active {unit}.service || true; "
-                                      "echo ---; sudo -n -l 2>/dev/null | grep -F NOPASSWD "
-                                      f"| grep -cF 'systemctl restart {unit}.service' || true")
-            if out is None:
-                return {"ok": False, "note": f"cannot reach {name} over ssh"}
-            state, _, allowed = out.partition("---")
-            state = (state.strip().splitlines() or ["unknown"])[-1]
-            try:
-                allowed_n = int((allowed.strip().splitlines() or ["0"])[-1])
-            except ValueError:
-                allowed_n = 0
-            if self.live and allowed_n < 1:
-                return {"ok": False, "note": f"lanowl is not allowed to restart "
-                                             f"{unit}.service on {name} (no sudoers rule for it "
-                                             "yet) — it cannot be done from here"}
+            q = shlex.quote(f"{unit}.service")
+            # is it running, and may this login restart it? `sudo -l <command>` answers for
+            # exactly this restart: a narrow NOPASSWD rule counts, a general sudo needs the
+            # password the login carries (none: nobody is there to type one)
+            pre, pw = self._sudo(ip)
+            allowed = (f"; {pre}-l /usr/bin/systemctl restart {q} >/dev/null 2>&1 "
+                       "&& echo ALLOWED || echo REFUSED" if pre else "; echo ALLOWED")
+            rc, out, err = await self._login_run(ip, f"systemctl is-active {q} || true" + allowed,
+                                                 25, sudo_pw=pw)
+            if rc is None:
+                return {"ok": False, "note": f"cannot reach {name} over ssh: "
+                                             f"{(err.strip().splitlines() or ['no answer'])[-1][:120]}"}
+            lines = out.strip().splitlines() or ["unknown"]
+            state = lines[0] if len(lines) > 1 else "unknown"
+            if self.live and lines[-1] != "ALLOWED":
+                return {"ok": False, "note": f"lanowl may not restart {unit}.service on {name} "
+                                             "(its login has no sudo for it) — it cannot be done "
+                                             "from here"}
             return {"ok": True, "note": f"{unit}.service is {state} now"}
         if action == "shelly_reboot":
             return await self._shelly_check(p)
@@ -676,14 +666,6 @@ class Actions:
             return await self.a.updates.upgrade_check(ip, name)
         if action == "routeros_upgrade":
             return await self.a.updates.ros_upgrade_check(ip, name)
-        if action == "vps_restart":
-            # root on the VPS: no sudo, so the only question is whether it is reachable
-            unit = p["args"]["service"]
-            out = await self._ssh(ip, f"systemctl is-active {shlex.quote(unit + '.service')} || true")
-            if out is None:
-                return {"ok": False, "note": f"cannot reach {name} over ssh"}
-            return {"ok": True, "note": f"{unit}.service is "
-                                        f"{(out.strip().splitlines() or ['unknown'])[-1]} now"}
         return {"ok": False, "note": "unknown action"}
 
     async def _shelly_read(self, ip: str) -> Optional[dict]:
@@ -747,18 +729,65 @@ class Actions:
         return {"ok": True, "note": f"{sh['model']} gen {gen}: " + ("; ".join(notes) or "no relay"),
                 "outs": sh["outs"]}
 
-    async def _ssh_run(self, ip: str, remote: str, timeout_s: float = 20) -> tuple:
-        """(rc, out, err) of one command on a host the host-log watcher already logs in to,
-        over its shared connection; rc None = could not. Not `HostLogWatcher._ssh`: that one
-        marks the host's log as failing when a command fails, and an action is not the log."""
+    async def _ssh_run(self, ip: str, remote: str, timeout_s: float = 20,
+                       root: bool = False) -> tuple:
+        """(rc, out, err) of one command on a device lanowl logs in to by its ssh KEY, over the
+        key's shared connection (hostlog.py); rc None = could not. Not `HostLogWatcher._ssh`:
+        that one marks the host's log as failing when a command fails, and an action is not
+        the log. `root`: as root — as it is when the key logs in as root, else through sudo,
+        with the login's password on stdin when it carries one, else a NOPASSWD rule."""
         hl = getattr(self.a, "hostlog", None)
         h = next((x for x in (getattr(hl, "hosts", None) or []) if x.ip == ip), None)
         if h is None:
-            return None, "", f"{ip} is not a host lanowl logs in to"
-        return await _exec(hl._ssh_argv(h, remote), timeout_s)
+            return None, "", f"{ip} is not a host lanowl logs in to by its key"
+        lg, stdin = None, None
+        if root and h.user != "root":
+            lg = self.a.access.login(ip)
+            if lg is not None and lg.password:
+                remote, stdin = "sudo -S -p '' sh -c " + shlex.quote(remote), (lg.password + "\n").encode()
+            else:
+                remote = "sudo -n sh -c " + shlex.quote(remote)
+        rc, out, err = await _exec(hl._ssh_argv(h, remote), timeout_s, stdin=stdin)
+        if lg is not None and lg.password:
+            out, err = out.replace(lg.password, "***"), err.replace(lg.password, "***")
+        return rc, out, err
+
+    def _key_host(self, ip: str):
+        """Its connection by lanowl's key (hostlog.py), if its login is the key."""
+        hl = getattr(self.a, "hostlog", None)
+        return next((x for x in (getattr(hl, "hosts", None) or []) if x.ip == ip), None)
+
+    def _sudo(self, ip: str) -> tuple:
+        """(prefix, password on stdin?) for one command run as root on `ip`: nothing for root,
+        `sudo -S` when the login carries a password, else `sudo -n` (a NOPASSWD rule)."""
+        lg = self.a.access.login(ip)
+        h = self._key_host(ip)
+        user = h.user if h is not None else (lg.user if lg else "")
+        if user == "root":
+            return "", False
+        if lg is not None and lg.password:
+            return "sudo -S -p '' ", True
+        return "sudo -n ", False
+
+    async def _login_run(self, ip: str, remote: str, timeout_s: float = 20,
+                         sudo_pw: bool = False) -> tuple:
+        """(rc, out, err) of `remote` on `ip` by whichever login it has: lanowl's key (its
+        shared connection, when it has one) or a password. `sudo_pw`: the login's password on
+        stdin first."""
+        h = self._key_host(ip)
+        if h is not None:
+            hl = self.a.hostlog
+            lg = self.a.access.login(ip)
+            pw = lg.password if lg is not None else ""
+            rc, out, err = await _exec(hl._ssh_argv(h, remote), timeout_s,
+                                       stdin=(pw + "\n").encode() if sudo_pw and pw else None)
+            if pw:
+                out, err = out.replace(pw, "***"), err.replace(pw, "***")
+            return rc, out, err
+        return await self.a.access.ssh(ip, remote, sudo_pw=sudo_pw, timeout_s=timeout_s)
 
     async def _ssh(self, ip: str, remote: str) -> Optional[str]:
-        rc, out, _ = await self._ssh_run(ip, remote, 15)
+        rc, out, _ = await self._login_run(ip, remote, 15)
         return out if rc == 0 else None
 
     # --- investigation sessions ---------------------------------------------------
@@ -1241,13 +1270,19 @@ class Actions:
         if action == "restart_service":
             unit = p["args"]["service"]
             q = shlex.quote(f"{unit}.service")
-            rc, out, err = await self._ssh_run(
-                p["ip"], f"sudo -n /usr/bin/systemctl restart {q}; rc=$?; sleep 4; "
-                         f"echo \"rc=$rc\"; systemctl is-active {q} || true", 45)
+            pre, pw = self._sudo(p["ip"])
+            wg = unit.startswith("wg-quick@")
+            # after WireGuard: do the peers come back? 20 s is enough for an active one
+            tail = (f"; sleep 20; echo ---; date +%s; {pre}wg show "
+                    f"{shlex.quote(unit.split('@', 1)[1])} latest-handshakes" if wg else "")
+            rc, out, err = await self._login_run(
+                p["ip"], f"{pre}/usr/bin/systemctl restart {q}; rc=$?; sleep 4; "
+                         f"echo \"rc=$rc\"; systemctl is-active {q} || true{tail}", 80, sudo_pw=pw)
             if rc is None:
                 return {"ok": False, "ran": False, "error": err or "ssh failed"}
-            m = re.search(r"rc=(\d+)", out)
-            state = (out.strip().splitlines() or ["?"])[-1]
+            head, _, hs = out.partition("---")
+            m = re.search(r"rc=(\d+)", head)
+            state = (head.strip().splitlines() or ["?"])[-1]
             why = (err.strip().splitlines() or ["?"])[-1][:160]
             if not m or m.group(1) != "0":
                 if "sudo" in err:          # never got as far as systemd
@@ -1255,31 +1290,6 @@ class Actions:
                 return {"ok": False, "ran": True,
                         "error": f"systemctl restart failed (rc {m.group(1) if m else '?'}): "
                                  f"{why}; {unit}.service is {state}"}
-            return {"ok": state == "active", "ran": True,
-                    "result": f"{unit}.service restarted — {state} 4 s later",
-                    **({} if state == "active" else
-                       {"error": f"{unit}.service is {state} after the restart"})}
-
-        if action == "vps_restart":
-            unit = p["args"]["service"]
-            q = shlex.quote(f"{unit}.service")
-            wg = unit.startswith("wg-quick@")
-            # after WireGuard: do the peers come back? 20 s is enough for an active one
-            tail = (f"; sleep 20; echo ---; date +%s; wg show {shlex.quote(unit.split('@', 1)[1])} "
-                    "latest-handshakes" if wg else "")
-            rc, out, err = await self._ssh_run(
-                p["ip"], f"systemctl restart {q}; rc=$?; sleep 4; echo \"rc=$rc\"; "
-                         f"systemctl is-active {q} || true{tail}", 80)
-            if rc is None:
-                return {"ok": False, "ran": False, "error": err or "ssh failed"}
-            head, _, hs = out.partition("---")
-            m = re.search(r"rc=(\d+)", head)
-            state = (head.strip().splitlines() or ["?"])[-1]
-            if not m or m.group(1) != "0":
-                return {"ok": False, "ran": True,
-                        "error": f"systemctl restart failed (rc {m.group(1) if m else '?'}): "
-                                 f"{(err.strip().splitlines() or ['?'])[-1][:160]}; "
-                                 f"{unit}.service is {state}"}
             result = f"{unit}.service restarted — {state} 4 s later"
             if wg:
                 rows = [x.split() for x in hs.strip().splitlines()]

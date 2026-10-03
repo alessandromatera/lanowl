@@ -186,7 +186,10 @@ logging:
 # Optional features. Each is off until you switch it on and tell it where things are.
 # =============================================================================================
 
-# Logins for devices (reboots, updates, backups, config diffs): secrets.yaml.
+# What lanowl does with each device is set on the device, in the inventory (kind, credentials,
+# manage); each feature below only switches it on and sets how. `lanowl --check` shows the plan.
+# Device logins: secrets.yaml. Device kinds of your own: a profiles folder beside this file.
+# profiles: {dir: "/config/profiles"}
 access:
   secrets_file: "/config/secrets.yaml"
   known_hosts: "known_hosts_devices"
@@ -205,15 +208,14 @@ actions:
   pin_sha256: ""                    # sha256 of your PIN; empty: no approvals from the dashboard
   pin_max_failures: 5
   pin_lockout_min: 30
-  catalog:
+  catalog:                          # which devices: the inventory's `manage`
     nmap_scan: {deny_groups: ["security"]}
     nmap_service: {deny_groups: ["security", "iot"]}
     shelly_reboot: {}
-    # restart_service: {host: "192.168.88.10", units: ["mosquitto"]}   # needs a NOPASSWD sudoers rule
-    # vps_restart: {host: "203.0.113.10", units: ["wg-quick@wg0"]}
-    # apt_upgrade: {hosts: {"192.168.88.10": {via: password}}}
-    # routeros_upgrade: {hosts: {"192.168.88.1": {}}}
-    # reboot: {hold_min: 5, devices: {"192.168.88.5": {via: routeros}}}
+    restart_service: {}
+    apt_upgrade: {}
+    routeros_upgrade: {}
+    reboot: {hold_min: 5}             # its alerts are held this long while it restarts
   session:                          # investigation sessions: the model's own diagnostics
     minutes: 15
     max_checks: 10
@@ -229,7 +231,8 @@ actions:
     router_lan_bridge: "bridge"
     vps_iface: "eth0"
 
-# Linux hosts whose auth log is read for security events (ssh by key).
+# The auth logs of the devices that `manage: [logs]` (Linux, by lanowl's ssh key), read for
+# security events. The key below is also how every key login in secrets.yaml connects.
 hostlog:
   enabled: false
   interval_s: 120
@@ -240,9 +243,6 @@ hostlog:
     control_path: "/tmp/lanowl-hostlog-%C"
     control_persist: "1h"
     identity: "/config/id_ed25519"
-  hosts: []
-  # - {name: "Home server", ip: "192.168.88.10", user: "admin"}
-  # - {name: "VPS", ip: "203.0.113.10", user: "root", public: true}
   burst: {enabled: true, window_s: 300, fail_attempts: 8, repeat_s: 3600}
   connections: {enabled: true, max_established: 400, confirm_polls: 2, repeat_s: 3600}
   triage: {enabled: true, cooldown_s: 900, timeout_s: 90, fetch_lines: 400, max_lines: 40,
@@ -252,7 +252,6 @@ hostlog:
 updates:
   enabled: false
   at: "06:30"
-  hosts: []                         # [{ip, via: key|password|sudo|routeros|openwrt|unifi|esxi|homeassistant}]
   scan: {enabled: true, day: 1, at: "04:00", top_ports: 1000, deny_groups: ["security", "iot"]}
 cves:
   after_review: true
@@ -264,11 +263,10 @@ exposure:
   page_from: ""                     # "YYYY-MM-DD": watch what it finds for a while before it pages
   outside_scan: {top_ports: 1000, max_rate: 20}
   public_names: []                  # your own host names, looked at from outside
-  hosts: []
 
 # The model's scheduled looks: what is slowly changing, and what changed in configurations.
 drift: {enabled: false, at: "07:30"}
-configwatch: {enabled: false, machines: []}
+configwatch: {enabled: false}
 fixes: {enabled: false}
 scorecard: {enabled: false, max_per_day: 6}
 
@@ -280,8 +278,8 @@ backups:
   keep: 6
   keep_before_days: 90
   snapshot_days: 7
-  store: {host: "", path: "/srv/lanowl-backups", share: "", group: ""}
-  machines: []                      # [{ip, via: routeros|homeassistant|vps|store|files|esxi|shellies|lanowl}]
+  store: {host: "", path: "/srv/lanowl-backups", share: "", group: ""}   # a device with a key login
+  self: {daily: 7}                  # lanowl itself (its database, secrets, config), daily
 
 # The model's shell, in a sandbox beside lanowl (docker/sandbox). Off until the sandbox runs.
 shell:

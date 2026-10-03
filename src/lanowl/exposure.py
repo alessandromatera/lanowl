@@ -309,8 +309,8 @@ class Exposure:
     async def _read(self, h: dict) -> dict:
         ip, via = h["ip"], h["via"]
         acc = self.a.access
-        if via == "key":                                       # root over the host-log key
-            rc, out, err = await self.a.actions._ssh_run(ip, "sh -c " + _q(LINUX), 90)
+        if via == "key":                                       # root, over lanowl's key
+            rc, out, err = await self.a.actions._ssh_run(ip, "sh -c " + _q(LINUX), 90, root=True)
         elif via == "sudo":                                    # the listed login + its sudo
             rc, out, err = await acc.ssh(ip, "sudo -S -p '' sh -c " + _q(LINUX),
                                          sudo_pw=True, timeout_s=90)
@@ -318,6 +318,9 @@ class Exposure:
             rc, out, err = await acc.ssh(ip, ESXI, timeout_s=90)
         elif via == "openwrt":
             rc, out, err = await acc.ssh(ip, OPENWRT, timeout_s=60)
+        elif via == "profile":                                 # the owner's own kind
+            ok, v = await self.a.kinds.run(self.a, ip, "security")
+            return {"ok": True, "text": clip(v)} if ok else {"ok": False, "error": v}
         elif via == "routeros":
             parts, errs = [], []
             for cmd in ROUTEROS:
@@ -337,11 +340,28 @@ class Exposure:
                     if (err or "").strip() else "no answer"}
         return {"ok": True, "text": clip(out)}
 
+    def _public_host(self) -> str:
+        """The server on the internet the network is looked at from: `actions.checks.vps`, else
+        the first reviewed host lanowl reaches by its key at a public address."""
+        vps = str(((self.a.cfg.get("actions") or {}).get("checks") or {}).get("vps") or "")
+        if vps:
+            return vps
+        lans = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12",
+                                                    "192.168.0.0/16", "100.64.0.0/10")]
+        for h in self.hosts:
+            try:
+                addr = ipaddress.ip_address(h["ip"])
+            except ValueError:
+                continue
+            if h["via"] == "key" and not any(addr in n for n in lans):
+                return h["ip"]
+        return ""
+
     async def _outside(self) -> dict:
         """What the internet reaches: the public host scanned from here; the network from that
         host only when its public address is really on the router (never the provider's NAT)."""
         out: dict = {"ts": time.time()}
-        vps = next((h["ip"] for h in self.hosts if h["via"] == "key" and not h["ip"].startswith(("10.", "192.168."))), "")
+        vps = self._public_host()
         if vps:
             rc, xml, err = await _exec(
                 ["nmap", "-sT", "-Pn", "-n", "--top-ports", str(self.scan_ports),
@@ -408,7 +428,7 @@ class Exposure:
         ports = " ".join(str(p) for p in top_ports(self.scan_ports))
         if not ports:
             return {"public_address": addr, "error": "no port list (nmap-services missing)"}
-        vps = next((h["ip"] for h in self.hosts if h["via"] == "key"), "")
+        vps = self._public_host()
         cmd = (f"for p in {ports}; do echo $p; done | xargs -P 20 -I{{}} sh -c "
                + _q(f"nc -z -w 2 {addr} {{}} 2>/dev/null && echo OPEN {{}}") + "; true")
         rc, out, err = await self.a.actions._ssh_run(vps, cmd, 400)

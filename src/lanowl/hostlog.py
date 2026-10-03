@@ -215,6 +215,10 @@ class _Host:
     name: str
     ip: str
     user: str
+    identity: str = ""                # its own key file; "" = hostlog.ssh.identity
+    # its log is read (`manage: [logs]`); a host lanowl only logs in to by key is listed too,
+    # for the shared connection the key's other uses ride (actions._ssh_run)
+    watch: bool = True
     cursor: Optional[str] = None      # journal cursor: the watermark, opaque and exact
     ok: bool = True                   # did the last poll succeed
     last_error: str = ""
@@ -298,6 +302,8 @@ class HostLogWatcher:
                     log.warning("host-log: %s: bad trusted network %r ignored", h["ip"], n)
             self.hosts.append(_Host(name=str(h.get("name") or h["ip"]),
                                     ip=str(h["ip"]), user=str(h.get("user") or "root"),
+                                    identity=str(h.get("identity") or ""),
+                                    watch=bool(h.get("watch", True)),
                                     public=public, about=str(h.get("about") or ""),
                                     trusted=nets,
                                     burst=bool(h.get("burst", not public)),
@@ -306,7 +312,7 @@ class HostLogWatcher:
                                     tunnel_names=[str(x) for x in (h.get("tunnel_names") or [])]))
         if self.enabled:
             log.info("host-log watcher: %s every %ss",
-                     ", ".join(f"{h.user}@{h.ip}" for h in self.hosts),
+                     ", ".join(f"{h.user}@{h.ip}" for h in self.watched),
                      self._cfg().get("interval_s", 120))
 
     # --- config ------------------------------------------------------------
@@ -329,8 +335,13 @@ class HostLogWatcher:
         return (self._cfg().get("connections") or {})
 
     @property
+    def watched(self) -> list:
+        """The hosts whose log is read."""
+        return [h for h in self.hosts if h.watch]
+
+    @property
     def enabled(self) -> bool:
-        return bool(self._cfg().get("enabled", False)) and bool(self.hosts)
+        return bool(self._cfg().get("enabled", False)) and bool(self.watched)
 
     @property
     def observer_ip(self) -> str:
@@ -346,11 +357,11 @@ class HostLogWatcher:
         # Prime every host WITHOUT replaying its journal: on a restart the box holds days
         # of history and re-triaging it would page about logins from last week. Same rule
         # the router-log watermark follows.
-        for h in self.hosts:
+        for h in self.watched:
             await self._poll(h, prime=True)
         while not self._stop:
             t0 = time.time()
-            for h in self.hosts:
+            for h in self.watched:
                 try:
                     await self._poll(h)
                 except Exception as e:                # never let the watcher die
@@ -376,8 +387,8 @@ class HostLogWatcher:
                 "-o", "ControlMaster=auto",
                 "-o", f"ControlPath={s.get('control_path', '/tmp/lanowl-hostlog-%C')}",
                 "-o", f"ControlPersist={s.get('control_persist', '1h')}"]
-        if s.get("identity"):
-            argv += ["-i", str(s["identity"])]
+        if h.identity or s.get("identity"):
+            argv += ["-i", str(h.identity or s["identity"])]
         argv += [f"{h.user}@{h.ip}", remote]
         return argv
 
@@ -957,7 +968,7 @@ class HostLogWatcher:
                 "established": h.conns, "peers": h.peers,
                 "public": h.public,
                 **({"noise_24h": self.noise_24h(h)} if h.public else {}),
-            } for h in self.hosts],
+            } for h in self.watched],
         }
 
     # --- the raw log, on request --------------------------------------------
@@ -974,10 +985,10 @@ class HostLogWatcher:
         scanner hum and the IPsec keepalives of a public host are left out unless `noise` —
         35k lines a day of "Failed password for root" would bury every line anyone asked
         for — and so are lanowl's own logins."""
-        h = next((x for x in self.hosts if x.ip == ip), None)
+        h = next((x for x in self.watched if x.ip == ip), None)
         if h is None:
             return {"error": f"{ip} is not a host whose log lanowl reads; it reads: "
-                             + ", ".join(f"{x.name} ({x.ip})" for x in self.hosts)}
+                             + (", ".join(f"{x.name} ({x.ip})" for x in self.watched) or "none")}
         mins = max(1, min(int(float(hours or 24) * 60), 72 * 60))
         limit = max(1, min(int(limit or 40), 100))
         unit = str(unit or "").strip()

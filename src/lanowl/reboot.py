@@ -48,9 +48,10 @@ try:
 except Exception:  # pragma: no cover
     aiohttp = None
 
-KINDS = ("routeros", "ssh", "ssh_key", "reolink", "homeassistant", "ha_button")
+KINDS = ("routeros", "ssh", "ssh_key", "reolink", "homeassistant", "ha_button", "profile")
 BACK_S = {"routeros": 240, "ssh": 300, "ssh_key": 300, "reolink": 300, "homeassistant": 600,
-          "ha_button": 300}          # how long it may take to answer again
+          "ha_button": 300, "profile": 300}          # how long it may take to answer again
+NEEDS_PASSWORD = ("routeros", "ssh", "reolink")     # the rest: lanowl's key, HA, a profile
 DOWN_WAIT_S = 90                     # ...and to stop answering at all
 POLL_S = 3
 AFTER_BACK_S = 120                   # the hold's tail once it is back: its clients reconnect
@@ -141,8 +142,8 @@ class Rebooter:
             if st in ("backup", "down"):
                 return {"ok": False, "note": f"the network's internet is on the {name} right now "
                                              f"(WAN {st}) — not rebooting it"}
-        if via != "ssh_key" and not self.a.access.has(ip):
-            return {"ok": False, "note": f"no login for {name} in secrets.yaml"}
+        if via in NEEDS_PASSWORD and not self.a.access.has(ip):
+            return {"ok": False, "note": f"no login with a password for {name} in secrets.yaml"}
         chk = await getattr(self, "_check_" + via)(ip, name, d)
         chk.setdefault("risk", [])
         chk["risk"] = risk + chk["risk"]
@@ -199,11 +200,25 @@ class Rebooter:
                 "uptime": up, "uid": uid, "clients": clients}
 
     async def _check_ssh_key(self, ip, name, d) -> dict:
-        rc, out, err = await self.a.actions._ssh_run(ip, "cat /proc/uptime", 20)
+        # read as root: a login that may not become root could not reboot it either
+        rc, out, err = await self.a.actions._ssh_run(ip, "cat /proc/uptime", 20, root=True)
         up = proc_uptime(out) if rc == 0 else None
         if up is None:
             return {"ok": False, "note": f"cannot reach {name} over ssh: {_last(err) or 'no answer'}"}
         return {"ok": True, "note": f"up {fmt_s(up)}", "uptime": up}
+
+    async def _check_profile(self, ip, name, d) -> dict:
+        K = self.a.kinds
+        prof = K.profile_of(ip)
+        if prof is not None and "uptime" in prof.ops:
+            ok, up = await K.run(self.a, ip, "uptime")
+            if not ok:
+                return {"ok": False, "note": f"cannot read {name}'s uptime: {up}"}
+            return {"ok": True, "note": f"up {fmt_s(up)}", "uptime": up}
+        rc, _, err = await K._ssh(self.a, ip, "true", False, 20)
+        if rc != 0:
+            return {"ok": False, "note": f"cannot log in to {name}: {_last(err) or 'no answer'}"}
+        return {"ok": True, "note": f"{name} answers over ssh"}
 
     async def _check_reolink(self, ip, name, d) -> dict:
         r = await self._reolink(ip, [{"cmd": "GetDevInfo", "action": 0, "param": {}}])
@@ -245,7 +260,7 @@ class Rebooter:
         """{"ok", "ran", "result" | "error"}. `via`/`back_s`/`hold_s`: for a reboot that is
         part of something longer — a RouterOS upgrade installs during the boot."""
         via = via or self.via(ip)
-        back_s = back_s or BACK_S[via]
+        back_s = back_s or float((self.devices.get(ip) or {}).get("back_s") or 0) or BACK_S[via]
         held = [ip] + list(chk.get("clients") or [])
         t0 = time.time()
         self.a.hold(held, t0 + (hold_s or self.hold_for(ip)), f"reboot of {name}")
@@ -325,6 +340,11 @@ class Rebooter:
         if via == "ssh_key":
             rc, out, _ = await self.a.actions._ssh_run(ip, "cat /proc/uptime", 15)
             return proc_uptime(out) if rc == 0 else None
+        if via == "profile":
+            prof = self.a.kinds.profile_of(ip)
+            if prof is not None and "uptime" in prof.ops:
+                ok, up = await self.a.kinds.run(self.a, ip, "uptime")
+                return up if ok else None
         return None
 
     async def _send_routeros(self, ip, chk) -> tuple:
@@ -348,10 +368,14 @@ class Rebooter:
 
     async def _send_ssh_key(self, ip, chk) -> tuple:
         rc, out, err = await self.a.actions._ssh_run(
-            ip, "( sleep 2; systemctl reboot ) </dev/null >/dev/null 2>&1 & echo REBOOTING", 20)
+            ip, "( sleep 2; systemctl reboot ) </dev/null >/dev/null 2>&1 & echo REBOOTING", 20,
+            root=True)
         if "REBOOTING" not in (out or ""):
             return False, f"the reboot command did not run: {_last(err) or f'rc {rc}'}"
         return True, ""
+
+    async def _send_profile(self, ip, chk) -> tuple:
+        return await self.a.kinds.send_reboot(self.a, ip)
 
     async def _send_reolink(self, ip, chk) -> tuple:
         r = await self._reolink(ip, [{"cmd": "Reboot", "param": {}}], logout=False)

@@ -1,0 +1,49 @@
+# A Mac, over ssh (System Settings → General → Sharing → Remote Login).
+#
+# Shipped with lanowl, and the example to copy for a kind of your own: put a file like this in
+# config/profiles/<kind>.yaml and write `kind: <kind>` on the device in inventory.yaml.
+#
+# Each operation is a command and a fixed parser for what it prints — never code:
+#   text · lines · first_line · seconds · proc_uptime · boottime · {regex: '...'} (named groups)
+# Per operation, optionally: sudo (run it as root: the login's password goes to sudo -S),
+# timeout_s, ok_rc (exit codes that count as success), back_s (reboot), file (backup),
+# ignore (config: lines left out of the comparison).
+#
+# What the operations give, with `manage:` on the device:
+#   version + updates → updates · reboot (+ uptime) → reboot · config → config ·
+#   security → security · backup → backup
+kind: macos
+about: "an Apple Mac, reached over ssh"
+ops:
+  version:
+    cmd: "sw_vers -productName; sw_vers -productVersion"
+    parse: lines                       # the first line is the system, the second its release
+  updates:
+    cmd: "softwareupdate --list 2>&1"
+    parse: {regex: '^\* Label: (?P<pkg>.+)$'}
+    timeout_s: 240                     # it asks Apple's servers
+  uptime:
+    cmd: "sysctl -n kern.boottime"
+    parse: boottime
+  reboot:
+    cmd: "shutdown -r now"
+    sudo: true
+    back_s: 600
+  config:
+    cmd: >-
+      echo '# name'; scutil --get ComputerName; scutil --get LocalHostName;
+      echo '# network services'; networksetup -listallnetworkservices;
+      echo '# power'; pmset -g custom;
+      echo '# launch daemons and agents'; ls /Library/LaunchDaemons /Library/LaunchAgents;
+      echo '# crontab'; crontab -l 2>/dev/null; true
+  security:
+    cmd: >-
+      echo '# system'; sw_vers;
+      echo '# FileVault'; fdesetup status;
+      echo '# System Integrity Protection'; csrutil status;
+      echo '# Gatekeeper'; spctl --status;
+      echo '# application firewall'; /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate;
+      /usr/libexec/ApplicationFirewall/socketfilterfw --getstealthmode;
+      echo '# listening TCP sockets'; netstat -anv -p tcp | awk 'NR<3 || /LISTEN/';
+      echo '# users who may log in'; dscl . -list /Users UniqueID | awk '$2 >= 500'; true
+    timeout_s: 60

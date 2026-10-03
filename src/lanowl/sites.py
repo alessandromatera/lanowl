@@ -138,9 +138,14 @@ class Sites:
             except ValueError:
                 log.warning("sites: bad network in %s — left out", s.get("key"))
                 continue
+            router = str(s.get("router") or "")
+            dev = auditor.inv.get(router) if router else None
+            # the router's kind, from the inventory unless the site names it (kinds.py)
+            kind = str(s.get("kind") or "") or {"mikrotik": "routeros", "openwrt": "openwrt"}.get(
+                str(dev.attrs.get("kind") or "") if dev is not None else "", "")
             self.sites.append({"key": str(s["key"]), "name": str(s.get("name") or s["key"]),
-                               "nets": nets, "router": str(s.get("router") or ""),
-                               "kind": str(s.get("kind") or ""),
+                               "nets": nets, "router": router,
+                               "kind": kind,
                                "criticality": str(s.get("criticality")
                                                   or ("low" if s["key"] == HOUSE else "info"))})
         if not any(s["key"] == HOUSE for s in self.sites):

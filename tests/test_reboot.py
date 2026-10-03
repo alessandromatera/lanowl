@@ -139,7 +139,7 @@ def _run(coro_fn):
 def test_the_list_and_the_secret():
     print("\n-- secrets.yaml: named logins, the password never shown --")
     rows = X.parse(LIST)
-    check(rows["logins"]["porch-ap"] == (("admin", PW)) and rows["devices"]["192.168.10.32"] == "porch-ap",
+    check(rows["logins"]["porch-ap"][:2] == ("admin", PW) and rows["devices"]["192.168.10.32"] == "porch-ap",
           "a named login, and the address that uses it")
     check("empty" not in rows["logins"], "a login without a password is dropped")
     out = {}
@@ -179,8 +179,8 @@ def test_the_list_and_the_secret():
     lg = out["lg"]
     check(lg.password == PW and PW not in repr(lg) and "***" in repr(lg),
           "a Login never prints its password (repr)")
-    check(out["esx"] == ("root", "esx$1"), "an address mapped to a named login gets it")
-    check(out["override"] == ("root", "esx$1"), "a device's own credentials: wins over the address map")
+    check(tuple(out["esx"] or ())[:2] == ("root", "esx$1"), "an address mapped to a named login gets it")
+    check(tuple(out["override"] or ())[:2] == ("root", "esx$1"), "a device's own credentials: wins over the address map")
     check(out["none"] == (None, None), "no password, or no login named: no login")
     s = out["seen"]
     check(all(PW not in " ".join(x["argv"]) for x in s), "the password is never in argv")
@@ -309,7 +309,7 @@ def test_the_check():
         answers[("192.168.10.32", "/system")] = (255, "", "admin@192.168.10.32: Permission denied (password).")
         out["denied"] = await rb.check("192.168.10.32", "AP-Porch")
 
-        async def vps(ip, remote, timeout_s=20):
+        async def vps(ip, remote, timeout_s=20, root=False):
             return 0, "1209600.5 1.0\n", ""
         a.actions._ssh_run = vps
         out["vps"] = await rb.check("203.0.113.10", "VPS")

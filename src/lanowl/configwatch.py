@@ -147,8 +147,16 @@ def clean_export(text: str) -> str:
 _COUNTER = re.compile(r"\bcounter packets \d+ bytes \d+")
 
 
+def _same(text: str) -> str:
+    return text
+
+
 def clean_linux(text: str) -> str:
     return scrub("\n".join(_COUNTER.sub("counter", x.rstrip()) for x in (text or "").splitlines() if x.strip()))
+
+
+# how a kept snapshot is cleaned again before it is compared: a better cleaner is no change
+CLEAN = {"routeros": clean_export, "linux": clean_linux, "profile": _same}
 
 
 def section_of(line: str, kind: str, header: str = "") -> str:
@@ -212,7 +220,7 @@ class ConfigWatch(Review):
     def __init__(self, auditor):
         super().__init__(auditor)
         self.machines = [dict(m) for m in (self.c.get("machines") or [])
-                         if m.get("ip") and m.get("via") in ("routeros", "key", "sudo")]
+                         if m.get("ip") and m.get("via") in ("routeros", "key", "sudo", "profile")]
         self.timeout_s = float(self.c.get("model_timeout_s", 900))
 
     @staticmethod
@@ -248,8 +256,12 @@ class ConfigWatch(Review):
                 if rc != 0 or "/" not in (out or ""):
                     return {"ok": False, "error": words(err or "the export came back empty", 160)}
                 return {"ok": True, "kind": "routeros", "text": clean_export(out)}
+            if via == "profile":                      # the owner's own kind (kinds.py)
+                ok, v = await self.a.kinds.run(self.a, ip, "config")
+                return {"ok": True, "kind": "profile", "text": v} if ok else \
+                    {"ok": False, "error": words(v, 160)}
             if via == "key":
-                rc, out, err = await self.a.actions._ssh_run(ip, "sh -c " + _q(LINUX), 90)
+                rc, out, err = await self.a.actions._ssh_run(ip, "sh -c " + _q(LINUX), 90, root=True)
             else:
                 rc, out, err = await acc.ssh(ip, "sudo -S -p '' sh -c " + _q(LINUX), sudo_pw=True, timeout_s=90)
             if rc is None or not (out or "").strip():
@@ -276,7 +288,7 @@ class ConfigWatch(Review):
                 old = self.rec["snap"].get(ip)
                 st["first"] = old is None
                 # the snapshot kept is cleaned again, so a better cleaner never reads as a change
-                was = old and (clean_export if r["kind"] == "routeros" else clean_linux)(old["text"])
+                was = old and CLEAN.get(r["kind"], clean_linux)(old["text"])
                 if old is not None and was != r["text"]:
                     d = diff(was, r["text"], r["kind"])
                     if d:

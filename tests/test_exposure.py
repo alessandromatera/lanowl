@@ -67,7 +67,7 @@ def _setup(a, page_from="2099-01-01"):
         return 0, "== sshd (effective settings)\npasswordauthentication yes\npermitrootlogin yes\n", ""
     a.access.ssh = ssh
 
-    async def key(ip, remote, timeout_s=20):
+    async def key(ip, remote, timeout_s=20, root=False):
         calls["key"].append((ip, remote))
         return 0, "== sshd (effective settings)\npasswordauthentication yes\n== firewall\n-P INPUT ACCEPT\n", ""
     a.actions._ssh_run = key

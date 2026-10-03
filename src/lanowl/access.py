@@ -6,7 +6,8 @@ whenever it changes, so an updated password needs no restart.
 
     logins:                       # named logins; several devices may share one
       routers:  {user: admin, password: "..."}
-      printer:  {user: pi, password: "..."}
+      server:   {user: root, key: true}                 # lanowl's own ssh key
+      nas:      {user: admin, key: true, password: "..."}   # the key logs in, sudo takes the password
     devices:                      # address -> login name
       192.168.10.32: routers
 
@@ -50,22 +51,27 @@ LEGACY = ["-o", "HostKeyAlgorithms=+ssh-rsa",
 class Login(NamedTuple):
     user: str
     password: str
+    key: str = ""        # "": no key; "default": lanowl's own (hostlog.ssh.identity); or a path
 
     def __repr__(self) -> str:          # a log line or a traceback must never print it
-        return f"Login(user={self.user!r}, password=***)"
+        return f"Login(user={self.user!r}, password=***, key={self.key!r})"
 
 
 def parse(text: str) -> dict:
     """{"logins": {name: Login}, "devices": {address: login name}} from secrets.yaml's text.
-    A login without a password is dropped: it could log in to nothing."""
+    A login with neither a password nor a key is dropped: it could log in to nothing."""
     import yaml
     raw = yaml.safe_load(text) or {}
     if not isinstance(raw, dict):
         raise ValueError("secrets.yaml must be a mapping")
     logins = {}
     for name, v in (raw.get("logins") or {}).items():
-        if isinstance(v, dict) and v.get("password"):
-            logins[str(name)] = Login(str(v.get("user") or ""), str(v["password"]))
+        if not isinstance(v, dict):
+            continue
+        key = v.get("key")
+        key = "default" if key is True else str(key or "") if key is not False else ""
+        if v.get("password") or key:
+            logins[str(name)] = Login(str(v.get("user") or ""), str(v.get("password") or ""), key)
     devices = {str(ip): str(n) for ip, n in (raw.get("devices") or {}).items() if n}
     return {"logins": logins, "devices": devices}
 
@@ -115,7 +121,15 @@ class Access:
         return self._data["logins"].get(self.login_name(ip))
 
     def has(self, ip: str) -> bool:
-        return self.login(ip) is not None
+        """A login with a password: what ssh-with-a-password, sudo and HTTP logins need."""
+        lg = self.login(ip)
+        return lg is not None and bool(lg.password)
+
+    def by_key(self, ip: str) -> bool:
+        """Its login is lanowl's ssh key (kinds.py routes it through the key's shared
+        connection, hostlog.py)."""
+        lg = self.login(ip)
+        return lg is not None and bool(lg.key)
 
     # --- ssh with a password ---------------------------------------------------
     def _askpass_path(self) -> str:
@@ -148,7 +162,7 @@ class Access:
         """(argv, env, login) of an ssh command NOT run yet — for streaming its output into
         another process (backups.py). None = no login for it."""
         lg = self.login(ip)
-        if lg is None or not lg.user:
+        if lg is None or not lg.user or not lg.password:
             return None
         return self.ssh_argv(ip, lg.user + user_suffix, remote), self._env(lg), lg
 
@@ -159,6 +173,8 @@ class Access:
         lg = self.login(ip)
         if lg is None or not lg.user:
             return None, f"no login for {ip} in secrets.yaml"
+        if not lg.password:
+            return None, f"{ip}'s login is lanowl's ssh key, and this needs a password"
         any_key = ip in self.hostkey_any
         argv = (["scp", "-q", "-o", "BatchMode=no", "-o", "NumberOfPasswordPrompts=1",
                  "-o", "PubkeyAuthentication=no", "-o", "ConnectTimeout=8",
@@ -180,6 +196,8 @@ class Access:
             return None, "", f"no login for {ip} in secrets.yaml"
         if not lg.user:
             return None, "", f"secrets.yaml has a password but no user for {ip}"
+        if not lg.password:
+            return None, "", f"{ip}'s login is lanowl's ssh key, and this needs a password"
         if sudo_pw:
             stdin = lg.password.encode() + b"\n" + (stdin or b"")
         rc, out, err = await _exec(self.ssh_argv(ip, lg.user + user_suffix, remote, tty),

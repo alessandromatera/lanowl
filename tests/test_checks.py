@@ -14,7 +14,7 @@ records its argument list. Pinned down here (checks.py + the sessions in actions
      the message; the budget, the clock and the End button each close it; a restart closes it;
   6. shadow mode runs nothing even inside a session; the audit's request is silent and once
      a day; sessions a day are capped;
-  7. vps_restart: only the VPS, only the listed units, root without sudo, peers counted after;
+  7. restart_service on the VPS: only its listed units, root without sudo, peers counted after;
   8. the router's test-policy checks exist only once the router allows them;
   9. mikrotik_read gets the router's credentials from the secret file.
 """
@@ -49,8 +49,9 @@ CFG = {"actions": {
     "repeat_after_h": 24, "pin_sha256": A.pin_hash("2389"),
     "catalog": {"nmap_scan": {"deny_groups": ["security"]},
                 "nmap_service": {"deny_groups": ["security", "iot"]},
-                "restart_service": {"host": "192.168.10.113", "units": ["nodered"]},
-                "vps_restart": {"host": VPS, "units": ["wg-quick@wg0", "xl2tpd"]},
+                "restart_service": {"hosts": {
+                    "192.168.10.113": {"via": "key", "units": ["nodered"]},
+                    VPS: {"via": "key", "units": ["wg-quick@wg0", "xl2tpd"]}}},
                 "shelly_reboot": {}},
     "session": {"minutes": 15, "max_checks": 3, "max_per_day": 8},
     "checks": {"lan_subnets": ["192.168.10.0/24"], "home_server": "192.168.10.113", "vps": VPS}},
@@ -554,9 +555,9 @@ def test_session_time_end_restart_shadow():
           "sessions a day are capped")
 
 
-# --- 7. vps_restart --------------------------------------------------------------------------
+# --- 7. restart_service on the VPS ---------------------------------------------------------
 def test_vps_restart():
-    print("\n-- vps_restart: only the VPS, only the listed units, peers counted after --")
+    print("\n-- restart_service on the VPS: only its listed units, root without sudo, peers counted --")
     out = {}
 
     async def go(d):
@@ -565,19 +566,19 @@ def test_vps_restart():
         seen = []
         now = int(time.time())
 
-        async def fake_ssh_run(ip, remote, timeout_s=20):
+        async def fake_login_run(ip, remote, timeout_s=20, sudo_pw=False):
             seen.append((ip, remote))
-            if "is-active" in remote and "restart" not in remote:
-                return 0, "active\n", ""
+            if "is-active" in remote and "restart" not in remote.split(";")[0]:
+                return 0, "active\nALLOWED\n", ""
             return 0, f"rc=0\nactive\n---\n{now}\nKEY1\t{now - 5}\nKEY2\t0\n", ""
-        a.actions._ssh_run = fake_ssh_run
+        a.actions._login_run = fake_login_run
         try:
             with a.actions.source("telegram"):
-                P = lambda **k: a.actions.propose({"action": "vps_restart", "reason": "r", **k})  # noqa: E731
+                P = lambda **k: a.actions.propose({"action": "restart_service", "reason": "r", **k})  # noqa: E731
                 out["lan"] = await P(ip="192.168.10.113", service="wg-quick@wg0")
                 out["unit"] = await P(ip=VPS, service="sshd")
                 out["trick"] = await P(ip=VPS, service="xl2tpd; reboot")
-                out["ok"] = await P(ip="vps", service="wg-quick@wg0.service")
+                out["ok"] = await P(ip=VPS, service="wg-quick@wg0.service")
             await _settle()
             p = a.actions.items[-1]
             out["p"] = dict(p)
@@ -594,16 +595,16 @@ def test_vps_restart():
         check("refused" in out[k], f"refused: {k} — {out[k].get('refused')}")
     p = out["p"]
     check(out["ok"].get("proposal") and p["ip"] == VPS
-          and p["command"] == f"ssh root@{VPS} systemctl restart wg-quick@wg0.service",
-          "the VPS by name, a listed unit: root over ssh, no sudo")
-    check(any("the remote ones" in r for r in p["risk"]), "the message says what drops: every tunnel, the remote sites included")
+          and p["command"] == "systemctl restart wg-quick@wg0.service on VPS",
+          "the VPS, a listed unit")
+    check(any("every WireGuard tunnel" in r for r in p["risk"]), "the message says what drops: every tunnel")
     o = out["done"]["outcome"]
     check(out["done"]["status"] == "done" and o["result"] ==
           "wg-quick@wg0.service restarted — active 4 s later; 1 of 2 peers handshook again within 20 s",
           f"after the restart it counts the peers that came back: {o.get('result')}")
     rem = out["seen"][-1][1]
-    check("systemctl restart wg-quick@wg0.service" in rem and "sudo" not in rem
-          and "wg show wg0 latest-handshakes" in rem, "the command run on the VPS")
+    check(rem.startswith("/usr/bin/systemctl restart wg-quick@wg0.service;") and "sudo" not in rem
+          and "wg show wg0 latest-handshakes" in rem, "as root over the key: no sudo")
 
 
 def test_router_probe():

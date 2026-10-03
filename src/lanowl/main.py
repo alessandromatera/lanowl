@@ -22,12 +22,14 @@ import contextlib
 import json
 import logging
 import os
+import sys
 import time
 from typing import Optional
 from urllib.parse import urlsplit
 
 from . import logbook, probes, weekly
 from .access import Access
+from .kinds import Kinds, report as kinds_report
 from .actions import Actions
 from .backups import Backups
 from .configwatch import ConfigWatch
@@ -90,9 +92,12 @@ NO_LLM_KINDS = ("wan", "wan-path")
 
 class Auditor:
     def __init__(self, cfg, inv, mqtt, state, tracker, executor, agent, no_llm=False,
-                 no_telegram=False):
+                 no_telegram=False, kinds=None):
         self.cfg = cfg
         self.inv = inv
+        # what lanowl does with each device beyond watching it, and the owner's own kinds
+        # (kinds.py) — planned before this, since every feature reads its list at its start
+        self.kinds = kinds or Kinds()
         self.mqtt = mqtt
         self.state = state
         # history of a device no longer in the inventory is not read as the network's
@@ -1763,6 +1768,8 @@ async def _amain(args):
     cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
     inv = load_inventory(args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
     _setup_logging(cfg, args.log_level)
+    # each device's kind, login and `manage`, into the lists every feature reads (kinds.py)
+    kinds = Kinds.load(cfg, inv, Access(cfg, inv))
 
     mqtt = MqttBridge(cfg)
     if not args.no_mqtt:
@@ -1781,7 +1788,7 @@ async def _amain(args):
     executor = ToolExecutor(cfg, inv, mqtt, state)
     agent = LlmAgent(cfg, executor)
     auditor = Auditor(cfg, inv, mqtt, state, tracker, executor, agent, no_llm=args.no_llm,
-                      no_telegram=args.no_telegram)
+                      no_telegram=args.no_telegram, kinds=kinds)
     if not args.once:
         auditor.resume_alerts()
 
@@ -1797,6 +1804,17 @@ async def _amain(args):
         state.close()
 
 
+def _check(args) -> int:
+    """`lanowl --check`: the plan for every device, read from the same files a start reads.
+    1 when something is wrong, so it can gate a deploy."""
+    cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
+    inv = load_inventory(args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
+    logging.basicConfig(level=logging.ERROR)
+    k = Kinds.load(cfg, inv, Access(cfg, inv))
+    print(kinds_report(k, inv))
+    return 1 if k.problems or any(p.problems for p in k.plans) else 0
+
+
 def main():
     ap = argparse.ArgumentParser(prog="lanowl", description="lanowl: a watchful, read-only caretaker for your network")
     ap.add_argument("--config", default=None)
@@ -1807,7 +1825,11 @@ def main():
     ap.add_argument("--no-telegram", action="store_true",
                     help="never send to Telegram (rehearsals: the smoke run)")
     ap.add_argument("--log-level", default=None)
+    ap.add_argument("--check", action="store_true",
+                    help="say what lanowl will do with each device, and why not; then exit")
     args = ap.parse_args()
+    if args.check:
+        sys.exit(_check(args))
     try:
         asyncio.run(_amain(args))
     except KeyboardInterrupt:

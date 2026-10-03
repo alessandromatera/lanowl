@@ -49,6 +49,12 @@ docker compose -f docker/compose.yaml up -d
 Then open `http://<this host>/`. On Linux, allow unprivileged ping first
 (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
 
+What lanowl will do with each device, and why not:
+
+```bash
+docker compose -f docker/compose.yaml run --rm lanowl lanowl --check
+```
+
 A dry run, one sweep printed and nothing sent:
 
 ```bash
@@ -62,8 +68,9 @@ Three files, all under `config/`:
 | file | what | shared? |
 |---|---|---|
 | `config.yaml` | everything lanowl does, with every optional feature off | yes |
-| `inventory.yaml` | the devices it watches: address, name, group, criticality, checks | yes |
+| `inventory.yaml` | the devices: how each is watched, and what lanowl does with it | yes |
 | `secrets.yaml` | device logins, by name; mode 600, mounted read-only | **never** |
+| `profiles/` | device kinds of your own (optional) | yes |
 
 Two settings shape how the owl thinks:
 
@@ -75,6 +82,70 @@ Two settings shape how the owl thinks:
 **A backup internet link** is optional. Without `wan.path.route_comment` lanowl assumes one
 line, and nothing speaks of failover. With it (a MikroTik dual-WAN), name your links
 (`wan.path.main` / `backup`) and every message uses those names.
+
+## Devices
+
+Each device is described once, in the inventory. Watching it needs only an address and its
+checks. What lanowl does with it besides is set on the device too:
+
+```yaml
+- ip: 192.168.88.1
+  name: Router
+  kind: mikrotik                 # what it is
+  credentials: routers           # its login, by name, in secrets.yaml
+  manage: [updates, upgrade, reboot, config, security, backup]
+```
+
+| feature | what lanowl does |
+|---|---|
+| `logs` | reads its auth log for security events |
+| `updates` | checks its updates every morning |
+| `upgrade` | may propose installing them |
+| `reboot` | may propose a reboot |
+| `restart` | may propose restarting one of its listed services |
+| `config` | tells what changed in its configuration |
+| `security` | reviews what it exposes, every day |
+| `backup` | backs it up, monthly and before updates |
+
+Built-in kinds and what each can do:
+
+| kind | logs | updates | upgrade | reboot | restart | config | security | backup |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `mikrotik` | | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
+| `openwrt` | | ✓ | | ✓ | | | ✓ | |
+| `linux` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `esxi` | | ✓ | | | | | ✓ | ✓ |
+| `unifi` | | ✓ | | ✓ | | | | |
+| `homeassistant` | | ✓ | | ✓ | | | | ✓ |
+| `reolink` | | | | ✓ | | | | |
+| `shelly` | | | | ✓ | | | | ✓ |
+| `generic` | | | | | | | | |
+
+Any device can be rebooted through a Home Assistant button (a smart plug):
+`reboot: {ha_button: button.nvr_plug_restart}`. A feature's options sit under its name:
+`restart: {units: [mosquitto]}`, `backup: {paths: [etc, home]}`,
+`reboot: {risk: "...", hold_min: 10}`, `logs: {public: true, about: "..."}`.
+
+**Logins** (`secrets.yaml`) are a user with a password, lanowl's ssh key (`key: true`), or both
+(the key logs in, the password is what sudo asks for). A user other than root needs sudo for
+what reads or changes the system.
+
+**A kind of your own** is a profile: `config/profiles/<kind>.yaml`, a command per operation
+and a fixed parser for what it prints, never code. lanowl ships `macos` as one; copy it:
+
+```yaml
+kind: macos
+ops:
+  version:  {cmd: "sw_vers -productName; sw_vers -productVersion", parse: lines}
+  updates:  {cmd: "softwareupdate --list 2>&1", parse: {regex: '^\* Label: (?P<pkg>.+)$'}}
+  uptime:   {cmd: "sysctl -n kern.boottime", parse: boottime}
+  reboot:   {cmd: "shutdown -r now", sudo: true, back_s: 600}
+  config:   {cmd: "scutil --get ComputerName; pmset -g custom"}
+  security: {cmd: "fdesetup status; csrutil status; spctl --status"}
+```
+
+Operations: `version`, `updates`, `uptime`, `reboot`, `config`, `security`, `backup`.
+Parsers: `text`, `lines`, `first_line`, `seconds`, `proc_uptime`, `boottime`, `{regex: ...}`.
 
 ## The model
 

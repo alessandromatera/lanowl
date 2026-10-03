@@ -1,17 +1,37 @@
-# lanowl — the devices it watches. Copy to inventory.yaml and edit.
+# lanowl — the devices it watches, and what it does with each. Copy to inventory.yaml and edit.
 #
 # Every address lanowl probes, and every one the model's tools may touch, is here: an
 # address that is not is refused. Start small — the dashboard lists what the router's DHCP
 # sees and nobody watches, with a Watch button.
 #
+# --- watching (every device) -----------------------------------------------------------------
 # criticality: critical (pages at once) | high | warning | low | info (reported once, never pages)
 # checks:      icmp | tcp (port) | http (port, path) | snmp | arp (the router ARP-pings it) |
 #              link (iface: the router port it hangs off) | lease (its DHCP lease; least reliable)
 #              each may carry timeout_ms (and count for icmp) for gear on weak Wi-Fi
 # optional:    mac (follows it when DHCP moves it) · role · note · depends_on (an address, or
 #              "wan": down because what it is reached through is down — one message, not many)
-#              · expect_offline: sun (off at night) | day (off in daylight) · debounce_fails ·
-#              credentials (a login name in secrets.yaml)
+#              · expect_offline: sun (off at night) | day (off in daylight) · debounce_fails
+#
+# --- managing (optional, per device) ---------------------------------------------------------
+# kind:        what it is — mikrotik | openwrt | linux | esxi | unifi | homeassistant |
+#              reolink | shelly | generic — or a profile of your own (config/profiles/<kind>.yaml;
+#              macos ships as one)
+# credentials: its login, by name, in secrets.yaml (a password, lanowl's ssh key, or both)
+# manage:      what lanowl does with it besides watching it — each only where its kind can:
+#                logs      reads its auth log for security events          (linux, by key)
+#                updates   checks its updates every morning
+#                upgrade   may propose installing them                     (mikrotik, linux)
+#                reboot    may propose a reboot
+#                restart   may propose restarting a listed service          (linux)
+#                config    tells what changed in its configuration
+#                security  reviews what it exposes, every day
+#                backup    backs it up, monthly and before updates
+#              Anything that CHANGES something is only ever a proposal you approve with a button.
+# A feature's options sit under its own name (restart: {units}, backup: {paths}, reboot:
+# {risk, hold_min, also_hold, ha_button}, logs: {public, about, trusted}).
+#
+# `lanowl --check` says what it will do with each device, and why not.
 
 groups:
   # majority_down_critical: most of a group dark at once is ONE critical (a switch, PoE, power)
@@ -29,7 +49,10 @@ devices:
     group: network
     criticality: critical
     role: main-router
+    kind: mikrotik
     credentials: routers
+    manage: [updates, upgrade, reboot, config, security, backup]
+    reboot: {risk: "the whole network is offline while it restarts"}
     checks:
       - {type: icmp}
       - {type: http, port: 80}
@@ -39,7 +62,9 @@ devices:
     group: network
     criticality: high
     role: ap
+    kind: openwrt
     credentials: routers
+    manage: [updates, reboot, security]
     checks:
       - {type: icmp}
 
@@ -47,6 +72,11 @@ devices:
     name: "Home server"
     group: servers
     criticality: critical
+    kind: linux
+    credentials: server                               # lanowl's ssh key (secrets.yaml)
+    manage: [logs, updates, upgrade, reboot, restart, config, security, backup]
+    restart: {units: [mosquitto]}                     # what it may restart, and nothing else
+    logs: {about: "the home server: MQTT, the media library, backups"}
     checks:
       - {type: icmp}
       - {type: tcp, port: 22}
@@ -56,6 +86,9 @@ devices:
     name: "NVR"
     group: cameras
     criticality: critical
+    kind: reolink
+    credentials: cameras
+    manage: [reboot]
     checks:
       - {type: icmp}
       - {type: tcp, port: 554}
@@ -64,6 +97,8 @@ devices:
     name: "Shelly Kitchen"
     group: home
     criticality: low
+    kind: shelly
+    manage: [reboot, backup]                          # its controller restarts; relays never switch
     checks:
       - {type: icmp, timeout_ms: 2500, count: 3}     # weak Wi-Fi: more patience, not fewer probes
 
@@ -82,12 +117,28 @@ devices:
     checks:
       - {type: icmp}
 
+  # A Mac, by the shipped `macos` profile:
+  # - ip: 192.168.88.70
+  #   name: "Studio Mac"
+  #   group: servers
+  #   criticality: high
+  #   kind: macos
+  #   credentials: mac
+  #   manage: [updates, reboot, config, security]
+  #   checks:
+  #     - {type: icmp}
+
   # A remote site, reached through a VPN hub: down with its parent, never on its own.
   # - ip: 203.0.113.10
   #   name: "VPS"
   #   group: vpn
   #   criticality: warning
   #   depends_on: wan
+  #   kind: linux
+  #   credentials: vps                                # root by lanowl's key
+  #   manage: [logs, updates, upgrade, reboot, restart, security, backup]
+  #   restart: {units: [wg-quick@wg0]}
+  #   logs: {public: true, about: "the VPN hub on the internet"}
   #   checks:
   #     - {type: tcp, port: 22}                       # many VPSs drop ping
   # - ip: 10.8.0.9
@@ -96,5 +147,8 @@ devices:
   #   criticality: info
   #   depends_on: 203.0.113.10
   #   debounce_fails: 5                               # a tunnel re-keys after a failover
+  #   kind: mikrotik
+  #   credentials: routers
+  #   manage: [updates, config, backup]
   #   checks:
   #     - {type: icmp}

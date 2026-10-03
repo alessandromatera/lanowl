@@ -72,8 +72,8 @@ ACTIONS_CFG = {"actions": {
     "repeat_after_h": 24, "pin_sha256": A.pin_hash("2389"),
     "catalog": {"nmap_scan": {"deny_groups": ["security"]},
                 "nmap_service": {"deny_groups": ["security", "iot"]},
-                "restart_service": {"host": "192.168.10.113",
-                                    "units": ["nodered", "mosquitto"]},
+                "restart_service": {"hosts": {"192.168.10.113": {
+                    "via": "key", "units": ["nodered", "mosquitto"]}}},
                 "shelly_reboot": {}}}}
 
 
@@ -182,14 +182,14 @@ def test_rules():
                    ("iot", "a version probe on cheap IoT"),
                    ("noports", "nmap_service without ports"),
                    ("manyports", "nmap_service with 11 ports"),
-                   ("badhost", "restart_service on anything but the service host"),
+                   ("badhost", "restart_service on a device with no services listed"),
                    ("badunit", "a service not on the list (or a shell trick)"),
                    ("notshelly", "shelly_reboot on something that is not a Shelly")]:
         check("refused" in out[k], f"refused: {why} — {out[k].get('refused', out[k])}")
     check(out["svc"].get("proposal") and out["nmap"].get("proposal"), "valid ones are proposed")
     svc = next(p for p in out["items"] if p["action"] == "restart_service" and p["status"] == "pending")
     nm = next(p for p in out["items"] if p["action"] == "nmap_service" and p["status"] == "pending")
-    check(svc["command"] == "ssh pi@192.168.10.113 sudo -n systemctl restart nodered.service",
+    check(svc["command"] == "systemctl restart nodered.service on VM HomeHub",
           "the command is built by the code, from the allow-list")
     check(nm["command"] == "nmap -sT -sV -Pn -p 80,554 192.168.10.31" and nm["args"]["ports"] == [80, 554],
           "ports are numbers, deduplicated and sorted")
@@ -731,12 +731,12 @@ def test_live_restart_service():
         calls = []
         allowed = {"n": "0"}
 
-        async def fake_ssh_run(ip, remote, timeout_s=20):
+        async def fake_login_run(ip, remote, timeout_s=20, sudo_pw=False):
             calls.append(remote)
             if "sudo -n -l" in remote:
-                return 0, f"active\n---\n{allowed['n']}\n", ""
+                return 0, "active\n" + ("ALLOWED" if allowed["n"] == "1" else "REFUSED") + "\n", ""
             return 0, "rc=0\nactive\n", ""
-        a.actions._ssh_run = fake_ssh_run
+        a.actions._login_run = fake_login_run
         try:
             with a.actions.source("telegram"):
                 out["no_rule"] = await a.actions.propose({"action": "restart_service",
@@ -764,7 +764,7 @@ def test_live_restart_service():
             tg.restore()
     with tempfile.TemporaryDirectory() as d:
         asyncio.run(go(d))
-    check("refused" in out["no_rule"] and "no sudoers rule" in out["no_rule"]["refused"],
+    check("refused" in out["no_rule"] and "no sudo for it" in out["no_rule"]["refused"],
           "without the sudoers rule it is refused, and says why")
     check(out["ok"].get("proposal"), "with it, proposed")
     run = [c for c in out["calls"] if "systemctl restart" in c and "sudo -n -l" not in c]

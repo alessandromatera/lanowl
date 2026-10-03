@@ -300,6 +300,8 @@ class ToolExecutor:
         out = {"ip": ip, "name": dev.name if dev else "?",
                "group": dev.group if dev else "?",
                "criticality": dev.criticality if dev else "?"}
+        if dev is not None and dev.attrs.get("kind"):
+            out["kind"] = str(dev.attrs["kind"])          # what it is (kinds.py)
         mac = (dev.attrs.get("mac") or "").upper() if dev else ""
 
         # --- current probe state

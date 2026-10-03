@@ -102,7 +102,7 @@ class _Fake:
     def install(self):
         a, fk = self.a, self
 
-        async def ssh_run(ip, remote, timeout_s=20):
+        async def ssh_run(ip, remote, timeout_s=20, root=False):
             return (0, fk.linux[ip], "") if ip in fk.linux else (None, "", "no")
         a.actions._ssh_run = ssh_run
 
@@ -301,7 +301,7 @@ def test_install_updates():
         state = {"203.0.113.10": UBUNTU.format(rb=int(time.time())),
                  "192.168.10.113": UBUNTU.format(rb=0).replace("REBOOT", "XREBOOT")}
 
-        async def ssh_run(ip, remote, timeout_s=20):
+        async def ssh_run(ip, remote, timeout_s=20, root=False):
             ran.append(("key", ip, remote, False))
             if remote.startswith("systemd-run"):
                 state[ip] = state[ip].split("UPG=")[0]          # everything installed
@@ -487,7 +487,7 @@ def test_installed_by_itself():
         out["before"] = next(h for h in a.updates.view()["hosts"] if h["ip"] == "203.0.113.10")["security"]
         cmds = []
 
-        async def ssh_run(ip, remote, timeout_s=20):
+        async def ssh_run(ip, remote, timeout_s=20, root=False):
             cmds.append(remote)
             return 0, (hist if "history.log" in remote else fresh), ""
         a.actions._ssh_run = ssh_run
@@ -517,7 +517,7 @@ def test_phased_and_presses():
         a = _auditor(d)[1]
         a.cfg["actions"]["catalog"]["apt_upgrade"] = {"hosts": {"203.0.113.10": {"via": "key"}}}
 
-        async def ssh_run(ip, remote, timeout_s=20):
+        async def ssh_run(ip, remote, timeout_s=20, root=False):
             return 0, phased_state, ""
         a.actions._ssh_run = ssh_run
         out["only_phased"] = await a.actions.ask("apt_upgrade", "203.0.113.10", "dashboard")

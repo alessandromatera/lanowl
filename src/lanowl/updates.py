@@ -30,7 +30,7 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Optional
 
-from . import probes
+from . import kinds, probes
 from .checks import _exec
 from .model import on_main_lan
 from .reboot import fmt_s, proc_uptime, routeros_field
@@ -396,6 +396,21 @@ class Updates:
             st, c = await self.a.actions.reboot._ha("GET", "/api/config")
             return {"kind": "homeassistant", "os": f"Home Assistant {(c or {}).get('version', '?')}",
                     "ha_updates": ups}
+        if via == "profile":
+            # a kind of the owner's own (kinds.py): its version and its waiting updates, as
+            # its profile reads them; reported, never paged
+            K, out = self.a.kinds, {}
+            prof = K.profile_of(ip)
+            if prof is not None and "version" in prof.ops:
+                ok, v = await K.run(self.a, ip, "version")
+                if not ok:
+                    return {"error": f"cannot read it: {v}"}
+                out.update(kinds.version_fields(v))
+            ok, v = await K.run(self.a, ip, "updates")
+            if not ok:
+                return {"error": f"cannot read its updates: {v}"}
+            return {"kind": prof.kind if prof else "profile", "profile": True, **out,
+                    "updates": kinds.update_items(v)}
         return {"error": f"unknown way to read it: {via}"}
 
     async def _fetch(self, url: str) -> Optional[str]:
@@ -521,6 +536,12 @@ class Updates:
                 if h.get("fw_new") and h.get("fw") and h["fw_new"] != h["fw"]:
                     out.append({"key": f"fw:{ip}", "ip": ip, "page": False,
                                 "text": f"{who}: RouterBOARD firmware {h['fw']} → {h['fw_new']}"})
+            elif h.get("profile"):
+                ups = h.get("updates") or []
+                if ups:
+                    names = ", ".join(u["pkg"] for u in ups[:6]) + ("…" if len(ups) > 6 else "")
+                    out.append({"key": f"upd:{ip}", "ip": ip, "page": False,
+                                "text": f"{who}: {len(ups)} update(s) waiting — {names}"})
             elif h.get("kind") == "homeassistant":
                 for u in h.get("ha_updates") or []:
                     out.append({"key": f"ha:{u['entity']}", "ip": ip, "page": False,
@@ -760,7 +781,7 @@ class Updates:
         `root_cmd` runs it through sudo -S with the same password."""
         via = self.upgradable().get(ip, {}).get("via")
         if via == "key":
-            return await self.a.actions._ssh_run(ip, cmd, timeout_s)
+            return await self.a.actions._ssh_run(ip, cmd, timeout_s, root=root_cmd)
         if root_cmd:
             cmd = f"sudo -S -p '' sh -c {_sq(cmd)}"
         return await self.a.access.ssh(ip, cmd, sudo_pw=root_cmd, timeout_s=timeout_s)

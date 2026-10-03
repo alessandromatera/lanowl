@@ -222,8 +222,8 @@ def device_info(a, ip: str) -> dict:
                    "not scanned: only the main LAN is" if not on_main_lan(a.cfg, ip) else
                    f"not scanned: the {grp} group is left out (version probes crash it)"
                    if grp in a.updates.scan_deny else "in the monthly vulnerability scan")
-    out["host_log"] = any(h.ip == ip for h in (getattr(a.hostlog, "hosts", None) or []))
-    out["login_known"] = a.access.has(ip)
+    out["host_log"] = any(h.ip == ip for h in (getattr(a.hostlog, "watched", None) or []))
+    out["login_known"] = a.access.login(ip) is not None
     out["actions"] = [{"id": p.get("id"), "title": ac.public(p)["title"], "status": p.get("status"),
                        "ts": p.get("done_ts") or p.get("ts"), "words": ac._status_words(p)}
                       for p in ac.items if p.get("ip") == ip][-6:][::-1]

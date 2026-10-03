@@ -124,7 +124,8 @@ class Fixes:
         a, out = self.a, []
         h = next((x for x in (getattr(a.hostlog, "hosts", None) or []) if x.ip == ip), None)
         if h is not None:
-            out.append(f"its log watcher, always connected: as {h.user} by its ssh KEY")
+            out.append(f"its log watcher, always connected: as {h.user} by its ssh KEY" if h.watch
+                       else f"as {h.user} by its ssh KEY")
         for what, items in (("the morning security review", a.exposure.hosts),
                             ("the configuration snapshot", getattr(a, "configwatch", None) and a.configwatch.machines),
                             ("the update check", a.updates.hosts)):

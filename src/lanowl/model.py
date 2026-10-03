@@ -139,6 +139,10 @@ def load_config(path: str) -> dict:
     import yaml
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
+    # the owner's own device kinds (kinds.py): a `profiles` folder beside config.yaml
+    pr = cfg.get("profiles") if isinstance(cfg.get("profiles"), dict) else {}
+    pr.setdefault("dir", os.path.join(os.path.dirname(os.path.abspath(path)), "profiles"))
+    cfg["profiles"] = pr
     return _env_override(cfg)
 
 
