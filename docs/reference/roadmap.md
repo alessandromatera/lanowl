@@ -16,5 +16,5 @@ and nothing here is promised by a date.
 - **Releases**: a multi-architecture image on GitHub's registry and packages on PyPI, so
   installing needs no build.
 
-The working list, including the rough edges found while testing, is
-[`TODO.md`](../../TODO.md) in the repository. Ideas and requests are welcome as GitHub issues.
+Ideas, requests and bugs are welcome as
+[GitHub issues](https://github.com/alessandromatera/lanowl/issues).
