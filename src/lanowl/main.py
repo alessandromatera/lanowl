@@ -1841,7 +1841,10 @@ def _check(args) -> int:
     print("\n" + text)
     text, wrong = model_report(cfg)
     print("\n" + text)
-    return 1 if bad or wrong or k.problems or any(p.problems for p in k.plans) else 0
+    from .shell import report as shell_report
+    text, walls = shell_report(cfg)
+    print("\n" + text)
+    return 1 if bad or wrong or walls or k.problems or any(p.problems for p in k.plans) else 0
 
 
 def main():

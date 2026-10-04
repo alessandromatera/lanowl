@@ -80,6 +80,8 @@ def test_canary():
             out["back"] = dict(await a.shell.canary())
             reply["out"] = "HANDSHAKE-FAIL\nGET-000\nSELF-000\nVM-CLOSED\n"
             out["noctl"] = dict(await a.shell.canary())
+            a.shell.lan_host = a.shell._self_ip()          # the control on lanowl's own host
+            out["own"] = dict(await a.shell.canary())
         finally:
             srv.close()
             await srv.wait_closed()
@@ -107,6 +109,9 @@ def test_canary():
           "and one message when it holds again")
     check(out["noctl"]["ok"] is False and "not proven" in out["noctl"]["why"] and len(out["tg"]) == 2,
           "no handshake to the control: not proven, off — quietly (the LAN or the control host is down)")
+    check(out["own"]["ok"] is False and "lanowl's own host" in out["own"]["why"]
+          and "the LAN or that host is down" not in out["own"]["why"],
+          "the control on lanowl's own host: said so, not 'the LAN is down'")
     check(out["gone"]["ok"] is False and "not running" in out["gone"]["why"], "no socket: off")
     check("not a socket" in out["planted"].get("error", ""), "a plain file where the socket should be is refused")
 
@@ -220,6 +225,22 @@ def test_clip():
     check(SH.clip("short", 50) == "short", "short output untouched")
 
 
+def test_the_control_is_not_lanowls_own_host():
+    """The sandbox walls off lanowl's own host, so a canary pointed at it can never take a
+    handshake: the shell stays off with "the LAN or that host is down", which sends you
+    looking at the wrong thing. Seen on a Mac running both lanowl and the model server."""
+    print("\n-- the shell's LAN control: never lanowl's own host --")
+    me = {"observer": {"host_ip": "192.168.88.5"}}
+    os.environ.pop("LANOWL_HOST_IP", None)
+    check(SH.report({"shell": {"enabled": False}})[1] == 0, "shell off: nothing to check")
+    t, bad = SH.report({**me, "shell": {"enabled": True}})
+    check(bad == 1 and "not set" in t, "on without a control: ✗")
+    t, bad = SH.report({**me, "shell": {"enabled": True, "canary_lan": "192.168.88.5:11434"}})
+    check(bad == 1 and "lanowl's own host" in t, "the control on lanowl's own host: ✗, and why")
+    t, bad = SH.report({**me, "shell": {"enabled": True, "canary_lan": "192.168.88.1:80"}})
+    check(bad == 0 and "192.168.88.1:80" in t, "another LAN service: fine")
+
+
 def test_scripts_parse():
     """The sandbox's entrypoint once said `${LANOWL_HOST_IP:?... lanowl's host}`: bash 5.2 takes
     that apostrophe for an opening quote, so neither sandbox started — and the Mac's bash 3.2
@@ -243,7 +264,8 @@ def test_scripts_parse():
 
 
 if __name__ == "__main__":
-    for fn in [test_canary, test_the_tool, test_clip, test_scripts_parse]:
+    for fn in [test_canary, test_the_tool, test_clip, test_the_control_is_not_lanowls_own_host,
+               test_scripts_parse]:
         fn()
     print()
     if _fails:

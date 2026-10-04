@@ -76,6 +76,24 @@ def clip(text: str, n: int) -> str:
             + text[-tail:].lstrip())
 
 
+def report(cfg: dict) -> tuple:
+    """(text, problems) for `lanowl --check`: the model's shell, when it is switched on — its
+    LAN control must be set, and must not be lanowl's own host (the sandbox walls that off, so
+    the isolation could never be proven and the shell would stay off)."""
+    c = (cfg or {}).get("shell") or {}
+    if not c.get("enabled"):
+        return "Shell: off", 0
+    host = str(c.get("canary_lan") or "").partition(":")[0]
+    me = os.environ.get("LANOWL_HOST_IP") or str(((cfg or {}).get("observer") or {}).get("host_ip") or "")
+    if not host:
+        return ("Shell: on\n  ✗ shell.canary_lan  not set: a LAN service that always answers a "
+                "handshake, e.g. the router's web page (192.168.88.1:80)"), 1
+    if me and host == me:
+        return (f"Shell: on\n  ✗ shell.canary_lan  {host} is lanowl's own host, which the sandbox "
+                "walls off: choose another LAN service that always answers, e.g. the router's web page"), 1
+    return f"Shell: on · its LAN control {c.get('canary_lan')}", 0
+
+
 class Shell:
     def __init__(self, auditor, audit: bool = False):
         """The owner's shell, or with `audit` the hourly audit's offline one."""
@@ -91,8 +109,9 @@ class Shell:
         self.out_max = int(c.get("output_max_chars", 6000))
         self.per_answer = int(ca.get("max_per_audit", 4)) if audit else int(c.get("max_per_answer", 20))
         self.record = RECORD + ("_audit" if audit else "")
-        # the canary's LAN control: a service that always answers a handshake (the model
-        # server is the usual pick). Required: there is no address that suits every network.
+        # the canary's LAN control: a service that always answers a handshake (the router's
+        # web page is the usual pick) — never lanowl's own host, which the sandbox walls off.
+        # Required: there is no address that suits every network.
         probe = str(c.get("canary_lan") or "")
         self.lan_host, _, port = probe.partition(":")
         self.lan_port = int(port or 80)
@@ -292,7 +311,10 @@ class Shell:
             ok, why, breach = False, "the isolation check printed nothing usable", False
         elif "HANDSHAKE-OK" not in out:
             ok, breach = False, False
-            why = (f"isolation not proven: the control ({h}:{p}) did not even take a "
+            why = (f"isolation not proven: the control ({h}:{p}) is lanowl's own host, which the "
+                   "sandbox walls off — set shell.canary_lan to another LAN service that always "
+                   "answers, e.g. the router's web page" if h == self._self_ip() else
+                   f"isolation not proven: the control ({h}:{p}) did not even take a "
                    "handshake — the LAN or that host is down")
         else:
             ok, why, breach = True, ("offline: no internet, no DNS; LAN handshake only, the VM "
