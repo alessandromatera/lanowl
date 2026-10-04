@@ -5,6 +5,10 @@
 #   docker compose -f docker/compose.yaml up -d
 #   docker compose -f docker/compose.yaml --profile shell up -d    # with the model's sandboxed shells
 #
+# The images come from GHCR (amd64 and arm64, the latest release). Compose builds them from
+# this checkout only when the pull fails; `docker compose -f docker/compose.yaml build` runs
+# the code you have instead.
+#
 # Host networking: on Linux, lanowl sees the network as the host does — mtr and traceroute see
 # every hop, ARP and packet captures see the real wire. (Docker Desktop on a Mac or Windows
 # works too, behind its own NAT: per-hop tools then see only the target.)
@@ -17,7 +21,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: lanowl:latest
+    image: ghcr.io/alessandromatera/lanowl:latest
     container_name: lanowl
     restart: unless-stopped
     network_mode: host
@@ -35,7 +39,7 @@ services:
     build:
       context: ..
       dockerfile: docker/sandbox/Dockerfile
-    image: lanowl-sandbox:latest
+    image: ghcr.io/alessandromatera/lanowl-sandbox:latest
     container_name: lanowl-sandbox
     restart: unless-stopped
     networks: [sandbox]
@@ -56,7 +60,7 @@ services:
   # The hourly audit's shell: the same walls, and no internet and no DNS at all.
   sandbox-offline:
     profiles: ["shell"]
-    image: lanowl-sandbox:latest
+    image: ghcr.io/alessandromatera/lanowl-sandbox:latest
     pull_policy: never
     container_name: lanowl-sandbox-offline
     restart: unless-stopped

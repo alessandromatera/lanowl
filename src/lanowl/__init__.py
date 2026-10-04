@@ -6,4 +6,4 @@ model (the owl) correlates, diagnoses and writes the human-readable report. Noth
 changes a device by itself: a change runs only when the owner approves it.
 """
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"

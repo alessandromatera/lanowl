@@ -106,7 +106,7 @@ probed and nothing is sent.
 docker compose -f docker/compose.yaml run --rm lanowl lanowl --check
 ```
 
-The first run builds the image, which takes a few minutes. The demo house answers:
+The first run downloads the image (amd64 or arm64). The demo house answers:
 
 ```text
 27 device(s) watched, 15 managed, 0 problem(s). Profiles: macos. ✓ on · ○ switched off in config.yaml · ✗ cannot

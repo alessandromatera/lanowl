@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lanowl"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "A watchful, read-only caretaker for home and small-office networks"
 readme = "README.md"
 license = "AGPL-3.0-only"
