@@ -251,6 +251,9 @@ def build_report(snapshot: Snapshot, inv: Inventory, down_ips: set,
         # ok | backup | down — what the dashboard box is coloured by. Overwritten in
         # main.py with the WAN watcher's faster answer when the watcher is running.
         "wan_state": wan_state(snapshot.wan_ok, snapshot.wan_path),
+        # what this sweep's own pings saw, before the debounce: None when nothing was pinged
+        # (no `wan.targets`), so no word may then say the internet is fine
+        "wan_answered": any(snapshot.wan.values()) if snapshot.wan else None,
         "counts": totals(snapshot, down_ips),
         "groups": counts,
         # down devices explained by something upstream (`depends_on`): {ip: parent ip|"wan"}.
@@ -452,6 +455,28 @@ def merge_llm(report: dict, llm: Optional[dict]) -> dict:
     return report
 
 
+def missed_checks(report: dict) -> list:
+    """Devices that matter which missed this sweep but are not confirmed down yet
+    (`debounce_fails`): no issue and no alert, but not "all good" either."""
+    told = {i.get("ip") for i in report.get("issues", [])}
+    shadow = report.get("shadowed") or {}
+    return [d for d in report.get("devices", [])
+            if not (d.get("up") or d.get("asleep") or d.get("paused") or d.get("held"))
+            and d.get("criticality") in ("critical", "high", "warning")
+            and d.get("ip") not in told and d.get("ip") not in shadow]
+
+
+def wan_words(report: dict) -> str:
+    """OK | DOWN | BACKUP, or what is true when nothing confirmed either: the sweep pinged
+    nothing, or its pings all missed once (the debounce has not called it down yet)."""
+    state = (report.get("wan_state") or ("ok" if report.get("wan_ok") else "down")).upper()
+    if report.get("wan_answered") is None and not report.get("wan_watch"):
+        return "not checked"
+    if report.get("wan_answered") is False and state != "DOWN":
+        return "missed a check"
+    return state
+
+
 def _auto_summary(report: dict) -> str:
     c = report["counts"]
     wp = report.get("wan_path") or {}
@@ -460,7 +485,13 @@ def _auto_summary(report: dict) -> str:
         quiet = [f"{c['asleep']} asleep as expected" if c.get("asleep") else "",
                  f"{c['paused']} paused" if c.get("paused") else ""]
         quiet = ", ".join(q for q in quiet if q)
-        return f"All good — {c['up']}/{c['total']} devices up{f' ({quiet})' if quiet else ''}, WAN OK."
+        up = f"{c['up']}/{c['total']} devices up{f' ({quiet})' if quiet else ''}"
+        wan, missed = wan_words(report), [d.get("name") for d in missed_checks(report)]
+        if missed or wan == "missed a check":
+            more = f" and {len(missed) - 3} more" if len(missed) > 3 else ""
+            who = f"{', '.join(missed[:3])}{more} missed a check; " if missed else ""
+            return f"Nothing confirmed down yet — {who}{up}, WAN {wan}."
+        return f"All good — {up}, WAN {wan}."
     crit = [i for i in report["issues"] if i["severity"] == "critical"]
     head = f"{c['down']}/{c['total']} devices down." + backup
     if crit:

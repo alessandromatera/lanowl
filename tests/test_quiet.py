@@ -525,6 +525,38 @@ def test_tracker_remembers_the_first_miss():
           "confirmed at 240 but down since 0 — four minutes the old clock would have hidden")
 
 
+def test_one_sweep_says_what_it_saw():
+    """Before the debounce confirms anything (a `--once` run is one sweep), the summary must
+    not say "All good, WAN OK" over devices and pings that just missed."""
+    print("an unconfirmed miss is named, and an unpinged internet is 'not checked'")
+    from lanowl.report import _auto_summary, build_report, missed_checks
+    from lanowl.sweep import Snapshot, DeviceStatus
+
+    class _Inv:
+        groups = {}
+
+    def dev(ip, name, crit, up):
+        return DeviceStatus(ip=ip, name=name, group="g", criticality=crit,
+                            up=up, reachable=up, latency_ms=5.0 if up else None)
+
+    devs = [dev("192.168.88.2", "Cloudflare DNS", "high", False),
+            dev("192.168.88.3", "TV", "info", False), dev("192.168.88.4", "NAS", "high", True)]
+    rep = build_report(Snapshot(ts=0, devices=devs, wan={"8.8.8.8": False}, wan_ok=True), _Inv(), set())
+    check(rep["overall_health"] == "ok" and not rep["issues"], "nothing is confirmed yet")
+    check([d["name"] for d in missed_checks(rep)] == ["Cloudflare DNS"],
+          "the high device that missed is named, the TV is not")
+    summ = _auto_summary(rep)
+    check(summ.startswith("Nothing confirmed down yet — Cloudflare DNS missed a check")
+          and "WAN missed a check" in summ, f"and the summary says so: {summ}")
+
+    devs = [dev("192.168.88.4", "NAS", "high", True)]
+    summ = _auto_summary(build_report(Snapshot(ts=0, devices=devs, wan={}, wan_ok=True), _Inv(), set()))
+    check(summ == "All good — 1/1 devices up, WAN not checked.", f"no wan.targets: {summ}")
+    summ = _auto_summary(build_report(Snapshot(ts=0, devices=devs, wan={"8.8.8.8": True}, wan_ok=True),
+                                      _Inv(), set()))
+    check(summ == "All good — 1/1 devices up, WAN OK.", f"pinged and answered: {summ}")
+
+
 if __name__ == "__main__":
     for fn in [test_muted_labels, test_llm_cannot_escalate_on_a_switched_off_tv,
                test_llm_can_still_escalate_on_something_real,
@@ -538,7 +570,7 @@ if __name__ == "__main__":
                test_model_host_down_is_one_issue,
                test_criticals_page_on_the_same_sweep,
                test_digest_says_when_a_device_went_down,
-               test_tracker_remembers_the_first_miss]:
+               test_tracker_remembers_the_first_miss, test_one_sweep_says_what_it_saw]:
         fn()
     print()
     if _fails:

@@ -50,7 +50,8 @@ from .pause import Pauses, event_detail, intervals, overlaps
 from .prompts import (WEEKLY_SYSTEM, build_user_context, build_weekly_context, system_prompt,
                       with_actions, with_shell_offline)
 from .report import (_SEV_RANK, _html, build_report, digest_fingerprint, format_alerts,
-                     format_diagnosis_note, format_digest, label, merge_llm)
+                     format_diagnosis_note, format_digest, label, merge_llm, missed_checks,
+                     wan_words)
 from .exposure import Exposure
 from .records import Records
 from .seclog import SecLog
@@ -1727,20 +1728,25 @@ class Auditor:
         snap, report, _ = await self.sweep_cycle()
         if run_llm:
             report = await self.run_llm_audit(snap, report, send_digest=False, reason="--once")
-        _print_table(snap, report)
+        _print_table(snap, report, self.tracker.debounce_fails)
         return report
 
 
-def _print_table(snap, report):
+def _print_table(snap, report, debounce_fails=2):
     c = report["counts"]
-    print("\n=== Auditor sweep @ %s ===" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(snap.ts)))
+    print("\n=== lanowl sweep @ %s ===" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(snap.ts)))
     wp = report.get("wan_path") or {}
     # the state word above already says BACKUP; this just names the link carrying traffic
     path = f" via {wp['link']}" if wp.get("link") else ""
+    wan = wan_words(report)
+    # one sweep confirms nothing: what it saw miss is said, not graded "ok"
+    unconfirmed = report["overall_health"] == "ok" and (missed_checks(report) or wan == "missed a check")
     print("Overall: %s | %d/%d up | WAN %s%s" % (
-        report["overall_health"].upper(), c["up"], c["total"],
-        (report.get("wan_state") or "").upper() or ("OK" if report["wan_ok"] else "DOWN"),
-        path))
+        "NOT CONFIRMED" if unconfirmed else report["overall_health"].upper(),
+        c["up"], c["total"], wan, path))
+    if unconfirmed:
+        print(f"  (lanowl calls something down after {debounce_fails} misses in a row; "
+              "a single run is one sweep)")
     print("-" * 68)
     for d in sorted(snap.devices, key=lambda x: (x.group, x.ip)):
         status = "PAUS" if d.paused else "UP " if d.up else ("ZZZ " if d.expected_down else "DOWN")
