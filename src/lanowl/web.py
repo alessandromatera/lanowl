@@ -88,17 +88,7 @@ def state_payload(a, now: float = 0.0) -> dict:
     # record begins and draws the time before it as "no record", not as a clean line.
     # One per moment (wanexplain.merge); the last few with the code's reading of where it
     # broke, for the Internet card's list.
-    wan_events, events_since = [], None
-    try:
-        wan_events = wanexplain.moments(a.state, now - 7 * 86400)
-        evs = wanexplain.evidence(a.state, wan_events[-3]["ts"] - 60) if wan_events else {}
-        nw = getattr(a.wanwatch, "netwatch", None)
-        for e in wan_events[-3:]:
-            v = wanexplain.verdict(e, wanexplain.find(evs, e["ts"]), nw, links=wan_links(a.cfg))
-            e.update(where=v["where"], why=v["short"])
-        events_since = a.state.first_event_ts()
-    except Exception:
-        log.debug("wan events unavailable", exc_info=True)
+    wan_events, events_since = wan_moments(a, now)
 
     audit = a._audit_task
     auditing = audit is not None and not audit.done()
@@ -156,6 +146,32 @@ def state_payload(a, now: float = 0.0) -> dict:
         "fixes": a.fixes.view(),
         "scorecard": a.scorecard.view(),
     }
+
+
+def wan_moments(a, now: float) -> tuple:
+    """The internet's week for the Internet card: (its events, when the record begins).
+
+    The start is read first and on its own. Without it the page draws the whole week as "no
+    record", and the explanation of the last events below is the part that can fail: it once
+    looked three events back in a week that held two, and every week with fewer than three
+    blips was drawn as never recorded."""
+    events, since = [], None
+    try:
+        since = a.state.first_event_ts()
+        events = wanexplain.moments(a.state, now - 7 * 86400)
+    except Exception:
+        log.debug("wan events unavailable", exc_info=True)
+        return events, since
+    try:
+        last = events[-3:]
+        evs = wanexplain.evidence(a.state, last[0]["ts"] - 60) if last else {}
+        nw = getattr(a.wanwatch, "netwatch", None)
+        for e in last:
+            v = wanexplain.verdict(e, wanexplain.find(evs, e["ts"]), nw, links=wan_links(a.cfg))
+            e.update(where=v["where"], why=v["short"])
+    except Exception:
+        log.debug("wan events: where they broke is unavailable", exc_info=True)
+    return events, since
 
 
 REBOOT_WAYS = {"routeros": "over ssh (RouterOS)", "ssh": "over ssh", "ssh_key": "over ssh, with lanowl's key",
