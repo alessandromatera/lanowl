@@ -1628,7 +1628,7 @@ class Auditor:
     # --- main loop --------------------------------------------------------
     async def loop(self):
         interval = self.cad.get("sweep_interval_s", 60)
-        log.info("Auditor started: %d devices, sweep=%ds, llm_mode=%s",
+        log.info("lanowl started: %d devices, sweep=%ds, llm_mode=%s",
                  len(self.inv.devices), interval, self.cad.get("llm_mode"))
         # Separate task on purpose: everything below can block for minutes behind an LLM
         # audit, and that stall is exactly when a 57s failover goes unseen.

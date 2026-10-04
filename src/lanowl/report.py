@@ -783,7 +783,7 @@ def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None) ->
 
 
 def format_digest(report: dict, now: Optional[float] = None,
-                  title: str = "Auditor digest") -> str:
+                  title: str = "lanowl digest") -> str:
     now = time.time() if now is None else now
     e = _EMOJI.get(report["overall_health"], "⚪")
     c = report["counts"]

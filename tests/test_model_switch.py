@@ -178,7 +178,7 @@ def test_switch_off_mid_audit():
           "said on Telegram, from the dashboard")
     check(any("What it was doing has been stopped" in s for s in out["sent"]),
           "...and that the audit was stopped")
-    check(any("Auditor digest" in s for s in out["sent"]),
+    check(any("lanowl digest" in s for s in out["sent"]),
           "the stopped audit's digest (Audit now) still went out")
     check(out["unloads"] == 1, "the model is unloaded from Ollama")
     check(not out["busy"], "the model lock is free")
@@ -230,7 +230,7 @@ def test_off_digests_without_the_model():
         asyncio.run(go(d))
     check(not out["told"], "switched from Telegram: no separate message (the reply is it)")
     check(out["probe"] is None, "the Ollama check is not probed")
-    dig = [s for s in out["sent"] if "Auditor digest" in s]
+    dig = [s for s in out["sent"] if "lanowl digest" in s]
     check(len(dig) == 1 and "The owl is asleep" in dig[0] and "/model on" in dig[0],
           "Audit now sends the digest, which says the model is off")
     check("The owl is asleep" in out["weekly"], "the weekly review says so too")

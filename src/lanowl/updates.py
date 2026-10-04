@@ -731,7 +731,7 @@ class Updates:
             f"🛡 <b>Updates &amp; security</b> — {len(new)} new\n"
             + "\n".join(f"• {_html(f['text'])}" for f in new[:12])
             + (f"\n…and {len(new) - 12} more" if len(new) > 12 else "")
-            + "\n<i>Everything else is on the dashboard: More → Updates &amp; security.</i>"))
+            + "\n<i>Everything else is on the dashboard, under Security.</i>"))
 
     # --- the monthly scan -----------------------------------------------------------------
     async def scan(self, reason: str = "scheduled") -> dict:
