@@ -9,7 +9,8 @@ works the same with the model switched off.
 
 1. Install Ollama on the machine with the most memory or the best GPU (it can be another
    machine than lanowl's).
-2. Pull a model with tool calling, for example `ollama pull qwen3:30b`.
+2. Pull a model with tool calling, for example `ollama pull qwen3.8:27b`, the one lanowl is
+   tested with.
 3. Make Ollama listen on the network if it is on another machine (`OLLAMA_HOST=0.0.0.0`),
    and point lanowl at it:
 
@@ -39,6 +40,10 @@ model:
 
 **Which model.** Any Ollama model with tool calling works. A larger model reasons better; a
 27–35B model on a machine with 32–64 GB of memory is comfortable.
+
+**Tested with `qwen3.8:27b`**, and it works well: lanowl is developed against a real home
+network with it (the Apple-silicon build `qwen3.8:27b-mlx`, about 18 GB, with `think: true`
+and `num_ctx: 131072`).
 
 Only Ollama is supported for now; cloud models are on the [roadmap](../reference/roadmap.md).
 

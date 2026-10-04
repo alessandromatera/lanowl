@@ -27,7 +27,7 @@ The model runs on your own Ollama. Nothing goes to the lanowl project: it has no
 
 No. Without a model everything works except the owl's words: detection, alerts, digests and
 the dashboard. For the owl, any Ollama model with tool calling; a 27–35B model on a machine
-with 32–64 GB of memory is comfortable.
+with 32–64 GB of memory is comfortable. lanowl is tested with `qwen3.8:27b`, and it works well.
 
 ### Can I use ChatGPT or Claude instead of a local model?
 
