@@ -27,6 +27,9 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
 def extract_json(text: str) -> Optional[dict]:
+    """The JSON object in a model's answer, or None. `strict=False`: a line break written
+    as-is inside a string is accepted — models do that in multi-line values (a fix's commands,
+    one per line), and strict JSON would throw the whole answer away for it."""
     if not text:
         return None
     m = _FENCE.search(text)
@@ -34,7 +37,7 @@ def extract_json(text: str) -> Optional[dict]:
         text = m.group(1)
     text = text.strip()
     try:
-        obj = json.loads(text)
+        obj = json.loads(text, strict=False)
         return obj if isinstance(obj, dict) else None
     except Exception:
         pass
@@ -42,7 +45,7 @@ def extract_json(text: str) -> Optional[dict]:
     start, end = text.find("{"), text.rfind("}")
     if 0 <= start < end:
         try:
-            obj = json.loads(text[start:end + 1])
+            obj = json.loads(text[start:end + 1], strict=False)
             return obj if isinstance(obj, dict) else None
         except Exception:
             return None

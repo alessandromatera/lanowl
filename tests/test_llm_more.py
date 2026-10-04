@@ -56,6 +56,20 @@ class _Exec:
         return {"tool": name, "result": {"ok": True}}
 
 
+def test_json_with_line_breaks_in_strings():
+    """A fix's commands come "one per line", and the model writes those line breaks as they are,
+    inside the JSON string: strict JSON threw every such answer away (seen on a real network:
+    two fixes lost in a row, "no JSON in its answer")."""
+    print("\n-- a model's JSON with raw line breaks inside a string --")
+    from lanowl.agent import extract_json
+    raw = '{"summary": "Turn off password logins",\n "steps": [{"where": "VPS", "commands": "sed -i x /etc/ssh/sshd_config\nsystemctl reload ssh"}]}'
+    v = extract_json(raw)
+    check(v is not None and v["steps"][0]["commands"] == "sed -i x /etc/ssh/sshd_config\nsystemctl reload ssh",
+          "read, the line break kept in the value")
+    check(extract_json("Here it is:\n```json\n" + raw + "\n```") == v, "...also fenced, after a sentence")
+    check(extract_json("no json here") is None and extract_json('["a list"]') is None, "still None when there is none")
+
+
 def test_agent_keeps_its_last_turn_for_the_answer():
     print("\n-- the model that keeps investigating still answers --")
     ag = LlmAgent({"model": {"max_tool_iters": 4}}, _Exec())
@@ -624,7 +638,7 @@ def test_web_dashboard():
 
 
 if __name__ == "__main__":
-    for fn in [test_web_dashboard,
+    for fn in [test_json_with_line_breaks_in_strings, test_web_dashboard,
                test_incident_diagnosis_is_edited_in, test_status_needs_no_model,
                test_agent_keeps_its_last_turn_for_the_answer,
                test_digest_carries_the_diagnosis, test_diagnosis_note,
