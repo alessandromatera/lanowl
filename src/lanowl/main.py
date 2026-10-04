@@ -44,7 +44,7 @@ from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .chat import Chat
 from .memory import Memory
 from .names import Names, clean as clean_name, mac_key
-from .model import load_config, load_inventory, router_host
+from .model import load_config, load_inventory, model_name, model_report, router_host
 from .oui import vendor
 from .pause import Pauses, event_detail, intervals, overlaps
 from .prompts import (WEEKLY_SYSTEM, build_user_context, build_weekly_context, system_prompt,
@@ -625,7 +625,7 @@ class Auditor:
     def model_view(self) -> dict:
         m = self._model_off or {}
         return {"on": not self.no_llm, "cli": self._no_llm_cli, "since": m.get("since"),
-                "by": m.get("by"), "name": (self.cfg.get("ollama") or {}).get("model", "")}
+                "by": m.get("by"), "name": model_name(self.cfg)}
 
     async def _unload_model(self):
         if await self.agent.unload():
@@ -1159,7 +1159,7 @@ class Auditor:
                  time.time() - t0, self.agent.last_tool_calls, llm is not None, peak, num_ctx)
         if num_ctx and peak >= 0.9 * num_ctx:
             # At the ceiling Ollama has already been truncating from the front, i.e.
-            # eating the system prompt. Raise ollama.num_ctx, not max_tool_iters.
+            # eating the system prompt. Raise model.num_ctx, not max_tool_iters.
             log.warning("LLM context peak %d is within 10%% of num_ctx %d — the model was "
                         "almost certainly working from a truncated prompt", peak, num_ctx)
         # Merge onto the FRESHEST deterministic report, not the one this audit started from.
@@ -1814,7 +1814,9 @@ def _check(args) -> int:
     print(kinds_report(k, inv))
     text, bad = secrets_report(cfg, inv)
     print("\n" + text)
-    return 1 if bad or k.problems or any(p.problems for p in k.plans) else 0
+    text, wrong = model_report(cfg)
+    print("\n" + text)
+    return 1 if bad or wrong or k.problems or any(p.problems for p in k.plans) else 0
 
 
 def main():

@@ -365,7 +365,7 @@ def test_model_host_down_is_one_issue():
     class _Inv:
         groups = {}
 
-    cfg = {"ollama": {"url": "http://192.168.10.103:11434"},
+    cfg = {"model": {"url": "http://192.168.10.103:11434"},
            "observer": {"host_ip": "192.168.10.95"}}
     mac = DeviceStatus(ip="192.168.10.103", name="Model server", group="servers",
                        criticality="warning", up=False, reachable=False, latency_ms=None)

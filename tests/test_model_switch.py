@@ -52,7 +52,7 @@ def _auditor(d, cfg_extra=None, persist=True):
                         "outbox_file": os.path.join(d, "o.json")},
            "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0},
            "observer": {"host_ip": "192.168.10.103"},
-           "ollama": {"url": "http://127.0.0.1:9", "model": "test-model"}, **(cfg_extra or {})}
+           "model": {"url": "http://127.0.0.1:9", "name": "test-model"}, **(cfg_extra or {})}
     inv = Inventory(devices=[Device(x.ip, x.name, x.group, x.criticality) for x in DEVICES])
     st = StateStore(os.path.join(d, "s.sqlite"))
     mq = MqttBridge(cfg)
@@ -88,7 +88,7 @@ def test_agent_guard():
     out = {}
 
     async def go():
-        ag = LlmAgent({"ollama": {"url": "http://127.0.0.1:9"}}, None)
+        ag = LlmAgent({"model": {"url": "http://127.0.0.1:9"}}, None)
         called = []
 
         async def fake_text(*a, **kw):

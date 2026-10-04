@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlsplit
 
-from .model import Inventory, router_host
+from .model import Inventory, model_cfg, model_name, router_host
 from .sweep import OLLAMA_KEY, Snapshot
 
 # device criticality -> issue severity when that device is down
@@ -278,7 +278,7 @@ def build_report(snapshot: Snapshot, inv: Inventory, down_ips: set,
              "port": c.port, "detail": c.detail}
             for d in snapshot.devices for c in d.checks if c.name
         ] + ([] if snapshot.ollama is None else [
-            {"host": f"Auditor host · {((cfg or {}).get('ollama') or {}).get('model', '?')}",
+            {"host": f"Model server · {model_name(cfg)}",
              "ip": _ollama_ip(cfg), "name": snapshot.ollama.name, "ok": snapshot.ollama.ok,
              "port": snapshot.ollama.port, "detail": snapshot.ollama.detail}])
           + _router_api_row(snapshot, cfg),
@@ -307,9 +307,9 @@ def _router_api_row(snapshot: Snapshot, cfg: Optional[dict]) -> list:
 
 def _ollama_ip(cfg: Optional[dict]) -> str:
     """The model server's address, so its issue is labelled like any device's: the host in
-    `ollama.url`, unless that is this machine under another name — loopback, or the
+    `model.url`, unless that is this machine under another name — loopback, or the
     container's alias for the Mac it runs on — which is `observer.host_ip`."""
-    host = urlsplit(((cfg or {}).get("ollama") or {}).get("url", "")).hostname or ""
+    host = urlsplit(str(model_cfg(cfg).get("url") or "")).hostname or ""
     if host in ("", "127.0.0.1", "localhost", "::1", "host.docker.internal"):
         return ((cfg or {}).get("observer") or {}).get("host_ip", "")
     return host

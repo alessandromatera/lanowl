@@ -38,7 +38,7 @@ from typing import Optional
 
 from . import timeline, wanexplain
 from .conversations import Conversations
-from .model import on_main_lan, wan_links
+from .model import model_name, on_main_lan, wan_links
 from .report import label, match_diagnosis
 
 log = logging.getLogger("lanowl.web")
@@ -108,7 +108,7 @@ def state_payload(a, now: float = 0.0) -> dict:
     return {
         "now": now,
         "sweep": {"ts": rep.get("ts"), "sweeps": a._sweeps, "started": a._started},
-        "about": {"model": (a.cfg.get("ollama") or {}).get("model", ""),
+        "about": {"model": model_name(a.cfg),
                   "llm_mode": (a.cfg.get("cadence") or {}).get("llm_mode", "interval"),
                   "llm_every_s": (a.cfg.get("cadence") or {}).get("llm_interval_s", 3600),
                   "llm_times": (a.cfg.get("cadence") or {}).get("llm_times") or []},

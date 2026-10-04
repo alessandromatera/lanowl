@@ -40,7 +40,7 @@ def test_network():
     nb = P.network_block({"network": {"description": "A LAN behind one router.\nTwo sites."}})
     check(nb.startswith("THE NETWORK, in its owner's words") and "Two sites." in nb,
           "a description is passed on as it is written")
-    a = LlmAgent({"ollama": {"persona": ""}, "network": {"description": "A LAN behind one router."}}, None)
+    a = LlmAgent({"model": {"persona": ""}, "network": {"description": "A LAN behind one router."}}, None)
     s = a._with_memory("PROMPT")
     check(s == "PROMPT\n\n" + P.network_block({"network": {"description": "A LAN behind one router."}}),
           "every system prompt carries it, right after the prompt itself")

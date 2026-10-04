@@ -1,7 +1,7 @@
 # lanowl — the monitor's image (amd64 and arm64).
 #
 # What does not come inside: the model. It runs in Ollama wherever the GPU is,
-# often another machine, and lanowl calls it over HTTP (ollama.url / LANOWL_OLLAMA_URL).
+# often another machine, and lanowl calls it over HTTP (model.url / LANOWL_MODEL_URL).
 FROM python:3.12-slim
 
 # snmp       router telemetry (snmpget): enrichment only, lanowl degrades gracefully without it

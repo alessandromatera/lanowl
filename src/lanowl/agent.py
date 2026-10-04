@@ -12,6 +12,7 @@ import logging
 import re
 from typing import Optional
 
+from .model import model_cfg, model_name
 from .prompts import DEFAULT_PERSONA, network_block, persona_block
 from .tools import TOOL_SPECS, ToolExecutor
 
@@ -50,9 +51,9 @@ def extract_json(text: str) -> Optional[dict]:
 
 class LlmAgent:
     def __init__(self, cfg: dict, executor: ToolExecutor):
-        o = cfg.get("ollama", {})
-        self.url = o.get("url", "http://127.0.0.1:11434").rstrip("/")
-        self.model = o.get("model", "qwen3:30b")
+        o = model_cfg(cfg)
+        self.url = str(o.get("url") or "http://127.0.0.1:11434").rstrip("/")
+        self.model = model_name(cfg)
         self.think = bool(o.get("think", True))
         self.keep_alive = o.get("keep_alive", 0)
         self.timeout_s = o.get("request_timeout_s", 240)

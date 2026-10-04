@@ -113,9 +113,11 @@ def _env_override(cfg: dict) -> dict:
     from secrets.yaml or the environment, when they are used.)"""
     # The model server: a GPU model often runs on another machine than the monitor (a Mac's
     # Metal is out of a container's reach, for one), so each deployment names the road to it.
-    if os.environ.get("LANOWL_OLLAMA_URL"):
-        cfg.setdefault("ollama", {})
-        cfg["ollama"]["url"] = os.environ["LANOWL_OLLAMA_URL"]
+    if os.environ.get("LANOWL_MODEL_URL"):
+        if cfg.get("model") is None:
+            cfg["model"] = {}
+        if isinstance(cfg["model"], dict):       # anything else: --check says what is wrong
+            cfg["model"]["url"] = os.environ["LANOWL_MODEL_URL"]
     # The machine lanowl runs on. More than a label: the host-log watcher recognises its OWN
     # ssh logins by this address, so a wrong value turns every poll into "somebody else
     # logged in", and hides a real stranger who comes from the right address.
@@ -145,6 +147,49 @@ def load_config(path: str) -> dict:
     cfg["access"] = ac
     cfg["_path"] = os.path.abspath(path)          # where it was read from (lanowl's own backup)
     return _env_override(cfg)
+
+
+# --- the model -------------------------------------------------------------------------
+# Only Ollama for now; `provider` is there so a cloud API is one more value, not a new section.
+PROVIDERS = ("ollama",)
+DEFAULT_MODEL = "qwen3:30b"
+
+
+def model_cfg(cfg: dict) -> dict:
+    """config.yaml's `model:` section ({} when there is none)."""
+    m = (cfg or {}).get("model")
+    return m if isinstance(m, dict) else {}
+
+
+def model_name(cfg: dict) -> str:
+    return str(model_cfg(cfg).get("name") or DEFAULT_MODEL)
+
+
+def model_report(cfg: dict) -> tuple:
+    """(text, problems) for `lanowl --check`: which model lanowl will ask, and what in
+    config.yaml it would not read — a section it ignores means the defaults, silently."""
+    m = model_cfg(cfg)
+    lines, bad = [], 0
+
+    def row(mark: str, what: str, text: str):
+        nonlocal bad
+        bad += mark == "✗"
+        lines.append(f"  {mark} {what:<15} {text}")
+
+    provider = str(m.get("provider") or "ollama")
+    url = str(m.get("url") or "http://127.0.0.1:11434")
+    where = " (from LANOWL_MODEL_URL)" if os.environ.get("LANOWL_MODEL_URL") else ""
+    lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where}")
+    if "ollama" in (cfg or {}):
+        row("✗", "config.yaml", "`ollama:` is not read any more: rename it `model:`, and its "
+                                "`model:` key `name:`")
+    if (cfg or {}).get("model") is not None and not isinstance(cfg.get("model"), dict):
+        row("✗", "model", "should be a section (url, name, ...), not a value")
+    if provider not in PROVIDERS:
+        row("✗", "model.provider", f"{provider!r}: only {', '.join(PROVIDERS)} for now")
+    if "model" in m:
+        row("✗", "model.model", "is `model.name` now")
+    return "\n".join(lines), bad
 
 
 # --- where things are, from config: one definition each ------------------------------

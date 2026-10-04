@@ -99,7 +99,7 @@ def test_agent_streams():
     async def go():
         runner, url, seen = await _ollama(lambda n, b: rounds.get(n, rounds[2]))
         ex = _Exec()
-        ag = LlmAgent({"ollama": {"url": url, "max_tool_iters": 4}}, ex)
+        ag = LlmAgent({"model": {"url": url, "max_tool_iters": 4}}, ex)
         hist = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
         out["text"] = await ag.ask_text("sys", "ctx", history=hist,
                                         on_event=lambda *e: events.append(e))
@@ -136,7 +136,7 @@ def test_stop_closes_the_stream():
     async def go():
         endless = [{"content": "word "}] * 400
         runner, url, seen = await _ollama(lambda n, b: endless, delay=0.02)
-        ag = LlmAgent({"ollama": {"url": url}}, _Exec())
+        ag = LlmAgent({"model": {"url": url}}, _Exec())
         got = []
         task = asyncio.ensure_future(ag.ask_text("sys", "ctx", on_event=lambda *e: got.append(e)))
         while len(got) < 5:

@@ -58,7 +58,7 @@ class _Exec:
 
 def test_agent_keeps_its_last_turn_for_the_answer():
     print("\n-- the model that keeps investigating still answers --")
-    ag = LlmAgent({"ollama": {"max_tool_iters": 4}}, _Exec())
+    ag = LlmAgent({"model": {"max_tool_iters": 4}}, _Exec())
     seen = []
 
     async def chat(session, messages, use_tools):

@@ -15,9 +15,10 @@ network:
     internet. IoT devices share the main LAN on purpose. Guests use their own Wi-Fi.
 
 # --- the model (optional: everything works without it) -----------------------------------
-ollama:
-  url: "http://127.0.0.1:11434"     # or LANOWL_OLLAMA_URL — the model often runs on another machine
-  model: "qwen3:30b"                # any Ollama model with tool calling; bigger reasons better
+model:
+  provider: ollama                  # the only one for now
+  url: "http://127.0.0.1:11434"     # or LANOWL_MODEL_URL — the model often runs on another machine
+  name: "qwen3:30b"                 # any Ollama model with tool calling; bigger reasons better
   think: true
   num_ctx: 32768                    # every tool result stays in the prompt: give it room
   keep_alive: "10m"                 # how long the model stays loaded after a call

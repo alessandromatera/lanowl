@@ -77,7 +77,7 @@ Two settings shape how the owl thinks:
 
 - **`network.description`**: a few sentences about your network, in your own words: the
   links, the sites, what runs where, what you chose on purpose. Every prompt gets it.
-- **`ollama.persona`**: `owl` (the default), or `""` for plain prose. The owl's voice is
+- **`model.persona`**: `owl` (the default), or `""` for plain prose. The owl's voice is
   calm and brief and never changes a severity; its words carry 🦉, the monitor's keep 🔴🟡🟢.
 
 **A backup internet link** is optional. Without `wan.path.route_comment` lanowl assumes one
@@ -158,8 +158,9 @@ Parsers: `text`, `lines`, `first_line`, `seconds`, `proc_uptime`, `boottime`, `{
 
 ## The model
 
-Any [Ollama](https://ollama.com) model with tool calling. A larger model reasons better: a
-27–35B model on a 32–64 GB machine is comfortable. Without a model everything still works:
+Any [Ollama](https://ollama.com) model with tool calling, set in config.yaml's `model:`
+section (`url`, `name`). A larger model reasons better: a 27–35B model on a 32–64 GB machine
+is comfortable. Without a model everything still works:
 detection, alerts, digests, the dashboard. The switch on the dashboard (or `/model off`)
 puts the owl to sleep.
 

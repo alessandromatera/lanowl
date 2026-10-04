@@ -91,7 +91,7 @@ class Chat:
         self.cfg = auditor.cfg
         q = (self.cfg.get("telegram", {}) or {}).get("chat") or {}
         self.max_wall_s = float(q.get("answer_max_wall_s", 420))
-        # a question's agent loop; None = ollama.max_tool_iters, the audit's
+        # a question's agent loop; None = model.max_tool_iters, the audit's
         self.max_iters = int(q["max_iters"]) if q.get("max_iters") else None
         sess = ((self.cfg.get("actions") or {}).get("session") or {})
         self.session_wall_s = float(sess.get("turn_max_s", 900))
