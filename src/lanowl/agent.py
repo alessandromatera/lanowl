@@ -26,30 +26,54 @@ except Exception:  # pragma: no cover
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 
-def extract_json(text: str) -> Optional[dict]:
-    """The JSON object in a model's answer, or None. `strict=False`: a line break written
-    as-is inside a string is accepted — models do that in multi-line values (a fix's commands,
-    one per line), and strict JSON would throw the whole answer away for it."""
+# The two slips a model makes in otherwise good JSON, mended before giving up on an answer:
+# a backslash that is no JSON escape (a sed or grep pattern: `\(`, `\s`) and a comma before a
+# closing bracket. Only tried on an answer that does not parse as it is.
+_BAD_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def _loads(text: str):
+    """(object, "") or (None, why): `strict=False` accepts a line break written as-is inside
+    a string — models do that in multi-line values (a fix's commands, one per line)."""
+    try:
+        return json.loads(text, strict=False), ""
+    except ValueError as e:
+        why = str(e)
+    for mend in (lambda s: _BAD_ESCAPE.sub(r"\\\\", s), lambda s: _TRAILING_COMMA.sub(r"\1", s)):
+        text = mend(text)
+        try:
+            return json.loads(text, strict=False), ""
+        except ValueError:
+            pass
+    return None, why
+
+
+def _json_in(text: str) -> tuple:
+    """(the JSON object in a model's answer or None, why not)."""
     if not text:
-        return None
+        return None, "an empty answer"
     m = _FENCE.search(text)
     if m:
         text = m.group(1)
     text = text.strip()
-    try:
-        obj = json.loads(text, strict=False)
-        return obj if isinstance(obj, dict) else None
-    except Exception:
-        pass
-    # last resort: outermost braces
-    start, end = text.find("{"), text.rfind("}")
-    if 0 <= start < end:
-        try:
-            obj = json.loads(text[start:end + 1], strict=False)
-            return obj if isinstance(obj, dict) else None
-        except Exception:
-            return None
-    return None
+    obj, why = _loads(text)
+    if obj is None:
+        # what is between the outermost braces: a sentence before or after the object
+        start, end = text.find("{"), text.rfind("}")
+        if 0 <= start < end:
+            obj, why2 = _loads(text[start:end + 1])
+            why = why if obj is None else ""
+        elif not why:
+            why = "no {...} in it"
+    if obj is not None and not isinstance(obj, dict):
+        return None, "not an object"
+    return obj, why
+
+
+def extract_json(text: str) -> Optional[dict]:
+    """The JSON object in a model's answer, or None."""
+    return _json_in(text)[0]
 
 
 class LlmAgent:
@@ -249,10 +273,21 @@ class LlmAgent:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 data = await self._chat(session, messages, use_tools=False)
                 text = (data.get("message", {}) or {}).get("content", "") or ""
-                v = extract_json(text)
+                v, why = _json_in(text)
                 if v is None:
-                    # what it said instead, so "no usable answer" can be read
-                    log.warning("LLM ask_json: no JSON in its answer (%d chars): %r", len(text), text[:300])
+                    # one repair, as the audit has: the model is told what the parser said
+                    messages += [{"role": "assistant", "content": text},
+                                 {"role": "user", "content": (
+                                     f"That was not valid JSON ({why}). Answer again with ONLY the "
+                                     "JSON object, valid: inside strings, escape every backslash "
+                                     "(\\\\) and every double quote (\\\").")}]
+                    data = await self._chat(session, messages, use_tools=False)
+                    text2 = (data.get("message", {}) or {}).get("content", "") or ""
+                    v, why2 = _json_in(text2)
+                    if v is None:
+                        # why, and what it said, so "no usable answer" can be read
+                        log.warning("LLM ask_json: no valid JSON in its answer, twice (%s; then %s) "
+                                    "(%d chars): %r", why, why2, len(text), text[:300])
                 return v
         except Exception as e:
             log.warning("LLM ask_json failed (%s: %s).", type(e).__name__, e or "no message")

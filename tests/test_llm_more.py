@@ -18,6 +18,7 @@ No network, no model, no Telegram — every one of them is a fake. Pinned down h
 from __future__ import annotations
 
 import asyncio
+import logging
 import datetime
 import json
 import os
@@ -68,6 +69,44 @@ def test_json_with_line_breaks_in_strings():
           "read, the line break kept in the value")
     check(extract_json("Here it is:\n```json\n" + raw + "\n```") == v, "...also fenced, after a sentence")
     check(extract_json("no json here") is None and extract_json('["a list"]') is None, "still None when there is none")
+
+
+def test_json_slips_mended_and_asked_again():
+    """A security review came back unreadable even with line breaks accepted: shell commands
+    carry backslashes that are no JSON escape (sed's `\\(`), and a list can end in a comma.
+    Those two are mended; anything else is asked again once, with what the parser said."""
+    print("\n-- a model's JSON slips: mended, or asked again with the parser's words --")
+    from lanowl.agent import extract_json
+    check(extract_json(r'''{"fix": "sed -i 's/\(Permit\).*/\1 no/' f; grep -E '\s+'"}''')["fix"]
+          == r"sed -i 's/\(Permit\).*/\1 no/' f; grep -E '\s+'", "a backslash that is no JSON escape: kept as written")
+    check(extract_json('{"a": [1, 2,], "b": {"c": 3,},}') == {"a": [1, 2], "b": {"c": 3}}, "trailing commas")
+    check(extract_json('{"q": "x \\"y\\" z", "n": "a\\nb"}') == {"q": 'x "y" z', "n": "a\nb"},
+          "valid escapes untouched")
+
+    ag = LlmAgent({"model": {}}, _Exec())
+    seen, answers = [], ['{"verdict": "fine", "why": "he said "ok" here"}', '{"verdict": "fine"}']
+
+    async def chat(session, messages, use_tools):
+        seen.append([dict(m) for m in messages])
+        return {"message": {"content": answers[len(seen) - 1]}}
+    ag._chat = chat
+    import lanowl.agent as A
+    v = asyncio.run(ag.ask_json("system", "is it fine?"))
+    check(v == {"verdict": "fine"} and len(seen) == 2, "unreadable: asked once more, and the second answer used")
+    check("Expecting ',' delimiter" in seen[1][-1]["content"] and seen[1][-2]["role"] == "assistant",
+          "...told exactly what the parser said about its first answer")
+    seen.clear()
+    answers[1] = "still not json"
+    logged = []
+    h = logging.Handler()
+    h.emit = lambda rec: logged.append(rec.getMessage())
+    logging.getLogger("lanowl.agent").addHandler(h)
+    try:
+        v = asyncio.run(ag.ask_json("system", "is it fine?"))
+    finally:
+        logging.getLogger("lanowl.agent").removeHandler(h)
+    check(v is None and len(seen) == 2 and any("Expecting ',' delimiter" in m and "twice" in m for m in logged),
+          "unreadable twice: None, and the log says why")
 
 
 def test_agent_keeps_its_last_turn_for_the_answer():
@@ -647,7 +686,7 @@ def test_web_dashboard():
 
 
 if __name__ == "__main__":
-    for fn in [test_json_with_line_breaks_in_strings, test_web_dashboard,
+    for fn in [test_json_slips_mended_and_asked_again, test_json_with_line_breaks_in_strings, test_web_dashboard,
                test_incident_diagnosis_is_edited_in, test_status_needs_no_model,
                test_agent_keeps_its_last_turn_for_the_answer,
                test_digest_carries_the_diagnosis, test_diagnosis_note,
