@@ -130,7 +130,7 @@ def test_the_auditors_rename():
     from lanowl.state import StateStore
 
     class A:
-        rename, _rekey = Auditor.rename, Auditor._rekey
+        rename, _rekey, refresh_report = Auditor.rename, Auditor._rekey, Auditor.refresh_report
 
     a, t = A(), 1_790_000_000.0
     a.inv, a.names, a.pauses = inv(), Names(), Pauses()

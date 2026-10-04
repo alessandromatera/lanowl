@@ -477,6 +477,12 @@ class Auditor:
         self.mqtt.publish("status", report, retain=True)
         return report
 
+    def refresh_report(self):
+        """The report again from the last sweep, after a change the page must show now (a
+        device no longer watched, a rename) rather than at the next sweep."""
+        if self.executor.snapshot is not None:
+            self._make_report(self.executor.snapshot)
+
     async def probe_now(self, ip: str):
         """A device just added to the inventory (watched from a site's DHCP): probed at once and
         put into the last sweep's snapshot, so the page shows it now instead of at the next
@@ -575,8 +581,7 @@ class Auditor:
         self._on_event("rename", None, json.dumps({"ip": dev.ip, "from": old, "to": new, "by": by},
                                                   ensure_ascii=False), now)
         log.info("RENAMED %s: %r -> %r (%s)", dev.ip, old, new, by)
-        if self.executor.snapshot is not None:
-            self._make_report(self.executor.snapshot)
+        self.refresh_report()
         self._publish_logbook(now)
         return {"ok": True, "changed": True, "name": new, "listed": listed}
 

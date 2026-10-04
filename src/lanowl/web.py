@@ -245,7 +245,7 @@ class Dashboard:
         self._tl = (0.0, None)       # the Timeline: (when, body)
         self._streams: set = set()   # one queue per page listening on /api/stream
         self._push_task = None
-        self._u7 = (0.0, {})         # each device's 7-day answered share: (when, {ip: pct})
+        self._u7 = (0.0, {}, {})     # each device's 7 days: (when, {ip: answered %}, {ip: first sample})
 
     # --- guards -------------------------------------------------------------
     def _host_ok(self, request) -> bool:
@@ -370,6 +370,7 @@ class Dashboard:
             "ok": True, "ip": ip, "now": now, "bucket_s": 900, "since": now - 86400,
             "buckets": a.state.device_history(ip, now - 86400, 900),
             "uptime_7d": a.state.uptime_pct(ip, now - 7 * 86400),
+            "first_7d": a.state.first_sample(ip, now - 7 * 86400),
             "info": info,
         }, dumps=_dumps)
 
@@ -394,10 +395,11 @@ class Dashboard:
             log.exception("device histories")
             return web.json_response({"ok": False, "error": str(e)}, status=500)
         if u7 is not None:
-            self._u7 = (now, u7)
+            self._u7 = (now, *u7)
         since = now - 86400
         body = {"ok": True, "now": now, "since": since, "bucket_s": 900,
-                "devices": {ip: {"b": buckets.get(ip, []), "u7": self._u7[1].get(ip)} for ip in ips}}
+                "devices": {ip: {"b": buckets.get(ip, []), "u7": self._u7[1].get(ip),
+                                 "f7": self._u7[2].get(ip)} for ip in ips}}
         if ips:     # not before the first sweep: an empty answer would stick for a minute
             self._hist = (now, body)
         return web.json_response(body, dumps=_dumps)
@@ -819,7 +821,8 @@ def _listed(a, ip) -> dict:
 
 def _histories(db_path: str, ips: list, now: float, want_u7: bool):
     """/api/history's queries, in a worker thread on a read-only connection: the same SQL as
-    StateStore.device_history and uptime_pct. Returns ({ip: buckets}, {ip: pct} or None)."""
+    StateStore.device_history, uptime_pct and first_sample. Returns ({ip: buckets}, None or
+    ({ip: answered %}, {ip: first sample in the 7 days, None = none}))."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
     try:
         since, out, u7 = now - 86400, {}, None
@@ -830,11 +833,13 @@ def _histories(db_path: str, ips: list, now: float, want_u7: bool):
             out[ip] = [[since + b * 900, n, u or 0, round(av, 1) if av is not None else None,
                         round(mx, 1) if mx is not None else None] for b, n, u, av, mx in rows]
         if want_u7:
-            u7 = {}
+            pct, first = {}, {}
             for ip in ips:
-                n, u = conn.execute("SELECT COUNT(*), SUM(up) FROM samples WHERE ip=? AND ts>=?",
-                                    (ip, now - 7 * 86400)).fetchone()
-                u7[ip] = round(100.0 * (u or 0) / n, 1) if n else None
+                n, u, t = conn.execute("SELECT COUNT(*), SUM(up), MIN(ts) FROM samples WHERE ip=? AND ts>=?",
+                                       (ip, now - 7 * 86400)).fetchone()
+                pct[ip] = round(100.0 * (u or 0) / n, 1) if n else None
+                first[ip] = t
+            u7 = (pct, first)
         return out, u7
     finally:
         conn.close()

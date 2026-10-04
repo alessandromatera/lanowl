@@ -1118,6 +1118,9 @@ function outages(d) {
   return {m, t0, t1, rec0};
 }
 
+// Where a device's own record starts in the 7 days (`first`: its first sample; null = none at
+// all, undefined = not known yet): before it is "no record", never a clean week.
+const recFrom = (rec0, first) => first === undefined ? rec0 : Math.max(rec0, first == null ? NOW : first);
 function strip(segs, t0, t1, rec0, cls = "") {
   const span = t1 - t0, pc = t => (Math.min(Math.max(t, t0), t1) - t0) / span * 100;
   let h = "";
@@ -1615,7 +1618,7 @@ function renderDevices(d) {
     return `<div class="drow" role="button" tabindex="0" data-ip="${esc(x.ip)}"><span class="sd c-${DSTATE[v][1]}${v === "down" ? " blink" : ""}"></span>
       <span class="dn"><span class="dnm">${esc(x.name)}</span><span class="dip">${esc(x.ip)}${f ? ` · <span class="flap">↓${f} this week</span>` : ""}</span></span>
       <span class="dsite">${esc(siteName(d, x.site))} · ${esc(x.criticality)}</span><span class="dnow${cls}">${val}</span>
-      <span class="dspk">${hh ? spark(hh.b) : ""}</span><span class="dstr">${strip(O.m[x.ip] || [], O.t0, O.t1, O.rec0, "thin")}</span>
+      <span class="dspk">${hh ? spark(hh.b) : ""}</span><span class="dstr">${strip(O.m[x.ip] || [], O.t0, O.t1, recFrom(O.rec0, hh ? hh.f7 : undefined), "thin")}</span>
       <span class="dpct">${hh && hh.u7 != null ? (hh.u7 >= 99.95 ? "100" : hh.u7.toFixed(1)) + "%" : "—"}</span><span class="dchev">${ic("chev")}</span></div>`;
   };
   const list = devs.filter(keep), sev = SORD;
@@ -3038,8 +3041,9 @@ function renderSheet() {
     monRow = `<label class="row mon"><span class="sd c-${p ? "indigo" : "green"}"></span><span class="rt"><span class="rn">Monitoring</span><span class="rs wrap">${esc(expl)}</span></span>
       <span class="sw"><input type="checkbox" id="mon" data-mon="${esc(ip)}" aria-label="Monitor this device"${p ? "" : " checked"}${self || S.monBusy ? " disabled" : ""}><span></span></span></label>`;
   }
-  h += `<div class="card"><div class="vizh" style="margin-top:0">Last 7 days</div>${strip(segs, O.t0, O.t1, O.rec0, "thin")}${dayAxis(O.t0, O.t1)}
-    <div class="keys"><span><i class="k-ok"></i>up</span><span><i class="k-bad"></i>down</span><span><i class="k-sched"></i>asleep on schedule</span>${segs.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${O.rec0 > O.t0 ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`;
+  const rec7 = recFrom(O.rec0, S.hist && S.hist.ok ? S.hist.first_7d : undefined);
+  h += `<div class="card"><div class="vizh" style="margin-top:0">Last 7 days</div>${strip(segs, O.t0, O.t1, rec7, "thin")}${dayAxis(O.t0, O.t1)}
+    <div class="keys"><span><i class="k-ok"></i>up</span><span><i class="k-bad"></i>down</span><span><i class="k-sched"></i>asleep on schedule</span>${segs.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${rec7 > O.t0 ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`;
   if (lbx.length) h += `<div class="sh">Ups &amp; downs</div><div class="list">` + lbx.slice(0, 12).map(e => evRow(e, null, !sameDay(e.ts, NOW))).join("") + `</div>`;
   h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow) + `<div id="sx-sec"></div>` + secH;
   h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the model about it</button>`;

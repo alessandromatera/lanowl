@@ -190,8 +190,7 @@ def test_the_page_follows_at_once():
             out["watched"], out["probed"] = names(), list(probed)
             a.rename(ip=first.ip, name="Boiler room")
             out["first"], out["renamed"] = first.ip, names()
-            s.unwatch(w["ip"])
-            a._make_report(a.executor.snapshot)
+            s.unwatch(w["ip"])                            # nothing else: the page must follow
             out["unwatched"] = names()
         finally:
             m._sweep_device = real

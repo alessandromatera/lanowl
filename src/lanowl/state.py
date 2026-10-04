@@ -427,6 +427,13 @@ class StateStore:
             return None
         return round(100.0 * (r["u"] or 0) / r["n"], 1)
 
+    def first_sample(self, ip: str, since_ts: float) -> Optional[float]:
+        """When this device's record starts within the window (None: nothing in it) — the
+        time before is "no record", never "up": a device watched since yesterday has no week."""
+        row = self.conn.execute("SELECT MIN(ts) t FROM samples WHERE ip=? AND ts>=?",
+                                (ip, since_ts)).fetchone()
+        return row["t"] if row and row["t"] is not None else None
+
     def device_history(self, ip: str, since_ts: float, bucket_s: int = 900) -> list[list]:
         """[bucket start, samples, answered, avg latency, max latency] for one device, oldest
         first — the dashboard's 24h chart. A bucket with no samples is simply absent (the

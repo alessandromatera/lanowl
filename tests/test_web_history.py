@@ -42,11 +42,14 @@ def _store():
 def test_the_thread_says_what_the_sheet_says():
     st, path, now = _store()
     ips = ["192.168.10.34", "192.168.10.38", "192.168.10.113"]
-    buckets, u7 = _histories(path, ips, now, True)
+    buckets, (u7, f7) = _histories(path, ips, now, True)
     for ip in ips[:2]:
         check(buckets[ip] == st.device_history(ip, now - 86400, 900), f"{ip}: the same 15-minute buckets as /api/device")
         check(u7[ip] == st.uptime_pct(ip, now - 7 * 86400), f"{ip}: the same 7-day share as /api/device ({u7[ip]})")
+        check(f7[ip] == st.first_sample(ip, now - 7 * 86400), f"{ip}: the same first sample as /api/device")
     check(buckets["192.168.10.113"] == [] and u7["192.168.10.113"] is None, "a device with no samples: no buckets, no share (never 0%)")
+    check(abs(f7["192.168.10.34"] - (now - (2 * 1440 - 1) * 60)) < 1 and f7["192.168.10.113"] is None,
+          "its record starts two days ago, not seven (the rest of the week is 'no record'); none: None")
     check(any(b[2] == 0 for b in buckets["192.168.10.38"]), "the hour .20 was down shows as unanswered buckets")
 
 

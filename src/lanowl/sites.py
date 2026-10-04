@@ -604,6 +604,9 @@ class Sites:
         self.a.inv.remove(str(ip))
         self._save()
         log.info("sites: no longer watching %s (%s)", w["name"], ip)
+        refresh = getattr(self.a, "refresh_report", None)
+        if callable(refresh):
+            refresh()                      # off the device list at once, not at the next sweep
         return {"ok": True}
 
     def _follow(self, s: dict, leases: list):
