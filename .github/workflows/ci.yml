@@ -1,0 +1,67 @@
+# Every push and pull request: the test suite, the check that no private address or name
+# slipped into the tree, and the two images building.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: The suite (each module in its own process)
+        run: python tests/run_all.py
+      - name: What failed
+        if: failure()
+        run: |
+          for f in .test-logs/*.log; do
+            grep -q "FAIL\|Traceback" "$f" && { echo "== $f"; tail -60 "$f"; }
+          done; true
+
+  private-data:
+    # The denylist is the maintainer's own (addresses and names of a real network): kept as a
+    # repository secret, never in the tree, and the check prints file names and counts only.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: No private address or name in the tree
+        env:
+          DENYLIST: ${{ secrets.LANOWL_DENYLIST }}
+        run: |
+          if [ -z "$DENYLIST" ]; then
+            echo "::notice::no LANOWL_DENYLIST secret here (a fork's pull request?): not checked"
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$DENYLIST" > "$RUNNER_TEMP/denylist.txt"
+          LANOWL_DENYLIST="$RUNNER_TEMP/denylist.txt" python scripts/check_private.py --quiet
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: lanowl
+        run: docker build -f docker/Dockerfile -t lanowl:ci .
+      - name: the model's sandbox
+        run: docker build -f docker/sandbox/Dockerfile -t lanowl-sandbox:ci .
+      - name: It starts far enough to check a config
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src lanowl:ci sh -c '
+            mkdir -p /tmp/c && cp config.example.yaml /tmp/c/config.yaml &&
+            cp inventory.example.yaml /tmp/c/inventory.yaml && cp secrets.example.yaml /tmp/c/secrets.yaml &&
+            chmod 600 /tmp/c/secrets.yaml && sed -i "s#/config/id_ed25519#/tmp/c/id#" /tmp/c/secrets.yaml &&
+            ssh-keygen -q -t ed25519 -N "" -f /tmp/c/id &&
+            python -m lanowl.main --config /tmp/c/config.yaml --inventory /tmp/c/inventory.yaml --check'
