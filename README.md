@@ -1,15 +1,20 @@
 # lanowl 🦉
 
-**A watchful, read-only caretaker for home and small-office networks.**
+**The self-hosted AI network monitor. Your monitor says it's down. lanowl tells you why.**
 
-lanowl checks every device on your network once a minute and tells you about a problem **once
-per incident**, not once per blip. It knows the difference between "the main line failed
-over" and "there is no internet at all". It looks after more than one site: your home, and
-the routers you reach over a VPN.
+lanowl checks every device on your network once a minute and tells you **once per incident**,
+not once per blip. When something breaks, a local model, the owl, investigates with read-only
+tools and writes the cause into the alert you already have: the switch, the line, the update,
+the Wi-Fi. It changes nothing by itself: a fix is a proposal that runs only when you press a
+button.
 
-On top of that deterministic monitor sits a **local model, the owl**. It diagnoses what broke,
-answers your questions about the network, reviews its security every morning, and proposes
-fixes. It **changes nothing by itself**: a change runs only when you press a button.
+![lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix](docs/img/home-wide.png)
+
+Free and open source (Apache-2.0). Self-hosted, no account, no telemetry. The model runs on
+your own [Ollama](https://ollama.com); everything else works without it.
+
+**[Documentation](docs/README.md)** · [Quick start](docs/getting-started/quick-start.md) ·
+[How alerts work](docs/using/alerts.md) · [The security model](docs/reference/security-model.md)
 
 > **Status: pre-alpha.** lanowl comes out of a monitor that has run a real home network
 > (MikroTik, OpenWrt, Linux servers, Shelly, cameras, a VPS hub, two remote sites) since
@@ -173,10 +178,11 @@ Built-in kinds and what each can do:
 | `shelly` | | | | ✓ | | | | ✓ |
 | `generic` | | | | | | | | |
 
-Any device can be rebooted through a Home Assistant button (a smart plug):
-`reboot: {ha_button: button.nvr_plug_restart}`. A feature's options sit under its name:
-`restart: {units: [mosquitto]}`, `backup: {paths: [etc, home]}`,
-`reboot: {risk: "...", hold_min: 10}`, `logs: {public: true, about: "..."}`.
+Any device can be rebooted through a Home Assistant button (a smart plug): give it a `kind`
+(`generic` is enough), `manage: [reboot]` and `reboot: {ha_button: button.nvr_plug_restart}`.
+A feature's options sit under its name: `restart: {units: [mosquitto]}`,
+`backup: {paths: [etc, home]}`, `reboot: {risk: "...", hold_min: 10}`,
+`logs: {public: true, about: "..."}`.
 
 **Logins** (`secrets.yaml`) are a user with a password, lanowl's ssh key (`key: true`), or both
 (the key logs in, the password is what sudo asks for). A user other than root needs sudo for

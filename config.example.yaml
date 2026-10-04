@@ -203,7 +203,8 @@ actions:
   max_pending: 3
   max_per_day: 20
   repeat_after_h: 24
-  pin_sha256: ""                    # sha256 of your PIN; empty: no approvals from the dashboard
+  pin_sha256: ""                    # printf 'lanowl-pin:%s' YOUR_PIN | sha256sum
+                                    # empty: no approvals from the dashboard
   pin_max_failures: 5
   pin_lockout_min: 30
   catalog:                          # which devices: the inventory's `manage`
