@@ -1348,8 +1348,13 @@ function renderStatus(d) {
   devs.forEach(x => n[devState(x, sh)]++);
   const all = d.issues || [], iss = all.filter(i => i.severity !== "info"), info = all.filter(i => i.severity === "info");
   const worst = iss.map(i => i.severity).sort((a, b) => (RANK[a] ?? 3) - (RANK[b] ?? 3))[0];
-  const tone = !d.sweep.ts ? "gray" : worst ? TONE[worst] || "orange" : "green";
-  const title = !d.sweep.ts ? "Waiting for the first sweep" : !iss.length ? "All clear" : iss.length === 1 ? issueTitle(iss[0]) : `${iss.length} problems`;
+  // a device that missed a sweep but is not confirmed down yet (`debounce_fails`) has no
+  // issue: it is not news, but the headline must not call the network clear while it is red
+  const missed = devs.filter(x => devState(x, sh) === "down" && ["critical", "high", "warning"].includes(x.criticality)
+                                  && !all.some(i => i.ip === x.ip));
+  const tone = !d.sweep.ts ? "gray" : worst ? TONE[worst] || "orange" : missed.length ? "gray" : "green";
+  const title = !d.sweep.ts ? "Waiting for the first sweep" : iss.length > 1 ? `${iss.length} problems` : iss.length ? issueTitle(iss[0])
+    : missed.length === 1 ? `${missed[0].name} missed a check` : missed.length ? `${missed.length} devices missed a check` : "All clear";
   const watched = devs.length - n.paused;
   const said = !d.sweep.ts ? "" : [`${n.up} of ${watched} devices answering${n.asleep ? `, ${n.asleep} asleep on schedule` : ""}${n.held ? `, ${n.held} rebooting` : ""}${n.paused ? `, ${n.paused} paused` : ""}.`,
     wanWords(d), sitesWords(d)].filter(Boolean).join(" ");
