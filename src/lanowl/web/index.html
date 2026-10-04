@@ -1618,7 +1618,7 @@ function renderDevices(d) {
     return `<div class="drow" role="button" tabindex="0" data-ip="${esc(x.ip)}"><span class="sd c-${DSTATE[v][1]}${v === "down" ? " blink" : ""}"></span>
       <span class="dn"><span class="dnm">${esc(x.name)}</span><span class="dip">${esc(x.ip)}${f ? ` · <span class="flap">↓${f} this week</span>` : ""}</span></span>
       <span class="dsite">${esc(siteName(d, x.site))} · ${esc(x.criticality)}</span><span class="dnow${cls}">${val}</span>
-      <span class="dspk">${hh ? spark(hh.b) : ""}</span><span class="dstr">${strip(O.m[x.ip] || [], O.t0, O.t1, recFrom(O.rec0, hh ? hh.f7 : undefined), "thin")}</span>
+      <span class="dspk">${hh ? spark(hh.b) : ""}</span><span class="dstr">${strip(O.m[x.ip] || [], O.t0, O.t1, recFrom(O.rec0, hh ? hh.f7 : HA.d ? null : undefined), "thin")}</span>
       <span class="dpct">${hh && hh.u7 != null ? (hh.u7 >= 99.95 ? "100" : hh.u7.toFixed(1)) + "%" : "—"}</span><span class="dchev">${ic("chev")}</span></div>`;
   };
   const list = devs.filter(keep), sev = SORD;

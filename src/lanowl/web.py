@@ -382,9 +382,11 @@ class Dashboard:
         a read-only connection of their own (the database is WAL: a reader never blocks the
         sweep's writes), one at a time, cached: the buckets a minute, the shares ten minutes."""
         a, now = self.a, time.time()
+        ips = [d.get("ip") for d in (a._last_report or {}).get("devices") or [] if d.get("ip")]
+        if self._hist[1] is not None and set(self._hist[1]["devices"]) != set(ips):
+            self._hist = (0.0, None)        # a device watched or dropped since: not a minute late
         if self._hist[1] is not None and now - self._hist[0] < 60:
             return web.json_response(self._hist[1], dumps=_dumps)
-        ips = [d.get("ip") for d in (a._last_report or {}).get("devices") or [] if d.get("ip")]
         want_u7 = now - self._u7[0] >= 600 or bool(set(ips) - set(self._u7[1]))
         try:
             async with self._hist_lock:

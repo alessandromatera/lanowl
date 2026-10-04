@@ -620,6 +620,12 @@ def test_web_dashboard():
             await asyncio.sleep(0.05)
             async with s.get(base + f"/api/chat?c={out['ask'].get('c')}") as r:
                 out["after"] = (await r.json())["conv"]["turns"]
+            async with s.get(base + "/api/history") as r:
+                out["hist1"] = sorted((await r.json())["devices"])
+            a._last_report["devices"].append({"ip": "192.168.10.122", "name": "Tablet", "up": False})
+            async with s.get(base + "/api/history") as r:        # a device just watched
+                h2 = await r.json()
+                out["hist2"] = (sorted(h2["devices"]), h2["devices"].get("192.168.10.122"))
         out["checks"] = len(checks)
         await a.dashboard.stop()
     with tempfile.TemporaryDirectory() as d:
@@ -632,6 +638,9 @@ def test_web_dashboard():
     check(out["rebind"] == 421, "a request under a borrowed name is refused (DNS rebinding)")
     check(out["form"] == 415, "a non-JSON POST — what a page elsewhere could send — is refused")
     check(out["check"] == 200 and out["checks"] == 1, "Check now starts an audit")
+    check(out["hist1"] == ["192.168.10.117"] and out["hist2"][0] == ["192.168.10.117", "192.168.10.122"]
+          and out["hist2"][1] == {"b": [], "u7": None, "f7": None},
+          "the histories follow a device watched a moment ago, with no record of it (not a minute late)")
     check(out["ask"].get("ok") and out["after"] and out["after"][0]["status"] == "done"
           and out["after"][0]["a"] == "answer to why is the boiler down?",
           f"a question is answered and shows up in its conversation ({out['after']})")
