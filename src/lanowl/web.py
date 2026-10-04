@@ -613,6 +613,8 @@ class Dashboard:
         if isinstance(body.get("watch"), dict):
             w = body["watch"]
             r = s.watch(str(w.get("site") or ""), str(w.get("mac") or ""), str(w.get("name") or ""))
+            if r.get("ok"):
+                await self.a.probe_now(r["ip"])     # on the page at once, not at the next sweep
         elif body.get("unwatch"):
             r = s.unwatch(str(body["unwatch"]))
         elif isinstance(body.get("known"), dict):

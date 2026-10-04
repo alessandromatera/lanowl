@@ -3389,7 +3389,7 @@ document.addEventListener("click", async e => {
       : act === "known" || act === "unknown" ? {known: {site: t.dataset.sk, mac: t.dataset.mac, known: act === "known"}}
       : act === "sitescan" ? {scan: true} : {read: true};
     const r = await post("/api/sites", body).catch(() => ({ok: false, error: "lanowl is not answering."}));
-    toast(r.ok ? {watch: `Watching ${r.name || ""} — from the next sweep.`, unwatch: "No longer watched.", known: "Known — no longer counted as unknown.",
+    toast(r.ok ? {watch: `Watching ${r.name || ""}.`, unwatch: "No longer watched.", known: "Known — no longer counted as unknown.",
                   unknown: "Back among the unknown.", siteread: "Reading it — a few seconds.",
                   sitescan: "Scanning every site's networks — a few minutes."}[act] : r.error || "Could not do it.");
     refresh();

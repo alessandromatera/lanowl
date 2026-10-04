@@ -157,6 +157,53 @@ def test_watch_follow_unwatch():
           "the DHCP rows nobody watches, routed or not, known or not")
 
 
+def test_the_page_follows_at_once():
+    """Watch, rename, stop watching: the page shows each at once, not at the next sweep (up to
+    a minute later, with the device missing from both lists meanwhile)."""
+    print("\n-- the page follows a watch, a rename and an unwatch at once --")
+    from lanowl.sweep import DeviceStatus, Snapshot
+    out = {}
+
+    async def go(d):
+        m, a = _auditor(d, SITES)
+        _fake_ssh(a, {("10.8.0.16", "dhcp.leases"): (0, OPENWRT_LEASES, "")}, [])
+        s = a.sites
+        s.rec["read"] = 0
+        s.tick(time.time())
+        await asyncio.sleep(0.05)
+        first = a.inv.devices[0]
+        a.executor.snapshot = Snapshot(ts=time.time(), devices=[DeviceStatus(
+            ip=first.ip, name=first.name, group=first.group, criticality=first.criticality,
+            up=True, reachable=True, latency_ms=3.0)], wan={}, wan_ok=True)
+        probed = []
+
+        async def probe(dev, cfg, sem, *rest):            # no network in a test
+            probed.append(dev.ip)
+            return DeviceStatus(ip=dev.ip, name=dev.name, group=dev.group,
+                                criticality=dev.criticality, up=True, reachable=True, latency_ms=9.0)
+        m._sweep_device, real = probe, m._sweep_device
+        try:
+            w = s.watch("lake", "aa:bb:cc:00:00:01", "Tablet Lake")
+            await a.probe_now(w["ip"])
+            await a.probe_now(w["ip"])                    # twice: still one row, one probe
+            names = lambda: {x["ip"]: x["name"] for x in a._last_report["devices"]}
+            out["watched"], out["probed"] = names(), list(probed)
+            a.rename(ip=first.ip, name="Boiler room")
+            out["first"], out["renamed"] = first.ip, names()
+            s.unwatch(w["ip"])
+            a._make_report(a.executor.snapshot)
+            out["unwatched"] = names()
+        finally:
+            m._sweep_device = real
+    _run(go)
+    ip = "192.168.108.101"
+    check(out["watched"].get(ip) == "Tablet Lake" and out["probed"] == [ip],
+          f"watched: on the page at once, probed once ({out['watched']})")
+    check(out["renamed"].get(out["first"]) == "Boiler room", f"renamed: the new name at once ({out['renamed']})")
+    check(ip not in out["unwatched"] and out["first"] in out["unwatched"],
+          "no longer watched: off the page at once, the rest kept")
+
+
 def test_site_checks():
     print("\n-- checks from a site's router --")
     out = {}
@@ -346,7 +393,7 @@ def test_vendor():
 
 
 if __name__ == "__main__":
-    for fn in [test_where_and_leases, test_watch_follow_unwatch, test_site_checks, test_updates_openwrt_unifi,
+    for fn in [test_where_and_leases, test_watch_follow_unwatch, test_the_page_follows_at_once, test_site_checks, test_updates_openwrt_unifi,
                test_by_hand_in_the_weekly, test_uniform_dhcp_known_and_the_house, test_one_check_now,
                test_vendor]:
         fn()

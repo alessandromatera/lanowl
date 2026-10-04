@@ -59,8 +59,8 @@ from .sites import HOUSE, Sites
 from .sinks import (MqttBridge, TelegramOutbox, TelegramPoller, TelegramRejected,
                     telegram_direct, telegram_edit)
 from .state import StateStore, StatusTracker
-from .sweep import (OLLAMA_KEY, CheckResult, apply_offline_grace, offline_by_design,
-                    offline_mode_ips, run_sweep)
+from .sweep import (OLLAMA_KEY, CheckResult, _sweep_device, apply_offline_grace,
+                    asleep_modes_at, offline_by_design, offline_mode_ips, run_sweep)
 from .tools import ToolExecutor
 from .hostlog import HostLogWatcher
 from .wanwatch import WanWatcher
@@ -438,8 +438,15 @@ class Auditor:
         """The deterministic report for `snap`, kept for the dashboard and published.
 
         Also run straight after a pause or resume, on the last sweep's snapshot, so the
-        page shows the change at once instead of up to a minute later."""
+        page shows the change at once instead of up to a minute later. For the same reason
+        the inventory as it is NOW wins over the snapshot: a renamed device shows its new
+        name, and one no longer watched leaves the page (one DHCP moved is still owned at
+        its old address until the next sweep finds it at the new one)."""
+        snap.devices = [d for d in snap.devices if self.inv.owns(d.ip, d.name)]
         for d in snap.devices:
+            dev = self.inv.get(d.ip)
+            if dev is not None:
+                d.name = dev.name
             d.paused = self.pauses.is_paused(d.ip)
             if self.held_until(d.ip):
                 d.held = d.expected_down = True
@@ -469,6 +476,19 @@ class Auditor:
         self._last_report = report
         self.mqtt.publish("status", report, retain=True)
         return report
+
+    async def probe_now(self, ip: str):
+        """A device just added to the inventory (watched from a site's DHCP): probed at once and
+        put into the last sweep's snapshot, so the page shows it now instead of at the next
+        sweep. Only the page: its first sample, and any up or down, are the next sweep's."""
+        dev, snap = self.inv.get(ip), self.executor.snapshot
+        if dev is None or snap is None or any(d.ip == ip for d in snap.devices):
+            return
+        st = await _sweep_device(dev, self.cfg, asyncio.Semaphore(4), self._mac_index,
+                                 asleep_modes_at(self.cfg, time.time()), self._iface_index)
+        if self.inv.get(ip) is dev and not any(d.ip == ip for d in snap.devices):
+            snap.devices.append(st)
+            self._make_report(snap)
 
     def _name(self, ip: str, fallback: str = "") -> str:
         dev = self.inv.get(ip)
