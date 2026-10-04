@@ -3,6 +3,9 @@
 From nothing to a dashboard of your own network in about ten minutes: three files to fill
 in, one command to check what lanowl will do, one to start it.
 
+Rather not write YAML? An AI assistant (Claude, ChatGPT, Gemini) can write the files from a
+description of your network: [Set it up with an AI assistant](with-an-ai.md).
+
 ## 1. Get lanowl and copy the three files
 
 Everything lanowl reads lives in one `config` folder, mounted read-only into the container.

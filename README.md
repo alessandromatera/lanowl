@@ -16,6 +16,11 @@ your own [Ollama](https://ollama.com); everything else works without it.
 **[Documentation](docs/README.md)** · [Quick start](docs/getting-started/quick-start.md) ·
 [How alerts work](docs/using/alerts.md) · [The security model](docs/reference/security-model.md)
 
+**Set it up with your AI assistant.** No YAML to learn: describe your network to Claude,
+ChatGPT, Gemini or any other assistant, give it the example files, and it writes your
+configuration. `lanowl --check` tells you both what to fix, and your passwords stay on your
+machine. [The prompt to copy](docs/getting-started/with-an-ai.md).
+
 > **Status: pre-alpha.** lanowl comes out of a monitor that has run a real home network
 > (MikroTik, OpenWrt, Linux servers, Shelly, cameras, a VPS hub, two remote sites) since
 > August 2026. It is being turned into something anyone can install, and is not ready yet.
@@ -40,6 +45,9 @@ your own [Ollama](https://ollama.com); everything else works without it.
 - **Sites.** Remote routers over WireGuard: their DHCP, their devices, checks from them.
 
 ## Quick start (Docker)
+
+The files under `config/` can be written by an AI assistant from a description of your
+network: [Set it up with an AI assistant](docs/getting-started/with-an-ai.md). By hand:
 
 ```bash
 git clone https://github.com/alessandromatera/lanowl && cd lanowl

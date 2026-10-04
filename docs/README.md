@@ -5,6 +5,12 @@ model explain what broke. These pages cover installing it, setting it up for you
 network, and living with it. They describe what lanowl does today; what is planned is on the
 [roadmap](reference/roadmap.md).
 
+> **Let an AI assistant write your configuration.** You do not need to learn lanowl's YAML.
+> Describe your network to Claude, ChatGPT, Gemini or any assistant, point it at the example
+> files, and it writes `config.yaml` and `inventory.yaml` for you; `lanowl --check` tells you
+> both what to fix. Your passwords never leave your machine.
+> [How, and the prompt to copy](getting-started/with-an-ai.md).
+
 The screenshots and messages come from a made-up house played through lanowl's own code
 ([`demo/`](../demo/)): a family home behind a MikroTik with fibre and an LTE backup, and a
 cabin reached over WireGuard. None of it is a real network.
@@ -13,6 +19,7 @@ cabin reached over WireGuard. None of it is a real network.
 
 - [What you need](getting-started/requirements.md)
 - [Quick start](getting-started/quick-start.md)
+- [Set it up with an AI assistant](getting-started/with-an-ai.md)
 - [Telegram](getting-started/telegram.md)
 - [The first hour](getting-started/first-hour.md)
 
