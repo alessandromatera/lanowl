@@ -61,7 +61,8 @@ tokens:
 INVENTORY = {"devices": [
     {"ip": "192.168.88.1", "name": "Router", "kind": "mikrotik", "credentials": "routers",
      "manage": ["updates", "upgrade", "reboot", "config", "security", "backup"],
-     "reboot": {"risk": "every Wi-Fi drops"}},
+     "reboot": {"risk": "every Wi-Fi drops"},
+     "upgrade": {"risk": "no internet while it installs", "hold_min": 12, "also_hold": ["wan"]}},
     {"ip": "192.168.88.2", "name": "AP", "kind": "openwrt", "credentials": "routers",
      "manage": ["updates", "reboot", "security"]},
     {"ip": "192.168.88.10", "name": "Server", "kind": "linux", "credentials": "server-key",
@@ -259,7 +260,9 @@ def test_apply():
           and rb["192.168.88.51"]["back_s"] == 120, "reboots: risk, the HA button, a profile's wait")
     check(cat["shelly_reboot"]["devices"] == ["192.168.88.40"], "only the Shelly with `reboot`")
     check(cat["apt_upgrade"]["hosts"] == {"192.168.88.10": {"via": "key"}}
-          and cat["routeros_upgrade"]["hosts"] == {"192.168.88.1": {}}, "upgrades")
+          and cat["routeros_upgrade"]["hosts"] == {"192.168.88.1": {
+              "risk": "no internet while it installs", "hold_min": 12, "also_hold": ["wan"]}},
+          "upgrades: a router's risk, and what is held while it installs")
     check(cat["restart_service"] == {"hosts": {"192.168.88.10": {"via": "key", "units": ["mosquitto"]}}}
           and "vps_restart" not in cat, "restarts: per device, the old shapes gone")
 

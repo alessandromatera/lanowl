@@ -29,7 +29,8 @@
 #                backup    backs it up, monthly and before updates
 #              Anything that CHANGES something is only ever a proposal you approve with a button.
 # A feature's options sit under its own name (restart: {units}, backup: {paths}, reboot:
-# {risk, hold_min, also_hold, ha_button}, logs: {public, about, trusted}).
+# {risk, hold_min, also_hold, ha_button}, upgrade: {risk; a router's hold_min, also_hold},
+# logs: {public, about, trusted}).
 #
 # `lanowl --check` says what it will do with each device, and why not.
 

@@ -14,6 +14,7 @@ besides, and each feature's options sit under the feature's own name:
     restart: {units: [mosquitto]}       # the services it may restart
     backup:  {paths: [etc, home]}       # what a backup by password takes
     reboot:  {risk: "the cameras record to it", hold_min: 10, also_hold: [192.168.88.21]}
+    upgrade: {risk: "the internet is down while it installs", hold_min: 12, also_hold: [wan]}
     logs:    {public: true, about: "a VPS", trusted: ["10.8.0.0/24"]}
 
 A kind is built in (`KINDS`), or a profile: a YAML file of commands, each read by a fixed
@@ -424,11 +425,13 @@ def apply(cfg: dict, inv, access, plans: list, profiles: dict) -> list:
 
     apt, ros = {}, {}
     for pl, how, d in by["upgrade"]:
-        risk = {"risk": _opts(d, "upgrade")["risk"]} if _opts(d, "upgrade").get("risk") else {}
+        # what it puts at risk; for a router, also how long its alerts and those of what goes
+        # dark with it ("wan", the tunnels) are held while it installs
+        o = {k: v for k, v in _opts(d, "upgrade").items() if k in ("risk", "hold_min", "also_hold")}
         if how == "routeros":
-            ros[pl.ip] = risk
+            ros[pl.ip] = o
         else:
-            apt[pl.ip] = {"via": how, **risk}
+            apt[pl.ip] = {"via": how, **({"risk": o["risk"]} if "risk" in o else {})}
     _node(cfg, "actions.catalog.apt_upgrade")["hosts"] = apt
     _node(cfg, "actions.catalog.routeros_upgrade")["hosts"] = ros
 
