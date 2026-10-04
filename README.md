@@ -84,6 +84,57 @@ Two settings shape how the owl thinks:
 line, and nothing speaks of failover. With it (a MikroTik dual-WAN), name your links
 (`wan.path.main` / `backup`) and every message uses those names.
 
+## The router (MikroTik)
+
+With a MikroTik as the main router, lanowl reads it: the DHCP leases (new devices, a device
+DHCP moved), the routes (which internet link is in use), ARP and the ports' link state (for
+gear that does not answer ping) and the log (the failover's own lines, logins). Everything
+else works without it: leave `mikrotik.dhcp_source` empty.
+
+On the router, a user that can read and nothing more, allowed only from lanowl's host
+(here `192.168.88.5`; older RouterOS calls a service's `available-from` `address`):
+
+```
+/user group add name=lanowl-ro policy=read,test,sniff,api,rest-api
+/user add name=lanowl group=lanowl-ro address=192.168.88.5/32 password="a long one"
+/ip service set www available-from=192.168.88.5/32
+```
+
+`test` and `sniff` let the model ping, traceroute and torch from the router when you ask it
+to look into something; leave them out and it simply cannot. lanowl watches its own group:
+a change to it that grants more than `mikrotik.lanowl_policy` is reported like any other
+configuration change.
+
+Then in `config.yaml`, `mikrotik.dhcp_source: "http://192.168.88.1"` and
+`mikrotik.credentials: router-read`, and in `secrets.yaml` that login:
+`router-read: {user: lanowl, password: "a long one"}`.
+
+**One kept connection instead of polling** (recommended): the API over TLS. RouterOS will
+not self-sign a server certificate ("CA not found"), so a small local CA signs it:
+
+```
+/certificate add name=lanowl-ca common-name=lanowl-ca key-usage=key-cert-sign,crl-sign days-valid=3650
+/certificate sign lanowl-ca
+/certificate add name=lanowl-api common-name=192.168.88.1 subject-alt-name=IP:192.168.88.1 days-valid=3650
+/certificate sign lanowl-api ca=lanowl-ca
+/ip service set api-ssl certificate=lanowl-api available-from=192.168.88.5/32 disabled=no
+```
+
+and `mikrotik.api.enabled: true`. The certificate is self-signed, so lanowl trusts it by its
+fingerprint: on the first connection the log says `router API: pin this certificate:
+mikrotik.api.fingerprint: …` — put that value in config.yaml. Until then the link is
+encrypted but not authenticated.
+
+If the router refuses the login, lanowl says so once — check the password and the user's
+`address=` — and does not try again for 15 minutes, or until secrets.yaml changes: every
+refused try is a `login failure` line in the router's log.
+
+**A failover script** (dual WAN): put a comment on the main link's default route
+(`wan.path.route_comment`), and give `wan.watch.log_down_match` / `log_up_match` the lines
+your script logs when the main link goes down and up. A backup that switches its own uplink
+on only when the router fails over to it (an LTE or radio link) is `wan.path.backup_standby:
+true`, and `wan.standby` reads it while the main link is down.
+
 ## Devices
 
 Each device is described once, in the inventory. Watching it needs only an address and its
