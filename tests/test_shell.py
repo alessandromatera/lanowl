@@ -225,6 +225,38 @@ def test_clip():
     check(SH.clip("short", 50) == "short", "short output untouched")
 
 
+def test_retried_until_proven():
+    """A sandbox not running when lanowl started (the shells' profile started afterwards, or a
+    sandbox that restarted) left the shell off for a day: the next try was the daily one."""
+    print("\n-- an unproven shell is tried again in minutes, a proven one daily --")
+    out = {}
+
+    async def go(d):
+        _, a = _auditor(d, _cfg(d))
+        sh, calls = a.shell, []
+
+        async def fake():
+            calls.append(1)
+            return sh.state
+        sh.canary = fake
+        t = 1_790_000_000.0
+
+        async def at(now):
+            sh.tick(now)
+            await asyncio.sleep(0)
+            return len(calls)
+        sh.state = {"ok": False, "why": "the sandbox is not answering", "ts": t, "marker": ""}
+        out["early"] = await at(t + 60)
+        out["retry"] = await at(t + SH.RETRY_S + 1)
+        sh.state = {"ok": True, "why": "isolated", "ts": t, "marker": ""}
+        out["proven"] = await at(t + SH.RETRY_S + 1)
+        out["daily"] = await at(t + SH.PROVE_EVERY_S + 1)
+    with tempfile.TemporaryDirectory() as d:
+        asyncio.run(go(d))
+    check(out["early"] == 0 and out["retry"] == 1, f"unproven: not at once, again after {SH.RETRY_S}s")
+    check(out["proven"] == 1 and out["daily"] == 2, "proven: left alone until the daily check")
+
+
 def test_the_control_is_not_lanowls_own_host():
     """The sandbox walls off lanowl's own host, so a canary pointed at it can never take a
     handshake: the shell stays off with "the LAN or that host is down", which sends you
@@ -264,7 +296,8 @@ def test_scripts_parse():
 
 
 if __name__ == "__main__":
-    for fn in [test_canary, test_the_tool, test_clip, test_the_control_is_not_lanowls_own_host,
+    for fn in [test_canary, test_the_tool, test_clip, test_retried_until_proven,
+               test_the_control_is_not_lanowls_own_host,
                test_scripts_parse]:
         fn()
     print()

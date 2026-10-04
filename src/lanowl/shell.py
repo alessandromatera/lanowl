@@ -44,6 +44,8 @@ log = logging.getLogger("lanowl.shell")
 RECORD = "shell"
 KEEP = 200
 PROVE_EVERY_S = 86400          # the daily safety net; the security review proves it daily too
+RETRY_S = 300                  # until it is proven: a sandbox started after lanowl, or one that
+                               # restarted, must not leave the shell off for a day
 
 SPEC = {"type": "function", "function": {
     "name": "shell",
@@ -250,15 +252,17 @@ class Shell:
 
     # --- proving the walls: at start, daily, and when the sandbox restarted -------------------
     def tick(self, now: Optional[float] = None):
-        """From the sweep: prove the walls once after lanowl starts, then at most daily
-        (the security review proves them every morning; `ready` when the sandbox restarted).
-        Never awaited."""
+        """From the sweep: prove the walls once after lanowl starts, then daily once proven (the
+        security review proves them every morning; `ready` when the sandbox restarted) — and
+        every five minutes until they are: a sandbox started after lanowl, or not running for a
+        while, must not leave the shell off until tomorrow. Never awaited."""
         if not self.enabled:
             return
         now = now or time.time()
         if self._task is not None and not self._task.done():
             return
-        if now - self.state["ts"] < PROVE_EVERY_S and self.state["ok"] is not None:
+        wait = PROVE_EVERY_S if self.state["ok"] else RETRY_S
+        if now - self.state["ts"] < wait and self.state["ok"] is not None:
             return
         self._task = asyncio.ensure_future(self.canary())
 
