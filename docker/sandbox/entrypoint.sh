@@ -6,7 +6,8 @@ set -euo pipefail
 
 # lanowl's host: unreachable from here (its dashboard, its sshd). No default — a sandbox that
 # does not know what to wall off does not start, and the shell stays off.
-HOST_IP="${LANOWL_HOST_IP:?set LANOWL_HOST_IP to the address of lanowl's host}"
+# (No apostrophe in the message: inside "${...:?...}" bash 5 reads one as a quote.)
+HOST_IP="${LANOWL_HOST_IP:?set LANOWL_HOST_IP to the address of the host lanowl runs on}"
 # SANDBOX_OFFLINE=1: the audit's sandbox (lanowl-sandbox-offline). The same walls towards the
 # LAN, and on top: no internet
 # at all, and no DNS — Docker's resolver and the LAN's forward a question to the internet, and

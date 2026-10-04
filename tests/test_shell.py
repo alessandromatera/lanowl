@@ -11,7 +11,8 @@ same one-JSON-line protocol as docker/sandbox/server.py. Pinned down here (shell
   3. a command: exit code and output (head and tail when long), killed at its time limit, at
      most max_per_answer per answer, every one kept in the record with who asked;
   4. a Telegram answer lists the commands under it; the dashboard shows each as `$ command`;
-  5. the socket path must BE a socket (a planted file or link is refused).
+  5. the socket path must BE a socket (a planted file or link is refused);
+  6. the image's shell scripts parse under the bash they run on (5.x), not only the Mac's 3.2.
 """
 from __future__ import annotations
 
@@ -219,8 +220,30 @@ def test_clip():
     check(SH.clip("short", 50) == "short", "short output untouched")
 
 
+def test_scripts_parse():
+    """The sandbox's entrypoint once said `${LANOWL_HOST_IP:?... lanowl's host}`: bash 5.2 takes
+    that apostrophe for an opening quote, so neither sandbox started — and the Mac's bash 3.2
+    (`bash -n`) did not mind. Every docker/ script: no ' inside a ${...} in double quotes, and
+    `bash -n` clean with whatever bash is here."""
+    import glob
+    import re
+    import subprocess
+    print("\n-- the image's shell scripts parse --")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    scripts = sorted(glob.glob(os.path.join(root, "docker", "**", "*.sh"), recursive=True))
+    check(bool(scripts), f"found the scripts ({len(scripts)})")
+    risky = re.compile(r'"[^"\n]*\$\{[^}\n]*\'[^}\n]*\}')
+    for p in scripts:
+        name = os.path.relpath(p, root)
+        bad = [i + 1 for i, ln in enumerate(open(p, encoding="utf-8")) if not ln.lstrip().startswith("#")
+               and risky.search(ln)]
+        check(not bad, f"{name}: no apostrophe inside a \"${{...}}\" (lines {bad or 'none'})")
+        rc = subprocess.run(["bash", "-n", p], capture_output=True).returncode
+        check(rc == 0, f"{name}: bash -n")
+
+
 if __name__ == "__main__":
-    for fn in [test_canary, test_the_tool, test_clip]:
+    for fn in [test_canary, test_the_tool, test_clip, test_scripts_parse]:
         fn()
     print()
     if _fails:
