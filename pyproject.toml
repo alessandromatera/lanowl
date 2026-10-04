@@ -7,7 +7,7 @@ name = "lanowl"
 version = "0.1.0.dev0"
 description = "A watchful, read-only caretaker for home and small-office networks"
 readme = "README.md"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Alessandro Matera" }]
 requires-python = ">=3.11"

@@ -10,7 +10,7 @@ button.
 
 ![lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix](docs/img/home-wide.png)
 
-Free and open source (Apache-2.0). Self-hosted, no account, no telemetry. The model runs on
+Free and open source (AGPL-3.0). Self-hosted, no account, no telemetry. The model runs on
 your own [Ollama](https://ollama.com); everything else works without it.
 
 **[Documentation](docs/README.md)** · [Quick start](docs/getting-started/quick-start.md) ·
@@ -239,4 +239,4 @@ puts the owl to sleep.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+AGPL-3.0. See [LICENSE](LICENSE).

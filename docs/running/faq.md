@@ -2,7 +2,7 @@
 
 ### Is it free?
 
-Yes. lanowl is open source under the Apache-2.0 license. There is no paid tier, no account and
+Yes. lanowl is open source under the AGPL-3.0 license. There is no paid tier, no account and
 no telemetry.
 
 ### What leaves my network?
