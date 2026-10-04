@@ -58,6 +58,15 @@ class ApiError(Exception):
     have been told the same, so this is never a reason to fall back."""
 
 
+# A login the router refused over REST is not tried again for this long (or until its password
+# changes in secrets.yaml): every try is a "login failure" line, critical, in the router's log.
+REFUSED_WAIT_S = 900
+
+
+def _login_key(user: str, pw: str) -> str:
+    return hashlib.sha256(f"{user}\0{pw}".encode()).hexdigest()
+
+
 class ApiDown(Exception):
     """No usable connection: never opened, closed, or lost in the middle of a command."""
 
@@ -357,6 +366,7 @@ class Router:
         self.rest_calls = 0              # reads that went to REST although the API is on
         self._told_down = False
         self._told_unpinned = False
+        self._refused: Optional[tuple] = None   # (login key, until): REST was refused that login
 
     # --- status --------------------------------------------------------------
     @property
@@ -405,7 +415,14 @@ class Router:
                 # unreachable, refused, TLS failed, or dropped mid-login (a wrong `address=`
                 # on the service): every reader must still get its REST answer, so nothing
                 # escapes from here
-                self._failed(f"{type(e).__name__}: {e}" if str(e) else type(e).__name__, None)
+                why = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+                if isinstance(e, (ApiDown, ConnectionResetError, ConnectionAbortedError,
+                                  asyncio.IncompleteReadError, ssl.SSLError)):
+                    why += (" — the router closed the connection before the login: is this host in "
+                            "the api-ssl service's available-from? (/ip service print)")
+                elif isinstance(e, ConnectionRefusedError):
+                    why += f" — nothing listens on port {self.port}: is the api-ssl service enabled?"
+                self._failed(why, None)
                 return None
             self.conn = c
             self.connects += 1
@@ -571,17 +588,45 @@ class Router:
             return probes.ProbeResult(False, None, str(r["error"]))
         return probes.ProbeResult(True, None, "mikrotik", {"json": r, "conn": serial})
 
+    def _rest_gate(self, user: str, pw: str) -> str:
+        """Why REST must not ask now ("" = it may): the router refused this very login a while
+        ago. A changed login in secrets.yaml lifts it at once."""
+        if self._refused is None:
+            return ""
+        key, until = self._refused
+        if key != _login_key(user, pw) or time.time() >= until:
+            self._refused = None
+            return ""
+        return (f"the router refused the login {user!r}: not asked again before "
+                f"{time.strftime('%H:%M', time.localtime(until))}, or a change of it in secrets.yaml")
+
+    def _rest_refused(self, user: str, pw: str):
+        """HTTP 401: the user, its password, or the address it may log in from. Said once, with
+        what to check, and not tried again for a while — instead of a "login failure" line in
+        the router's log at every read."""
+        self._refused = (_login_key(user, pw), time.time() + REFUSED_WAIT_S)
+        me = str((self.cfg.get("observer") or {}).get("host_ip") or "") or "lanowl's host"
+        log.warning("router REST: %s refused the login %r (HTTP 401). Check its password in "
+                    "secrets.yaml, and on the router that this user may log in from %s "
+                    "(/user print detail: address=). Not tried again for %d min, or until "
+                    "secrets.yaml changes: every try is a 'login failure' line in the router's log.",
+                    self.host or self.rest_base, user, me, REFUSED_WAIT_S // 60)
+
     async def _rest(self, method: str, path: str, body: Optional[dict], timeout_s: float):
         """The REST call this module exists to avoid, kept as the fallback."""
+        user, pw = resolve_mikrotik(self.cfg)
+        why = self._rest_gate(user, pw)
+        if why:
+            return {"error": why}
         if method.upper() == "GET":
-            user, pw = resolve_mikrotik(self.cfg)
             # probes.mikrotik_rest is looked up at call time, so the tests' stubs still apply
             r = await probes.mikrotik_rest(self.rest_base, path, user, pw, self.verify_tls,
                                            int(timeout_s * 1000))
+            if not r.ok and r.detail == "mikrotik http 401":
+                self._rest_refused(user, pw)
             return r.data.get("json") if r.ok else {"error": r.detail}
         if aiohttp is None:
             return {"error": "aiohttp missing"}
-        user, pw = resolve_mikrotik(self.cfg)
         if not user:
             return {"error": "no router credentials"}
         url = f"{self.rest_base}/rest/{path}"
@@ -596,6 +641,8 @@ class Router:
                         js: Any = json.loads(txt)
                     except ValueError:
                         js = {"error": txt[:200]}
+                    if r.status == 401:
+                        self._rest_refused(user, pw)
                     if r.status >= 400:
                         det = js.get("detail") or js.get("message") if isinstance(js, dict) else ""
                         return {"error": f"router said {r.status}: {det or txt[:160]}"}

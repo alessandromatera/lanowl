@@ -391,6 +391,55 @@ def test_api_down_falls_back_to_rest():
     check("ApiDown" in st["error"], f"...and the reason is kept ({st['error'][:50]})")
 
 
+def test_a_refused_login_is_not_repeated():
+    """A 401 is the router refusing the login — a wrong password, or a user allowed only from
+    another address. Every try writes a critical "login failure" line in the router's log, so
+    lanowl asks once, says what to check, and waits until the login changes or 15 min pass."""
+    print("\n-- a login the router refuses is asked once, not every minute --")
+    real = probes.mikrotik_rest
+    calls = []
+
+    async def refuse(base, path, user, pw, verify=False, timeout_ms=5000):
+        calls.append((path, user, pw))
+        return probes.ProbeResult(False, None, "mikrotik http 401")
+    probes.mikrotik_rest = refuse
+    before = {k: os.environ.get(k) for k in ("LANOWL_MIKROTIK_USER", "LANOWL_MIKROTIK_PASS")}
+    os.environ.update(LANOWL_MIKROTIK_USER="lanowl", LANOWL_MIKROTIK_PASS="old")
+    cfg = {"mikrotik": {"dhcp_source": "http://192.168.88.1"}, "observer": {"host_ip": "192.168.88.5"}}
+
+    async def go():
+        r = Router(cfg)
+        a = await r.read("ip/dhcp-server/lease")
+        b = await r.read("log")
+        os.environ["LANOWL_MIKROTIK_PASS"] = "new"          # the owner fixed secrets.yaml
+        c = await r.read("log")
+        return a, b, c
+
+    import logging
+    seen = []
+    h = logging.Handler()
+    h.emit = lambda rec: seen.append(rec.getMessage())
+    logging.getLogger("lanowl.routeros").addHandler(h)
+    try:
+        a, b, c = asyncio.run(go())
+    finally:
+        probes.mikrotik_rest = real
+        logging.getLogger("lanowl.routeros").removeHandler(h)
+        for k, v in before.items():                        # the other tests' login, back
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check(not a.ok and not b.ok and len(calls) == 2, f"refused: the next read does not ask ({len(calls)} asks)")
+    check("refused the login 'lanowl'" in b.detail and "secrets.yaml" in b.detail,
+          f"...and says why ({b.detail[:60]})")
+    check(calls[-1][2] == "new", "a changed password is tried at once")
+    warn = [m for m in seen if "HTTP 401" in m]
+    check(len(warn) == 2 and "192.168.88.5" in warn[0] and "address=" in warn[0],
+          "said once per refusal, with what to check: the password, and this host's address")
+    check(not any("old" in m or "new" in m.split("HTTP")[0] for m in warn), "never the password")
+
+
 def test_rest_only_paths_go_to_rest():
     print("\n-- a path only REST understands is answered by REST --")
     real = probes.mikrotik_rest
@@ -614,7 +663,8 @@ def test_arp_check_in_the_sweep():
 if __name__ == "__main__":
     for fn in [test_framing, test_multiplexing_and_timeouts,
                test_one_login_heartbeat_reconnect_refollow, test_a_hung_router_is_dropped,
-               test_api_down_falls_back_to_rest, test_rest_only_paths_go_to_rest, test_the_pin,
+               test_api_down_falls_back_to_rest, test_a_refused_login_is_not_repeated,
+               test_rest_only_paths_go_to_rest, test_the_pin,
                test_watcher_follows_the_log, test_rights_change_matches_only_ours,
                test_arp_check_in_the_sweep]:
         fn()
