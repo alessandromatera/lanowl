@@ -238,7 +238,8 @@ See [MQTT topics](../reference/mqtt.md).
 weekly: {enabled: true, day: "sun", time: "10:00"}
 ```
 
-The week in review: the numbers, and the owl's note on top.
+The week in review: the numbers, and the owl's note on top. The first one waits until lanowl
+has watched for six days (`/week` asks for one at any time).
 
 ## state and logging
 

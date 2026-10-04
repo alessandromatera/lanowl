@@ -458,6 +458,12 @@ def test_weekly_is_due_once():
     check(not weekly.is_due(cfg, sun_1001 + 86400, sun_1001), "not on Monday")
     check(weekly.is_due(cfg, sun_1001 + 7 * 86400, sun_1001), "and again next Sunday")
     check(not weekly.is_due({"weekly": {"enabled": False}}, sun_1001, 0), "off is off")
+    check(not weekly.is_due(cfg, sun_1001, 0, since=sun_0959 - 3600),
+          "not on a first start that same morning: a week it never watched")
+    check(not weekly.is_due(cfg, sun_1001 + 7 * 86400, 0, since=sun_0959 + 3 * 86400),
+          "nor after three days of watching")
+    check(weekly.is_due(cfg, sun_1001 + 7 * 86400, 0, since=sun_0959 - 3600),
+          "but the next Sunday, a week later")
 
 
 def test_weekly_numbers_without_the_model():

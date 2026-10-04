@@ -207,6 +207,7 @@ class Auditor:
         self._weekly_task = None
         self._unload_task = None  # the switch going off: the model dropped from Ollama's memory
         self._weekly_last = 0.0
+        self._weekly_since = 0.0      # when lanowl began watching: set by resume_alerts()
         self._incident_issues: dict = {}     # key -> issue, raised this sweep (see _diff_criticals)
         # --- for lanowl's own dashboard (web.py) ---
         # What Telegram was told, newest last — part of the alert record, so it survives a
@@ -903,7 +904,14 @@ class Auditor:
         self._last_digest_fp = rec.get("last_digest_fp") or ""
         self._last_digest_sent = float(rec.get("last_digest_sent") or 0.0)
         self._sent_log = list(rec.get("sent_log") or [])[-80:]
-        self._weekly_last = float((self.state.load_record("weekly") or {}).get("last") or 0.0)
+        wrec = self.state.load_record("weekly") or {}
+        self._weekly_last = float(wrec.get("last") or 0.0)
+        # when lanowl began watching (its oldest event, else now): the first review waits
+        # for a week of it. Kept, so a quiet house with no events does not wait forever.
+        self._weekly_since = float(wrec.get("since") or 0.0) \
+            or min(self.state.first_event_ts() or now, now)
+        if not wrec.get("since"):
+            self.state.save_record("weekly", {**wrec, "since": self._weekly_since})
         w = self.wanwatch.restore_record(self.state.load_record("wanwatch"), now)
         self.wanwatch.persist = lambda r: self.state.save_record("wanwatch", r)
         self._persist_alerts = True
@@ -1521,7 +1529,7 @@ class Auditor:
         text = weekly.format_weekly(facts, narrative)
         self._emit_telegram("digest", text)
         if reason == "scheduled" and self._persist_alerts:
-            self.state.save_record("weekly", {"last": now})
+            self.state.save_record("weekly", {"last": now, "since": self._weekly_since})
         return text
 
     async def run_discovery(self, now: float):
@@ -1684,7 +1692,7 @@ class Auditor:
                     self._start_llm_audit(snap, report, send_digest=False, reason="incident",
                                           incident_issues=dict(self._incident_issues))
 
-                if weekly.is_due(self.cfg, t0, self._weekly_last):
+                if weekly.is_due(self.cfg, t0, self._weekly_last, self._weekly_since):
                     self._weekly_last = t0      # claimed now: a slow review must not start twice
                     self.request_weekly("scheduled")
                 # updates and the monthly scan run as tasks of their own, like the audit

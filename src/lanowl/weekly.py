@@ -26,8 +26,13 @@ from .sweep import offline_mode_ips
 _DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
-def is_due(cfg: dict, now: float, last_sent: float) -> bool:
-    """Is this the configured weekday, past the configured time, and not yet sent today?"""
+FIRST_WEEK_S = 6 * 86400   # the first review waits for (nearly) a week of watching
+
+
+def is_due(cfg: dict, now: float, last_sent: float, since: float = 0.0) -> bool:
+    """Is this the configured weekday, past the configured time, and not yet sent today?
+    And has lanowl watched for most of a week (`since`: when it began)? A first start on
+    the review's day would otherwise review a week it never saw."""
     w = cfg.get("weekly") or {}
     if not w.get("enabled", False):
         return False
@@ -37,7 +42,7 @@ def is_due(cfg: dict, now: float, last_sent: float) -> bool:
         return False
     hh, mm = (int(x) for x in str(w.get("time", "10:00")).split(":"))
     slot = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh, mm, 0, 0, 0, -1))
-    return now >= slot and last_sent < slot
+    return now >= slot and last_sent < slot and slot - since >= FIRST_WEEK_S
 
 
 def _random_mac(mac: str) -> bool:
