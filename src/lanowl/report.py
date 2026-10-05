@@ -209,12 +209,15 @@ def build_report(snapshot: Snapshot, inv: Inventory, down_ips: set,
 
     # 4) group-majority escalation (e.g. whole camera range dark => upstream cause)
     #    Shadowed devices do not count towards a majority: they are already explained.
+    #    Only CONFIRMED-down devices count: one sweep where both of a pair miss is a blip
+    #    the debounce exists to absorb, and paging on it would undo the debounce for every
+    #    group at once.
     counts = group_counts(snapshot, down_ips)
     shadowed_in = {}
     for d in snapshot.devices:
         if d.ip in shadow:
             shadowed_in[d.group] = shadowed_in.get(d.group, 0) + 1
-    for g, c in counts.items():
+    for g, c in group_counts(snapshot, down_ips, confirmed_only=True).items():
         meta = inv.groups.get(g, {})
         own_down = c["down"] - shadowed_in.get(g, 0)
         # a majority of what is WATCHED: five cameras paused for the holiday leave four,
@@ -330,14 +333,17 @@ def totals(snapshot: Snapshot, down_ips: set) -> dict:
             "asleep": asleep, "paused": paused}
 
 
-def group_counts(snapshot: Snapshot, down_ips: set) -> dict:
+def group_counts(snapshot: Snapshot, down_ips: set, confirmed_only: bool = False) -> dict:
+    """Per group: total, down, up, asleep, paused. By default a device that missed this
+    sweep counts as down, as the dashboard draws it; `confirmed_only` counts only what the
+    debounce confirmed (`down_ips`), which is what an alert may act on."""
     out: dict[str, dict] = {}
     for d in snapshot.devices:
         c = out.setdefault(d.group, {"total": 0, "down": 0, "up": 0, "asleep": 0, "paused": 0})
         c["total"] += 1
         if d.paused:
             c["paused"] += 1     # nor may a device the owner switched off on purpose
-        elif d.ip in down_ips or not d.up:
+        elif d.ip in down_ips or (not d.up and not confirmed_only):
             # asleep must not count as down: it would poison majority-down escalation
             c["asleep" if d.expected_down else "down"] += 1
         else:

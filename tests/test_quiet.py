@@ -557,6 +557,38 @@ def test_one_sweep_says_what_it_saw():
     check(summ == "All good — 1/1 devices up, WAN OK.", f"pinged and answered: {summ}")
 
 
+def test_a_group_majority_waits_for_the_debounce():
+    """Both cameras of a pair missing ONE sweep is a blip, not a 🔴 about the group: the
+    majority counts confirmed-down devices only, as every device alert does."""
+    print("a group majority pages only once its devices are confirmed down")
+    from lanowl.alerts import NEW, AlertGate
+    from lanowl.report import build_report
+    from lanowl.sweep import Snapshot, DeviceStatus
+
+    class _Inv:
+        groups = {"cameras": {"majority_down_critical": True}}
+
+    def dev(ip, name, group, up):
+        return DeviceStatus(ip=ip, name=name, group=group, criticality="warning",
+                            up=up, reachable=up, latency_ms=5.0 if up else None)
+
+    devs = [dev("192.168.88.21", "Cam 1", "cameras", False),
+            dev("192.168.88.22", "Cam 2", "cameras", False),
+            dev("192.168.88.10", "NAS", "servers", True)]
+    snap = Snapshot(ts=1000, devices=devs, wan={"8.8.8.8": True}, wan_ok=True)
+    rep = build_report(snap, _Inv(), set())
+    check(not [i for i in rep["issues"] if i["kind"] == "group"] and rep["overall_health"] == "ok",
+          "one sweep, nothing confirmed: no group issue")
+    check(rep["groups"]["cameras"]["down"] == 2, "while the dashboard still draws both missing")
+
+    rep = build_report(snap, _Inv(), {"192.168.88.21", "192.168.88.22"})
+    grp = [i for i in rep["issues"] if i["kind"] == "group"]
+    check(len(grp) == 1 and grp[0]["severity"] == "critical"
+          and grp[0]["detail"].startswith("2/2 in group down"), "confirmed: the group's 🔴")
+    ev = AlertGate().update({"g": grp[0]}, 1000.0)
+    check([e.kind for e in ev] == [NEW], "and it pages on that sweep")
+
+
 if __name__ == "__main__":
     for fn in [test_muted_labels, test_llm_cannot_escalate_on_a_switched_off_tv,
                test_llm_can_still_escalate_on_something_real,
@@ -570,7 +602,8 @@ if __name__ == "__main__":
                test_model_host_down_is_one_issue,
                test_criticals_page_on_the_same_sweep,
                test_digest_says_when_a_device_went_down,
-               test_tracker_remembers_the_first_miss, test_one_sweep_says_what_it_saw]:
+               test_tracker_remembers_the_first_miss, test_one_sweep_says_what_it_saw,
+               test_a_group_majority_waits_for_the_debounce]:
         fn()
     print()
     if _fails:
