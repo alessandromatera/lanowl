@@ -1415,14 +1415,15 @@ function renderLanes24(d) {
   const moved = (d.devices || []).filter(x => (O.m[x.ip] || []).some(v => v.b > t0))
     .sort((a, b) => grank(a.group) - grank(b.group) || String(a.name).localeCompare(b.name));
   const segs24 = moved.flatMap(x => (O.m[x.ip] || []).filter(v => v.b > t0));
+  const rec = Object.fromEntries(moved.map(x => [x.ip, recFrom(O.rec0, firstOf(x.ip))]));
   const lane = (label, segs, rec0, ip, wan) => ip
     ? `<button class="lrow" type="button" data-ip="${esc(ip)}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</button>`
     : `<div class="lrow${wan ? " wan" : ""}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</div>`;
   put("lanes24", `<div class="sh">Last 24 hours <a class="r" href="#log" style="color:var(--blue-t);text-decoration:none">Timeline</a></div><div class="card"><div class="lanes">
     <div class="lrow"><span></span><div class="lax">${hourAxis(t0, t1)}</div></div>
-    ${lane("Internet", ws, wrec, null, true)}${moved.map(x => lane(x.name, O.m[x.ip], O.rec0, x.ip)).join("")}</div>
+    ${lane("Internet", ws, wrec, null, true)}${moved.map(x => lane(x.name, O.m[x.ip], rec[x.ip], x.ip)).join("")}</div>
     ${moved.length ? "" : `<div class="fine" style="margin-top:10px">No device went down in the last 24 hours.</div>`}
-    <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${segs24.some(v => v.cls === "sched") ? `<span><i class="k-sched"></i>asleep on schedule</span>` : ""}${segs24.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${ws.some(v => v.cls === "warn") ? `<span><i class="k-warn"></i>on backup</span>` : ""}${wrec > t0 ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`);
+    <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${segs24.some(v => v.cls === "sched") ? `<span><i class="k-sched"></i>asleep on schedule</span>` : ""}${segs24.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${ws.some(v => v.cls === "warn") ? `<span><i class="k-warn"></i>on backup</span>` : ""}${wrec > t0 || moved.some(x => rec[x.ip] > t0) ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`);
 }
 
 // lanowl's own vitals, under the sections in the sidebar (desktop)
@@ -1574,8 +1575,11 @@ async function loadHistAll() {
   HA.busy = true;
   try { const j = await (await fetch("/api/history", {cache: "no-store"})).json(); if (j.ok) HA.d = j; } catch (e) { /* the rows show without */ }
   HA.at = Date.now(); HA.busy = false;
-  if (S.d) renderDevices(S.d);
+  if (S.d) renderAll();         // the lanes on Now and the Timeline hatch from it too
 }
+// A device's first sample in the 7 days (/api/history's f7): undefined while it has not come,
+// or for a device it does not list — the lane then claims nothing either way.
+const firstOf = ip => { const h = HA.d && (HA.d.devices || {})[ip]; return h ? h.f7 : undefined; };
 function spark(b, w = 96, h = 24) {
   const H = HA.d, v = (b || []).map(x => x[3]).filter(x => x != null);
   if (!H || v.length < 2) return "";
@@ -1751,7 +1755,7 @@ function tlLanes(d) {
   const wrec = T.wan_since ? Math.max(t0, T.wan_since) : t1;
   const CLS = {down: "bad", sched: "sched", paused: "paus"};
   const lanes = Object.entries(T.lanes || {}).filter(([ip]) => inSite(d, ip))
-    .map(([ip, l]) => ({ip, name: devName(d, ip, l.name), group: l.group,
+    .map(([ip, l]) => ({ip, name: devName(d, ip, l.name), group: l.group, rec: recFrom(t0, firstOf(ip)),
                         segs: l.segs.filter(v => S.sched || v[2] === "down").map(v => ({a: v[0], b: v[1], cls: CLS[v[2]] || "bad"}))}))
     .filter(l => l.segs.length).sort((a, b) => grank(a.group) - grank(b.group) || String(a.name).localeCompare(b.name));
   const bands = T.items.filter(x => x.type === "incident" && x.cat === "down" && x.members.length > 1 && x.members.some(v => inSite(d, v.ip)));
@@ -1762,9 +1766,9 @@ function tlLanes(d) {
   const nq = Object.entries(T.lanes || {}).filter(([ip]) => inSite(d, ip)).reduce((t, [, l]) => t + l.segs.filter(v => v[2] !== "down").length, 0);
   return `<div class="card"><div class="vizh" style="margin-top:0">Seven days at a glance<span class="r">${bands.length ? `${bands.length} time${bands.length > 1 ? "s" : ""} several went down together: shaded` : ""}</span></div>
     <div class="lanes"><div class="lrow"><span></span>${dayAxis(t0, t1, innerWidth < 700)}</div>${ws ? lane("Internet", ws, wrec, null, true) : ""}
-    <div class="lbody">${lanes.map(l => lane(l.name, l.segs, t0, l.ip)).join("") || `<div class="fine">Nothing went down in 7 days${S.sched ? "" : ", schedules and pauses aside"}.</div>`}
+    <div class="lbody">${lanes.map(l => lane(l.name, l.segs, l.rec, l.ip)).join("") || `<div class="fine">Nothing went down in 7 days${S.sched ? "" : ", schedules and pauses aside"}.</div>`}
     <div class="lbands">${bands.map(x => `<i class="tlband" style="left:${pc(x.a).toFixed(3)}%;width:${(pc(x.b) - pc(x.a)).toFixed(3)}%"></i>`).join("")}</div></div></div>
-    <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${S.sched ? `<span><i class="k-sched"></i>asleep on schedule</span><span><i class="k-paus"></i>paused</span>` : ""}${ws && ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${ws && wrec > t0 ? `<span><i class="k-nodata"></i>internet not recorded yet</span>` : ""}</div>
+    <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${S.sched ? `<span><i class="k-sched"></i>asleep on schedule</span><span><i class="k-paus"></i>paused</span>` : ""}${ws && ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${(ws && wrec > t0) || lanes.some(l => l.rec > t0) ? `<span><i class="k-nodata"></i>not recorded yet</span>` : ""}</div>
     <label class="toggle tltog"><span>Show devices asleep on schedule or paused <span class="fine">(${nq})</span></span><span class="sw"><input type="checkbox" id="sched"${S.sched ? " checked" : ""}><span></span></span></label></div>`;
 }
 function renderLog(d) {
