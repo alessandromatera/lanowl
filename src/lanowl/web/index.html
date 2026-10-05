@@ -1255,8 +1255,9 @@ function renderSites(d) {
   // after months is "here since" the day of the first visit
   const seen = r => r.new ? `<span class="rs wrap"><span class="tagx c-yellow">new</span> first seen ${esc(clock(r.first_seen))}${r.guest ? " · guest Wi-Fi" : ""}</span>`
     : r.first_seen || r.guest ? `<span class="rs wrap">${[r.first_seen ? "here since " + (r.before ? "before " : "") + esc(dmy(r.first_seen)) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · ")}</span>` : "";
-  // no DHCP lease: an address set by hand, seen in the router's ARP table or by the monthly scan
-  const fixed = r => r.how === "arp" ? `<span class="rs wrap">fixed address — no DHCP</span>`
+  // no DHCP lease: an address set by hand, seen in the router's ARP table or by the monthly scan —
+  // or only a stale ARP entry, which says nothing of how its address was set
+  const fixed = r => r.how === "arp" ? `<span class="rs wrap">${r.stale ? "stale ARP entry — not there at the moment, no DHCP lease" : "fixed address — no DHCP"}</span>`
     : r.how === "scan" ? `<span class="rs wrap">fixed address — found by the scan${r.found ? " of " + esc(dmy(r.found)) : ""}</span>` : "";
   const row = r => `<div class="row row2"><span class="rt"><span class="rn">${title(r)}</span>
       <span class="rs wrap mono">${esc(r.ip)} · ${esc(r.mac)}</span>${maker(r) ? `<span class="rs wrap">${maker(r)}</span>` : ""}${fixed(r)}${seen(r)}${r.routed === false ? `<span class="rs wrap">not routed here — the tunnels do not carry that network, so it cannot be watched</span>` : ""}</span>${btns(r) ? `<span class="rbtns">${btns(r)}</span>` : ""}</div>`;
@@ -1270,7 +1271,7 @@ function renderSites(d) {
     `<span class="rs wrap">${SC.ts ? "scanned " + esc(clock(SC.ts)) + " · " + SC.found + " answered" : "never scanned yet"}${SC.error ? " · " + esc(SC.error) : ""} · monthly on day ${esc(SC.day)}</span></span></button>` + `</div>` +
     (kn.length ? `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""} style="margin:0 0 6px"><summary style="margin-left:4px">Known, not watched · ${kn.length}${ic("chev")}</summary>` +
       `<div class="list" style="--inset:16px">${kn.map(row).join("")}</div></details>` : "") +
-    `<div class="fine" style="margin:6px 4px 10px"><b>Watch</b> — pinged from here from now on${s.router ? `, behind ${esc(s.name)}'s router` : ""}, reported like the rest of ${esc(s.name)}; it follows its MAC if DHCP moves it. <b>Known</b> — it belongs there: no longer counted as unknown, not watched.${s.remote ? " “Not routed here”: a network of theirs the tunnels do not carry." : ""} <b>Fixed address</b> — no DHCP lease: the router's ARP table saw it, or the monthly scan (every network asked “who is there” from its own router, no ports).</div>`);
+    `<div class="fine" style="margin:6px 4px 10px"><b>Watch</b> — pinged from here from now on${s.router ? `, behind ${esc(s.name)}'s router` : ""}, reported like the rest of ${esc(s.name)}; it follows its MAC if DHCP moves it. <b>Known</b> — it belongs there: no longer counted as unknown, not watched.${s.remote ? " “Not routed here”: a network of theirs the tunnels do not carry." : ""} <b>Fixed address</b> — no DHCP lease: the router's ARP table saw it, or the monthly scan (every network asked “who is there” from its own router, no ports). <b>Stale ARP entry</b> — the router still holds its address but has not heard from it lately.</div>`);
 }
 
 // ---------------------------------------------------------------- now

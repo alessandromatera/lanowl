@@ -191,7 +191,8 @@ def static_from_arp(arp, leases, nets) -> list:
                 or not in_nets(ip, nets)):
             continue
         seen.add(mac)
-        out.append({"ip": ip, "mac": mac, "how": "arp"})
+        # stale: the router has not heard from it lately — no sign the address was set by hand
+        out.append({"ip": ip, "mac": mac, "how": "arp", **({"stale": True} if x.get("status") == "stale" else {})})
     return out
 
 
@@ -240,7 +241,7 @@ def compute(leases, inv: Inventory, cfg: dict = None, known_macs=None, static=No
         have.add(mac)
         rec = {"ip": ip, "mac": mac, "host": "", "dynamic": "false", "vendor": vendor(mac),
                "guest": in_nets(ip, guest), "how": s.get("how") or "arp",
-               **({"found": s["found"]} if s.get("found") else {})}
+               **({"found": s["found"]} if s.get("found") else {}), **({"stale": True} if s.get("stale") else {})}
         if mac in ign_macs or ip in ign_ips:
             ignored.append(rec)
         else:

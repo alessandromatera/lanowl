@@ -86,13 +86,28 @@ def parse_proc_arp(text: str) -> list:
     return out
 
 
+def parse_ip_neigh(text: str) -> list:
+    """`ip neigh show` (OpenWrt): 'IP dev IFACE lladdr MAC [router] STATE'; no MAC = gone.
+    STALE: the table still holds the address, but the router has not heard from it lately —
+    /proc/net/arp shows that the same as a device answering now."""
+    out = []
+    for ln in (text or "").splitlines():
+        p = ln.split()
+        if (len(p) >= 6 and p[1] == "dev" and p[3] == "lladdr" and "." in p[0] and _MAC.match(p[4].lower())
+                and p[4].lower() != _NOMAC and p[-1] not in ("FAILED", "INCOMPLETE")):
+            out.append({"ip": p[0], "mac": p[4].lower(), "iface": p[2], **({"stale": True} if p[-1] == "STALE" else {})})
+    return out
+
+
 def parse_routeros_arp(text: str) -> list:
-    """`/ip arp print terse`: key=value per line; a failed entry has no MAC."""
+    """`/ip arp print terse`: key=value per line. A failed entry is gone, MAC or not (RouterOS
+    7 keeps the MAC of a device that stopped answering); `status=stale`: not heard from lately."""
     out = []
     for ln in (text or "").splitlines():
         mac, ip = _field(ln, "mac-address").lower(), _field(ln, "address")
-        if mac and ip and _MAC.match(mac) and mac != _NOMAC:
-            out.append({"ip": ip, "mac": mac, "iface": _field(ln, "interface")})
+        if mac and ip and _MAC.match(mac) and mac != _NOMAC and _field(ln, "status") not in ("failed", "incomplete"):
+            out.append({"ip": ip, "mac": mac, "iface": _field(ln, "interface"),
+                        **({"stale": True} if _field(ln, "status") == "stale" else {})})
     return out
 
 
@@ -251,6 +266,7 @@ class Sites:
                     out.append({"ip": r["ip"], "mac": r["mac"].upper(), "host": r.get("name") or "",
                                 "vendor": r.get("vendor") or "", "first_seen": r.get("first_seen"),
                                 "how": r.get("how") or "dhcp", "site": s["key"], "site_name": s["name"],
+                                **({"stale": True} if r.get("stale") else {}),
                                 **({"not_routed_here": True} if s["nets"] and not self.routed(s, r["ip"]) else {})})
         return sorted(out, key=lambda x: -(x.get("first_seen") or 0))
 
@@ -282,8 +298,8 @@ class Sites:
             prev = self.rec["leases"].get(s["key"]) or {}
             rows = leases if leases is not None else prev.get("rows") or []
             leased = {r["mac"] for r in rows}
-            static = ([{"ip": x["ip"], "mac": x["mac"], "how": "arp"} for x in arp
-                       if x["mac"] not in leased and _in(x["ip"], self._lan(s))]
+            static = ([{"ip": x["ip"], "mac": x["mac"], "how": "arp", **({"stale": True} if x.get("stale") else {})}
+                       for x in arp if x["mac"] not in leased and _in(x["ip"], self._lan(s))]
                       if arp is not None else prev.get("static") or [])
             now = time.time()
             self.rec["leases"][s["key"]] = {"ts": now, "error": err, "rows": rows, "static": static}
@@ -302,8 +318,10 @@ class Sites:
 
     async def arp(self, s: dict) -> Optional[list]:
         if s["kind"] == "openwrt":
-            rc, out, err = await self.a.access.ssh(s["router"], "cat /proc/net/arp", timeout_s=25)
-            return parse_proc_arp(out) if rc == 0 else None
+            # `ip neigh` says which entries are stale; /proc/net/arp where there is no `ip`
+            rc, out, err = await self.a.access.ssh(s["router"], "ip neigh show 2>/dev/null || cat /proc/net/arp",
+                                                   timeout_s=25)
+            return (parse_ip_neigh(out) or parse_proc_arp(out)) if rc == 0 else None
         rc, out, err = await self.a.access.ssh(s["router"], "/ip arp print terse without-paging",
                                                user_suffix="+ct", timeout_s=30)
         return parse_routeros_arp(out) if rc == 0 else None
@@ -447,6 +465,7 @@ class Sites:
                      "new": str(x.get("mac") or "").lower() in new,
                      # a fixed address: from the ARP table, or found by the monthly scan
                      "how": x.get("how") or "dhcp", **({"found": x["found"]} if x.get("found") else {}),
+                     **({"stale": True} if x.get("stale") else {}),
                      # already there the first time it was looked at: "here since before …"
                      "before": bool(x.get("before"))}
                     for x in (d.get("unknown") or []) + (d.get("ignored") or [])
@@ -463,7 +482,8 @@ class Sites:
         for r in L.get("static") or []:
             if r["mac"] not in have:
                 have.add(r["mac"])
-                static.append({"ip": r["ip"], "mac": r["mac"], "name": "", "how": "arp"})
+                static.append({"ip": r["ip"], "mac": r["mac"], "name": "", "how": "arp",
+                               **({"stale": True} if r.get("stale") else {})})
         sc = self.rec["scan"].get(key) or {}
         for r in sc.get("rows") or []:
             if r["mac"] not in have:

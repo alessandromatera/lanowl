@@ -1275,7 +1275,8 @@ class Auditor:
                 f"<b>{_html(what)}</b> ({_html(x.get('ip') or '')}) · {_html(mac)}"
                 + (f" · at <b>{_html(x.get('site_name'))}</b>" if x.get("site") not in (None, HOUSE) else "")
                 + (" · guest Wi-Fi" if x.get("guest") else "")
-                + (" · fixed address, no DHCP" if x.get("how") in ("arp", "scan") else "") + "\n"
+                + (" · stale ARP entry, no DHCP lease" if x.get("stale")
+                   else " · fixed address, no DHCP" if x.get("how") in ("arp", "scan") else "") + "\n"
                 + (f"<i>{_html(maker)}</i>\n" if x.get("host") and maker else "")
                 + f"First on the network at {when} — never seen here before.\n"
                 + (f"<i>{_html(str(i.get('root_cause') or ''))}</i>\n" if i.get("root_cause") else "")

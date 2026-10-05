@@ -16,7 +16,9 @@ router, no model: the leases are a fake, the audit's verdict is written here. Pi
   6. a device with a fixed address — in the router's ARP table, no lease, or found by the
      monthly scan, on every site — is listed and can be new; what was there at the first look is not new; Lake's
      site keeps its own record, its ARP table and its monthly scan too; both routers' tables
-     and RouterOS's ip-scan are read right.
+     and RouterOS's ip-scan are read right;
+  7. an address with no lease that is only a STALE entry in the router's table (a phone gone,
+     its lease over — 10-05, at Lake's) is said as that, never as a fixed address.
 """
 from __future__ import annotations
 
@@ -230,6 +232,13 @@ def test_gran():
         out["scan_rec"] = s.rec["scan"].get("lake")
         out["after_scan"] = {r["mac"]: (r["how"], r["new"]) for r in s.rows("lake")[0]}
         out["seen"] = [(r["site_name"], r["mac"], r["fixed"]) for r in s.seen() if r["site"] == "lake"]
+        # her router has `ip`: the table with each entry's state, 00:05 not heard from lately
+        procs.append("192.168.108.101 dev br-lan lladdr aa:bb:cc:00:00:01 REACHABLE\n"
+                     "192.168.108.2 dev br-lan lladdr aa:bb:cc:00:00:05 STALE\n"
+                     "192.168.108.3 dev br-lan lladdr aa:bb:cc:00:00:06 router DELAY\n"
+                     "192.168.108.77 dev br-lan  FAILED\n")
+        await s.read_all()
+        out["stale"] = {r["mac"]: (r["how"], bool(r.get("stale"))) for r in s.rows("lake")[0]}
         # a year on: the scan just run must come before the day probed (a fixed date would go
         # stale the morning its scan was already done)
         y = time.localtime().tm_year + 1
@@ -252,6 +261,9 @@ def test_gran():
     check(out["after_scan"].get("aa:bb:cc:00:00:09") == ("scan", False),
           "...listed as found by the scan, and not new: the first scan is a first look too")
     check(("Lake", "aa:bb:cc:00:00:06", True) in out["seen"], "the log of every device holds Lake's, fixed ones marked")
+    check(out["stale"].get("aa:bb:cc:00:00:05") == ("arp", True) and out["stale"].get("aa:bb:cc:00:00:06") == ("arp", False)
+          and "aa:bb:cc:00:00:01" not in {m_ for m_, v in out["stale"].items() if v[1]},
+          f"read with `ip neigh`: the stale entry is marked stale, the live ones are not ({out['stale']})")
     check(out["due"] == [False, True, False], f"monthly, on the day, after the hour ({out['due']})")
     check(out["again"].get("ok") is False, "one scan at a time")
 
@@ -261,6 +273,20 @@ def test_parsers():
     r = SI.parse_routeros_arp('0 D address=192.168.0.5 mac-address=11:22:33:44:55:66 interface=bridge status=reachable\n'
                               '1 D address=192.168.0.9 interface=bridge status=failed\n')
     check(r == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "bridge"}], "RouterOS ARP, the failed entry left out")
+    r = SI.parse_routeros_arp('0 D address=192.168.0.6 mac-address=11:22:33:44:55:67 interface=bridge status=stale\n'
+                              '1 D address=192.168.0.7 mac-address=11:22:33:44:55:70 interface=bridge status=failed\n')
+    check(len(r) == 1 and r[0].get("stale") is True,
+          "RouterOS ARP: a stale entry is marked stale; a failed one is left out even with its MAC kept")
+    n = SI.parse_ip_neigh("192.168.0.5 dev br-lan lladdr 11:22:33:44:55:66 REACHABLE\n"
+                          "192.168.0.6 dev br-lan lladdr 11:22:33:44:55:67 STALE\n"
+                          "192.168.0.1 dev wlan0 lladdr 11:22:33:44:55:68 router DELAY\n"
+                          "192.168.0.9 dev br-lan  FAILED\n"
+                          "fe80::1 dev br-lan lladdr 11:22:33:44:55:69 router STALE\n")
+    check(n == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "br-lan"},
+                {"ip": "192.168.0.6", "mac": "11:22:33:44:55:67", "iface": "br-lan", "stale": True},
+                {"ip": "192.168.0.1", "mac": "11:22:33:44:55:68", "iface": "wlan0"}],
+          f"OpenWrt's `ip neigh`: IPv4 with a MAC, the stale one marked, failed and IPv6 left out ({n})")
+    check(SI.parse_ip_neigh(PROC_ARP) == [], "...and /proc/net/arp is not mistaken for it (read by its own parser)")
     scan = ("Columns: ADDRESS, MAC-ADDRESS, TIME, DNS\n  ADDRESS      MAC-ADDRESS        TIME  DNS\n"
             "  192.168.0.1  4C:5E:0C:11:22:33  1ms   router.lan\n  192.168.0.20 11:22:33:44:55:77  3ms\n")
     check(SI.parse_pairs(scan) == [{"ip": "192.168.0.1", "mac": "4c:5e:0c:11:22:33"},
@@ -271,6 +297,10 @@ def test_parsers():
                              arp("192.168.10.8", "00:0C:42:AA:BB:03", "failed")],
                             [lease("192.168.10.150", PI)], DI.guest_nets({"discovery": {"guest_nets": ["192.168.10.0/24"]}}))
     check([x["mac"] for x in st] == [SWITCH], "fixed = in ARP, on the network, no lease, not failed")
+    st = DI.static_from_arp([arp("192.168.10.2", SWITCH, "stale")], [], DI.guest_nets({"discovery": {"guest_nets": ["192.168.10.0/24"]}}))
+    check(st and st[0].get("stale") is True, "the main router's stale entry is marked stale")
+    d = DI.compute([], Inventory([], {}), {}, static=st)
+    check(d["unknown"] and d["unknown"][0].get("stale") is True, "...and stays marked in the unknown devices")
 
 
 if __name__ == "__main__":

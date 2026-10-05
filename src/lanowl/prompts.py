@@ -54,7 +54,9 @@ NEW_DEVICES were NEVER seen on their network before — the main LAN or its gues
 remembered for good, so a device in UNKNOWN_DHCP_DEVICES with an older `first_seen` has been \
 here before and is NOT new, however long it was away. `fixed_address`: it took no DHCP \
 lease — its address was set by hand; the router's ARP table or the monthly scan found it. On \
-the main LAN that is somebody's deliberate setup, worth more attention than a phone. A \
+the main LAN that is somebody's deliberate setup, worth more attention than a phone. \
+`stale_arp`: no lease, and only a stale entry in the router's ARP table — the router has not \
+heard from it lately, so it is not there at the moment; NOT a fixed address. A \
 `first_seen` of "before <date>" means it was already there the first time lanowl looked that \
 way — here for longer, not new. Most new devices are a visitor's phone or \
 laptop (a "private" vendor is a phone hiding its MAC), and on the guest Wi-Fi that is what \
@@ -264,7 +266,8 @@ def build_user_context(snapshot_dict: dict, anomalies: list, recent_transitions:
         return {**{k: x[k] for k in ("ip", "mac", "host", "vendor") if x.get(k)},
                 **({"site": x["site_name"]} if x.get("site") not in (None, "home") else {}),
                 **({"guest": True} if x.get("guest") else {}),
-                **({"fixed_address": True} if x.get("how") in ("arp", "scan") else {}),
+                **({"stale_arp": True} if x.get("stale") else
+                   {"fixed_address": True} if x.get("how") in ("arp", "scan") else {}),
                 **({"not_routed_here": True} if x.get("not_routed_here") else {}),
                 **({"first_seen": ("before " if x.get("before") else "")
                                   + time.strftime("%Y-%m-%d %H:%M", time.localtime(fs))} if fs else {})}
