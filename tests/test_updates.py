@@ -354,15 +354,18 @@ def test_install_updates():
 def test_routeros_update():
     print("\n-- RouterOS: check, download (nothing changes if it fails), reboot, version back --")
     out = {}
-    real = (U.ROS_POLL_S,)
+    real = (U.ROS_POLL_S, U.ROS_START_S)
 
     async def go(d):
         m, a = _auditor(d)
-        U.ROS_POLL_S = 0
+        U.ROS_POLL_S, U.ROS_START_S = 0, 0
         a.cfg["actions"]["catalog"]["routeros_upgrade"] = {"hosts": {
             "192.168.10.32": {"risk": "Wi-Fi off"}, "192.168.20.1": {}}}
         st = {"inst": "6.49.21", "latest": "6.49.22", "status": "New version is available",
-              "download": "Downloaded, please reboot router to upgrade it", "fw": "6.49.22", "fw_new": "6.49.22"}
+              "download": "Downloaded, please reboot router to upgrade it", "fw": "6.49.22", "fw_new": "6.49.22",
+              "log": [" 2026-10-05 18:02:11 system,error,critical an older error, before any download",
+                      " 2026-10-05 18:15:27 system,info,account user admin logged in from 192.168.10.2 via ssh",
+                      " 2026-10-05 18:15:28 system,info,account user admin logged out from 192.168.10.2 via ssh"]}
         cmds = []
 
         async def ssh(ip, remote, stdin=None, timeout_s=20, user_suffix="", tty=False, sudo_pw=False):
@@ -371,8 +374,11 @@ def test_routeros_update():
                 return 0, "uptime: 3w\n version: 6.49.21\n board-name: wAP R ac\n", ""
             if remote.startswith("/interface wireless"):
                 return 0, "", ""
+            if remote == "/log print without-paging":
+                return 0, "\n".join(st["log"]) + "\n", ""
             if remote.endswith("download"):
                 st["status"] = st["download"]
+                st["log"] += st.pop("logs", [])
                 return 0, "", ""
             if remote == "/system routerboard print":
                 return 0, f"routerboard: yes\n current-firmware: {st['fw']}\n upgrade-firmware: {st['fw_new']}\n", ""
@@ -406,6 +412,16 @@ def test_routeros_update():
         chk = await ac._check(p)
         st["download"] = "ERROR: not enough disk space"
         out["fail"] = await ac._run(p, chk)
+        # the command comes back, the status never moves: it did not start — said at once, with
+        # what the device logged since it was asked, as it wrote it (10-05: 240 s waited, and
+        # the why gone with the reboot that installed it by hand)
+        st["download"], st["status"] = "New version is available", "New version is available"
+        st["logs"] = [" 2026-10-05 18:15:29 system,info,account user admin logged in from 192.168.10.2 via ssh",
+                      " 2026-10-05 18:15:29 system,error the device's own words about the download",
+                      " 2026-10-05 18:15:30 system,info,account user admin logged out from 192.168.10.2 via ssh"]
+        t = time.monotonic()
+        out["idle"] = await ac._run(p, chk)
+        out["idle_s"] = time.monotonic() - t
         st["download"], st["status"] = "Downloaded, please reboot router to upgrade it", "New version is available"
         out["ok"] = await ac._run(p, chk)
         p.update(status="rejected", decided_ts=time.time(), decided_by="dashboard")
@@ -434,7 +450,7 @@ def test_routeros_update():
         with tempfile.TemporaryDirectory() as d:
             asyncio.run(go(d))
     finally:
-        (U.ROS_POLL_S,) = real
+        U.ROS_POLL_S, U.ROS_START_S = real
     check("only on: 192.168.10.32, 192.168.20.1" in out["router"].get("refused", ""),
           "only the MikroTiks configured for it (the main router is not)")
     check("internet is on the Uplink" in out["antenna"].get("refused", ""),
@@ -444,8 +460,14 @@ def test_routeros_update():
           and p["risk"] == ["Wi-Fi off"], f"proposed with what it will install ({p.get('check')})")
     check("/system package update check-for-updates once" in out["cmds"], "the check asks MikroTik first")
     f = out["fail"]
-    check(not f["ok"] and not f["ran"] and "nothing was installed" in f["error"] and "not enough disk space" in f["error"],
+    check(not f["ok"] and not f["ran"] and "nothing was installed" in f["error"] and "not enough disk space" in f["error"]
+          and f["error"].endswith("; its log says nothing about it"),
           f"a download that fails: nothing changed, and why ({f.get('error')})")
+    f = out["idle"]
+    check(not f["ok"] and not f["ran"] and f["error"] == "the download did not start — nothing was installed "
+          "(New version is available); its log: 2026-10-05 18:15:29 system,error the device's own words about the download"
+          and out["idle_s"] < 5,
+          f"a download that never starts: given up at once, with only its new log lines, word for word ({f.get('error')})")
     ok = out["ok"]
     check(ok["ok"] and ok["result"].startswith("RouterOS 6.49.21 → 6.49.22; answering again after 95 s"),
           f"downloaded, rebooted, the new version read back ({ok.get('result')})")

@@ -49,6 +49,10 @@ INSECURE = {21: "ftp", 23: "telnet"}
 ROS_DOWNLOAD_S = 240               # a RouterOS package, downloaded before any reboot
 ROS_BACK_S = 480                   # ...and the boot that installs it
 ROS_POLL_S = 5
+ROS_START_S = 30                   # a download asked and not begun this long after never will
+ROS_IDLE = re.compile(r"new version is available", re.I)   # the status before any download
+# a device's log lines about a failed download: its errors, its packages, its updates
+ROS_LOG_WHY = re.compile(r"error|critical|fail|download|package|upgrade|update|disk|space", re.I)
 REBOOT_PAGE_S = 3 * 86400          # a reboot pending longer than this pages
 SECURITY_PAGE_S = 2 * 86400        # ...and a security update not installed after this
 LISTS_STALE_S = 7 * 86400          # apt's lists older than this: "no updates" means nothing
@@ -1005,6 +1009,12 @@ class Updates:
         h["ts"] = time.time()
         self._save()
 
+    async def _ros_log(self, ip: str) -> Optional[list]:
+        """The device's log, line by line as it prints it; None: it could not be read."""
+        rc, out, _ = await self.a.access.ssh(ip, "/log print without-paging", user_suffix="+ct",
+                                             timeout_s=30)
+        return [s.strip() for s in out.splitlines() if s.strip()] if rc == 0 else None
+
     async def _routerboard(self, ip: str) -> dict:
         rc, out, _ = await self.a.access.ssh(ip, "/system routerboard print", user_suffix="+ct",
                                              timeout_s=20)
@@ -1050,15 +1060,24 @@ class Updates:
     async def _ros_package(self, ip: str, name: str, chk: dict, hold: float) -> dict:
         """RouterOS itself: download, reboot, read the version back. {"ok", "step"|"error"}."""
         self.a.actions.step("downloading RouterOS")
-        await self.a.access.ssh(ip, "/system package update download", user_suffix="+ct",
-                                timeout_s=ROS_DOWNLOAD_S)
+        # Why a download failed is in the device's log, and only there for now: a MikroTik
+        # logs to memory, and the reboot that installs it by hand wipes it. Its last line now
+        # marks where this download's lines begin.
+        before = await self._ros_log(ip)
+        rc, _, _ = await self.a.access.ssh(ip, "/system package update download",
+                                           user_suffix="+ct", timeout_s=ROS_DOWNLOAD_S)
+        # a command that came back with the status never moving did not start one — no use
+        # waiting the full time for it
+        asked = time.time()
         f = await self._ros_update(ip, ROS_DOWNLOAD_S, lambda st: bool(re.search(
-            r"downloaded|reboot|error|fail|not enough", st or "", re.I)))
+            r"downloaded|reboot|error|fail|not enough", st or "", re.I)) or (
+            rc is not None and bool(ROS_IDLE.search(st or "")) and time.time() - asked > ROS_START_S))
         st = f.get("status", "")
         if f.get("timeout") or not re.search(r"downloaded|reboot", st, re.I):
             return {"ok": False, "ran": False,
-                    "error": f"the download did not finish — nothing was installed "
-                             f"({st or f.get('error') or 'no answer'})"}
+                    "error": f"the download did not {'start' if ROS_IDLE.search(st) else 'finish'} "
+                             f"— nothing was installed ({st or f.get('error') or 'no answer'}); "
+                             f"{_ros_log_says(before, await self._ros_log(ip))}"}
         r = await self.a.actions.reboot.run(ip, name, chk, via="routeros", back_s=ROS_BACK_S,
                                             hold_s=hold)
         if not r.get("ok"):
@@ -1156,3 +1175,19 @@ def _sq(text: str) -> str:
 
 def _last(text: str) -> str:
     return ((text or "").strip().splitlines() or [""])[-1][:160]
+
+
+def _ros_log_says(before: Optional[list], after: Optional[list]) -> str:
+    """What the device logged since `before` about a download, quoted as it wrote it — the
+    lines on errors, packages and updates; never lanowl's own logins."""
+    if before is None or after is None:
+        return "its log could not be read"
+    # the log only grows (its oldest lines dropped when full): the new lines follow the first
+    # place `before`'s last lines are found, each stamped to the second
+    tail, new = before[-3:], after
+    for i in range(len(after) - len(tail) + 1):
+        if tail and after[i:i + len(tail)] == tail:
+            new = after[i + len(tail):]
+            break
+    said = [s for s in new if ROS_LOG_WHY.search(s)]
+    return f"its log: {' | '.join(said[-3:])}" if said else "its log says nothing about it"
