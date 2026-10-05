@@ -46,7 +46,7 @@ def check(cond, msg):
 VPS = "203.0.113.10"
 CFG = {"actions": {
     "enabled": True, "mode": "live", "expire_min": 15, "max_pending": 3, "max_per_day": 20,
-    "repeat_after_h": 24, "pin_sha256": A.pin_hash("2389"),
+    "repeat_after_h": 24,
     "catalog": {"nmap_scan": {"deny_groups": ["security"]},
                 "nmap_service": {"deny_groups": ["security", "iot"]},
                 "restart_service": {"hosts": {
@@ -468,7 +468,7 @@ def test_session_time_end_restart_shadow():
                 a2 = A.Actions(a)
                 out["after_restart"] = [(x["status"], (x.get("outcome") or {}).get("ended"))
                                         for x in a2.items if x["id"] == p3["id"]][0]
-                # the dashboard's End, through the web API, needs no PIN
+                # the dashboard's End, through the web API, needs no confirm
                 ac.items = [x for x in ac.items if x["id"] != p3["id"]]
                 p4 = await ask_and_open()
                 from lanowl.web import Dashboard
@@ -540,7 +540,7 @@ def test_session_time_end_restart_shadow():
     check("NOT RUN" in out["after_end"].get("status", ""), "after End, a check asks again instead of running")
     check(out["open_before_restart"] == "open" and out["after_restart"] == ("done", "restart"),
           "a restart closes an open session (its turn is gone) — never silently reopened")
-    check(out["web_end"] == (200, "done"), "the dashboard's End works without a PIN")
+    check(out["web_end"] == (200, "done"), "the dashboard's End works with one press")
     check(out["dry"]["summary"].startswith("DRY RUN") and out["dry_calls"] == 0,
           "shadow mode: even inside a session nothing is executed")
     check("refused" in out["audit0"] and "incident" in out["audit0"]["refused"],

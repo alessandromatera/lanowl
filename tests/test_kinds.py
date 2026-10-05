@@ -30,7 +30,6 @@ import yaml  # noqa: E402
 
 from lanowl import access as X  # noqa: E402
 from lanowl import kinds as K  # noqa: E402
-from lanowl.actions import pin_hash  # noqa: E402
 from lanowl.model import Device, Inventory  # noqa: E402
 
 _fails = []
@@ -430,7 +429,6 @@ def test_check():
             yaml.safe_dump({"devices": [INVENTORY["devices"][0]]}, f)
         cfg.pop("updates")
         cfg["actions"]["catalog"] = {}
-        cfg["actions"]["pin_sha256"] = pin_hash("2389")
         os.remove(os.path.join(d, "profiles", "broken.yaml"))
         key = os.path.join(d, "id_lanowl")                  # every key file there, mode 600
         with open(key, "w") as f:

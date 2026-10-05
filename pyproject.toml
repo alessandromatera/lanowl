@@ -31,3 +31,8 @@ lanowl = "lanowl.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lanowl"]
+
+# the example files, inside the package: Settings on the dashboard builds its forms from them
+[tool.hatch.build.targets.wheel.force-include]
+"config.example.yaml" = "lanowl/examples/config.example.yaml"
+"inventory.example.yaml" = "lanowl/examples/inventory.example.yaml"

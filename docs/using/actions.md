@@ -2,7 +2,7 @@
 
 A monitor that can only look can say what is wrong but never settle it. So the owl may
 **propose** a change, and you **approve** it, on Telegram with a button or on the dashboard
-with your PIN. Nothing changes by itself, and the model never writes a command: it names an
+in a sheet that says what runs. Nothing changes by itself, and the model never writes a command: it names an
 action from a fixed catalog and a device, and lanowl builds the command.
 
 ## The catalog
@@ -29,10 +29,6 @@ actions:
 
 Start in **shadow** mode: proposals arrive and you answer them, but an approval only records
 what would have run. When you trust what it proposes, switch to `live`.
-
-Actions need a [dashboard PIN](dashboard.md#the-pin): until one is set they stay off, and
-lanowl says so on Telegram when it starts. Send `/pin` to the bot, or set
-`actions.pin_sha256` in `config.yaml`.
 
 ## The rules every proposal passes
 
@@ -79,7 +75,7 @@ preceded by a backup when backups are on for that machine, and a failed backup s
 
 `/reboot ap porch` or `/upgrade home server` on Telegram, or **Reboot** and **Update** in a
 device's sheet on the dashboard. Your own request passes the same rules and the same check,
-and still waits for your button or your PIN, so a typo never reboots the wrong thing. It does
+and still waits for your button or the dashboard's confirm, so a typo never reboots the wrong thing. It does
 not count against the daily limit.
 
 ## Investigation sessions

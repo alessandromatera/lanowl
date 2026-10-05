@@ -24,6 +24,10 @@ services:
     env_file: .env
     volumes:
       - ../config:/config:ro                    # config.yaml, inventory.yaml, secrets.yaml, profiles, ssh key
+      # ...and the two files Settings on the dashboard writes, read-write, each on its own
+      # (secrets.yaml and the rest stay read-only). Both must exist before the first start.
+      - {type: bind, source: ../config/config.yaml, target: /config/config.yaml, bind: {create_host_path: false}}
+      - {type: bind, source: ../config/inventory.yaml, target: /config/inventory.yaml, bind: {create_host_path: false}}
       - lanowl-state:/state                     # the database, the log, the outbox
       - lanowl-ssh:/root/.ssh                   # known_hosts for the host-log watcher
       - sandbox-sock:/run/sandbox:ro

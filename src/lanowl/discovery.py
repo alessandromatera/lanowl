@@ -130,8 +130,8 @@ def reconcile(inv: Inventory, mac_index: dict) -> list:
     moves = []
     for dev in inv.devices:
         mac = (dev.attrs.get("mac") or "").upper()
-        if not mac:
-            continue
+        if not mac or str(dev.attrs.get("site") or "home") != "home":
+            continue                      # a remote site's device follows its own DHCP (sites.py)
         new_ip = mac_index.get(mac)
         if not new_ip or new_ip == dev.ip:
             continue

@@ -181,6 +181,10 @@ def parse_routeros_leases(text: str) -> list:
     return out
 
 
+def ip_in_watch(rec: dict, ip: str) -> bool:
+    return str(ip) in (rec.get("watch") or {})
+
+
 class Sites:
     def __init__(self, auditor):
         self.a = auditor
@@ -705,6 +709,16 @@ class Sites:
                     self.a.inv.rebind(dev, new)
                 self.rec["watch"][new] = self.rec["watch"].pop(ip)
                 log.info("sites: %s moved %s -> %s", w["name"], ip, new)
+        # ...and a device of this site's in inventory.yaml (`site:` and `mac:`), the same way
+        for dev in list(self.a.inv.devices):
+            at = dev.attrs or {}
+            if str(at.get("site") or "") != s["key"] or not at.get("mac") or ip_in_watch(self.rec, dev.ip):
+                continue
+            new = by_mac.get(str(at["mac"]).lower())
+            if new and new != dev.ip and self.a.inv.get(new) is None:
+                old = dev.ip
+                self.a.inv.rebind(dev, new)
+                log.info("sites: %s moved %s -> %s", dev.name, old, new)
 
     # --- checks from a site's router (checks.py) -----------------------------------------
     async def run_check(self, name: str, n: dict, timeout_s: float) -> dict:

@@ -23,7 +23,7 @@ ENV PYTHONUNBUFFERED=1 \
     LANOWL_INVENTORY=/config/inventory.yaml
 
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE ./
+COPY pyproject.toml README.md LICENSE config.example.yaml inventory.example.yaml ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir .
 # the test suite rides along: `docker run --rm lanowl python /app/tests/run_all.py` gates a deploy

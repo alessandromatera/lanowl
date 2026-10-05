@@ -13,7 +13,7 @@ Pinned down here (actions.py):
   5. unanswered proposals expire and lose their buttons;
   6. the audit's proposals ride on the incident's own alert (no second message), and the
      diagnosis edit keeps their buttons; otherwise one silent message per audit;
-  7. the dashboard: Reject freely, Approve with the PIN; five wrong ones lock it and say so;
+  7. the dashboard: Reject freely, Approve from a logged-in page (its confirm is the page's);
   8. a Shelly whose relay would change on a restart is refused (a contactor that powers on OFF);
   9. the record survives a restart; a button from anyone but the owner does nothing;
  10. host_log: the model's words reach the remote shell quoted, never as shell;
@@ -69,7 +69,7 @@ DEVICES = [
 
 ACTIONS_CFG = {"actions": {
     "enabled": True, "mode": "shadow", "expire_min": 15, "max_pending": 3, "max_per_day": 20,
-    "repeat_after_h": 24, "pin_sha256": A.pin_hash("2389"),
+    "repeat_after_h": 24,
     "catalog": {"nmap_scan": {"deny_groups": ["security"]},
                 "nmap_service": {"deny_groups": ["security", "iot"]},
                 "restart_service": {"hosts": {"192.168.10.113": {
@@ -209,19 +209,14 @@ def test_tool_offered_only_in_a_turn():
             a.actions.switched_on = False
             with a.actions.source("telegram"):
                 off = names()
-            a.actions.switched_on, a.actions.pin_cfg_raw = True, ""
-            with a.actions.source("telegram"):
-                nopin = names()
-            return outside, inside, off, nopin
-        outside, inside, off, nopin = asyncio.run(go())
+            return outside, inside, off
+        outside, inside, off = asyncio.run(go())
     check("propose_action" not in outside
           and set(outside) == {t["function"]["name"] for t in TOOL_SPECS} | {"lanowl_records", "cve_lookup"},
           "not offered to the weekly review / triages / MQTT (the read-only tools and the "
           "auditor's own records are)")
     check("propose_action" in inside and "host_log" in inside, "offered to the audit, with host_log")
     check("propose_action" not in off, "actions.enabled=false takes it away entirely")
-    check("propose_action" not in nopin and "run_check" not in nopin,
-          "switched on but no PIN anywhere: off as well")
 
 
 # --- 3. a question's proposal, the buttons, the dry run -----------------------------------
@@ -373,111 +368,45 @@ def test_owner_presses_are_not_capped():
           "three of the model's proposals waiting do not block the owner's press")
 
 
-def test_pin_sources():
-    """The PIN is required: config.yaml's, or — when that is empty — the one set with /pin on
-    Telegram (only its hash, in the record). Without either, actions stay off."""
-    print("\n-- the dashboard PIN: config.yaml, else /pin; none = actions off --")
-    out = {}
-
-    async def go(d):
-        m, a = _auditor(d, {"state": {"db_path": os.path.join(d, "s.sqlite")}})
-        ac = a.actions
-        _fake_checks(a)
-        ac.pin_cfg_raw = ac.pin_cfg = ""                   # config.yaml without one
-        out["off"] = (ac.enabled, ac.needs_pin, ac.view()["needs_pin"])
-        out["ask_off"] = await ac.ask("nmap_scan", "192.168.10.61", "dashboard")
-        out["short"] = ac.set_pin("12")
-        out["letters"] = ac.set_pin("12ab")
-        out["set"] = ac.set_pin("4321")
-        out["on"] = (ac.enabled, ac.needs_pin, ac.check_pin("4321"), ac.check_pin("2389"))
-        out["changed"] = ac.set_pin("5678")
-        # it outlives a restart: a fresh Actions reads it back from the record
-        b = A.Actions(a)
-        b.pin_cfg_raw = b.pin_cfg = ""
-        out["restored"] = (b.enabled, b.check_pin("5678")[0])
-        out["report_tg"] = A.report({**a.cfg, "actions": {**a.cfg["actions"], "pin_sha256": ""}})
-        # config.yaml wins, and /pin will not touch it
-        out["cfg_wins"] = (b.__class__(a).check_pin("2389")[0], b.__class__(a).set_pin("1111"))
-        # the digits themselves in pin_sha256: no PIN, and --check says why
-        c = A.Actions(a)
-        c.pin_cfg_raw, c.pin_cfg = "1234", ""
-        out["raw"] = (c.enabled, c.needs_pin, c.set_pin("1111"))
-
-    with tempfile.TemporaryDirectory() as d:
-        asyncio.run(go(d))
-    check(out["off"] == (False, True, True), "config.yaml has none: actions off, and the page is told")
-    check("/pin" in out["ask_off"].get("refused", ""), "an owner's press then says how to set it")
-    check(not out["short"]["ok"] and not out["letters"]["ok"], "a PIN is 4 to 12 digits")
-    check(out["set"]["ok"] and "actions are on" in out["set"]["text"]
-          and out["on"][0] and not out["on"][1] and out["on"][2][0] and not out["on"][3][0],
-          "/pin sets it: actions on, that PIN approves, another does not")
-    check(out["changed"]["ok"] and "changed" in out["changed"]["text"], "/pin again changes it")
-    check(out["restored"] == (True, True), "kept (as a hash) across a restart")
-    check(out["report_tg"][1] == 0 and "set on Telegram" in out["report_tg"][0],
-          "--check finds it in the state: ✓")
-    check(out["cfg_wins"][0] and not out["cfg_wins"][1]["ok"]
-          and "config.yaml" in out["cfg_wins"][1]["text"],
-          "config.yaml's PIN wins, and /pin points there")
-    check(out["raw"][:2] == (False, True) and not out["raw"][2]["ok"],
-          "pin_sha256 holding the digits themselves is no PIN; fix it in config.yaml")
-
-
-def test_pin_report():
-    print("\n-- --check: actions on need a PIN --")
-    base = {"telegram": {"chat": {"enabled": True}}, "state": {"db_path": "/nonexistent/x.sqlite"}}
-    off = A.report({**base, "actions": {"enabled": False}})
-    good = A.report({**base, "actions": {"enabled": True, "pin_sha256": A.pin_hash("2389")}})
-    raw = A.report({**base, "actions": {"enabled": True, "pin_sha256": "2389"}})
-    none = A.report({**base, "actions": {"enabled": True}})
-    nochat = A.report({"actions": {"enabled": True}, "state": base["state"]})
-    check(off[1] == 0 and "off" in off[0], "actions off: nothing needed")
-    check(good[1] == 0 and "✓ dashboard PIN" in good[0] and "from config.yaml" in good[0], "config.yaml's: ✓")
-    check(raw[1] == 1 and "not a SHA-256" in raw[0] and "2389" not in raw[0],
-          "the digits in pin_sha256: ✗, without repeating them")
-    check(none[1] == 1 and "/pin" in none[0] and "--hash-pin" in none[0], "none: ✗, both ways named")
-    check(nochat[1] == 1 and "/pin" not in nochat[0], "no Telegram chat: only config.yaml")
-
-
-def test_pin_on_telegram():
-    print("\n-- /pin on Telegram: the digits are deleted --")
+def test_no_pin():
+    """No PIN any more: actions are on when switched on; approving on the dashboard is the
+    logged-in page's confirm. /pin only says so, and digits sent with it leave the chat."""
+    print("\n-- no PIN: on means on; /pin explains; --check names leftovers --")
     out = {"replies": [], "calls": []}
     from lanowl import chat as C
 
     async def go(d):
         m, a = _auditor(d)
-        a.actions.pin_cfg_raw = a.actions.pin_cfg = ""
+        out["on"] = (a.actions.enabled, "needs_pin" in a.actions.view())
         real = C.telegram_call
 
         async def call(cfg, method, payload, timeout_s=15):
             out["calls"].append((method, payload))
-            return {"ok": method != "deleteMessage" or payload["message_id"] != 99}
+            return {"ok": True}
 
         async def reply(chat_id, text):
             out["replies"].append(text)
         C.telegram_call = call
         a.chat._reply = reply
         try:
-            await a.chat.on_telegram("/pin", "100000001", 7)
-            await a.chat.on_telegram("4321", "100000001", 8)
-            out["on"] = a.actions.enabled and a.actions.check_pin("4321")[0]
-            await a.chat.on_telegram("/pin@lanowl_example_bot 5678", "100000001", 99)
-            out["changed"] = a.actions.check_pin("5678")[0]
-            # after /pin, anything that is not digits is not taken as the PIN
-            await a.chat.on_telegram("/pin", "100000001", 10)
-            await a.chat.on_telegram("/status", "100000001", 11)
-            await a.chat.on_telegram("1111", "100000001", 12)
-            out["kept"] = a.actions.check_pin("5678")[0] and not a.actions.check_pin("1111")[0]
+            await a.chat.on_telegram("/pin 4321", "100000001", 8)
+            await a.chat.on_telegram("/pin", "100000001", 9)
         finally:
             C.telegram_call = real
+
     with tempfile.TemporaryDirectory() as d:
         asyncio.run(go(d))
-    r, calls = out["replies"], out["calls"]
-    deleted = [p["message_id"] for meth, p in calls if meth == "deleteMessage"]
-    check("4 to 12 digits" in r[0], "/pin asks for the digits")
-    check(8 in deleted and out["on"] and "actions are on" in r[1], "the PIN message is deleted; actions are on")
-    check(out["changed"] and 99 in deleted and "delete it yourself" in r[2],
-          "/pin 5678 in one go works too; a message it could not delete is said")
-    check(out["kept"] and 12 not in deleted, "a command cancels the wait: later digits are a question")
+    deleted = [p["message_id"] for meth, p in out["calls"] if meth == "deleteMessage"]
+    check(out["on"] == (True, False), "switched on: on, and the page hears nothing of a PIN")
+    check(len(out["replies"]) == 2 and all("no dashboard PIN" in r for r in out["replies"]),
+          "/pin says there is none any more")
+    check(deleted == [8], "digits sent with /pin are deleted all the same; a bare /pin is not")
+    base = {"state": {"db_path": "/nonexistent/x.sqlite"}}
+    left = A.report({**base, "actions": {"enabled": True, "pin_sha256": "ab" * 32, "pin_lockout_min": 30}})
+    clean = A.report({**base, "actions": {"enabled": True}})
+    check(left[1] == 0 and "not used any more" in left[0] and "actions.pin_sha256" in left[0]
+          and "abab" not in left[0], "--check names the leftover keys, without their value, as no problem")
+    check(clean == ("Actions: on · shadow", 0), "and says nothing of a PIN otherwise")
 
 
 # --- 6. the audit ---------------------------------------------------------------------
@@ -525,8 +454,8 @@ def test_audit_rides_on_the_incident_alert():
 
 
 # --- 7. the dashboard ---------------------------------------------------------------------
-def test_dashboard_pin():
-    print("\n-- the dashboard: Reject freely, Approve with the PIN --")
+def test_dashboard_approve():
+    print("\n-- the dashboard: Reject freely, Approve from the logged-in page --")
     import aiohttp
     out = {}
 
@@ -549,14 +478,9 @@ def test_dashboard_pin():
                     async with s.post(base + "/api/action", data=json.dumps(body),
                                       headers={"Content-Type": ctype}) as r:
                         return r.status, await r.json(content_type=None) if r.status != 415 else None
-                out["form"] = await post({"id": ids[0], "approve": True, "pin": "2389"}, "text/plain")
-                out["nopin"] = await post({"id": ids[0], "approve": True})
-                out["wrong"] = await post({"id": ids[0], "approve": True, "pin": "1234"})
-                out["right"] = await post({"id": ids[0], "approve": True, "pin": "2389"})
+                out["form"] = await post({"id": ids[0], "approve": True}, "text/plain")
+                out["right"] = await post({"id": ids[0], "approve": True})
                 out["reject"] = await post({"id": ids[1], "approve": False})
-                for _ in range(5):
-                    out["lock"] = await post({"id": ids[2], "approve": True, "pin": "0000"})
-                out["locked_right"] = await post({"id": ids[2], "approve": True, "pin": "2389"})
                 async with s.get(base + "/api/state") as r:
                     out["state"] = (await r.json())["actions"]
             await _settle()
@@ -568,17 +492,12 @@ def test_dashboard_pin():
     with tempfile.TemporaryDirectory() as d:
         asyncio.run(go(d))
     check(out["form"][0] == 415, "a non-JSON POST is refused")
-    check(out["nopin"][0] == 403 and out["wrong"][0] == 403 and out["wrong"][1]["pin"] == "wrong",
-          "no PIN / a wrong PIN: refused")
-    check(out["right"][0] == 200 and out["p0"] == "done", "the right PIN approves (dry run)")
-    check(out["reject"][0] == 200 and out["reject"][1]["status"] == "rejected", "Reject needs no PIN")
-    check(out["lock"][1]["pin"] == "locked" and out["locked_right"][1]["pin"] == "locked",
-          "5 wrong in a row lock it — even the right PIN waits")
-    check(len(out["emitted"]) == 1 and "locked" in out["emitted"][0], "and Telegram is told, once")
+    check(out["right"][0] == 200 and out["p0"] == "done", "an approval needs no PIN (dry run)")
+    check(out["reject"][0] == 200 and out["reject"][1]["status"] == "rejected", "Reject, the same")
     st = out["state"]
-    check(st["enabled"] and st["mode"] == "shadow" and st["pin"] and st["locked_until"]
+    check(st["enabled"] and st["mode"] == "shadow" and "pin" not in st and "needs_pin" not in st
           and len(st["pending"]) == 1 and len(st["recent"]) == 2,
-          "the state carries pending, history and the lock for the page")
+          "the state carries pending and history for the page, and nothing about a PIN")
 
 
 # --- 8. the Shelly check ------------------------------------------------------------------
@@ -1115,9 +1034,8 @@ def test_live_steps():
 if __name__ == "__main__":
     for fn in [test_rules, test_tool_offered_only_in_a_turn,
                test_question_proposal_and_telegram_button, test_limits_and_expiry,
-               test_owner_presses_are_not_capped, test_pin_sources, test_pin_report,
-               test_pin_on_telegram,
-               test_audit_rides_on_the_incident_alert, test_dashboard_pin, test_shelly_safety,
+               test_owner_presses_are_not_capped, test_no_pin,
+               test_audit_rides_on_the_incident_alert, test_dashboard_approve, test_shelly_safety,
                test_record_and_foreign_button, test_host_log_quotes_the_models_words,
                test_prompts, test_live_nmap, test_live_restart_service, test_live_shelly_reboot,
                test_live_timeout_and_prompts, test_live_queue, test_live_steps]:

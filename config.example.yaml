@@ -199,7 +199,7 @@ access:
   ha_url: ""                        # Home Assistant, for its updates and restarts; its token:
                                     # secrets.yaml `tokens.homeassistant`
 
-# Actions the model may PROPOSE and you approve with a button (or the PIN on the dashboard).
+# Actions the model may PROPOSE and you approve with a button (on the dashboard, after a confirm).
 actions:
   enabled: false
   mode: "shadow"                    # "shadow": record what WOULD run; "live": it runs
@@ -207,11 +207,6 @@ actions:
   max_pending: 3
   max_per_day: 20
   repeat_after_h: 24
-  pin_sha256: ""                    # lanowl --hash-pin makes it
-                                    # empty: set it with /pin on Telegram. No PIN at
-                                    # all: actions stay off
-  pin_max_failures: 5
-  pin_lockout_min: 30
   catalog:                          # which devices: the inventory's `manage`
     nmap_scan: {deny_groups: ["security"]}
     nmap_service: {deny_groups: ["security", "iot"]}

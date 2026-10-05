@@ -1,12 +1,16 @@
 """The dashboard's login: one password, and each browser remembered for 30 days.
 
 The dashboard shows the whole network and can ask the model anything, so it is closed until
-it has a password, on by default. Where the password comes from, like the actions PIN:
+it has a password, on by default. Where the password comes from:
 
-  - config.yaml's `web.password_hash` wins (`lanowl --hash-password` makes one);
+  - config.yaml's `web.password_hash` wins (`lanowl --hash-password` makes one, and the
+    first-run setup or Settings write it there);
   - otherwise the one set with /password on Telegram: the message is deleted at once and only
     the hash is kept, in the `login` record;
-  - with neither, the page says how to set one and shows nothing else.
+  - with neither, the page asks for the SETUP CODE and then for a password: a one-time code
+    lanowl makes while it has no password, kept in its state, shown by
+    `lanowl --setup-code` (docker exec) — proof that whoever sets the password can reach
+    the machine, not merely the page.
 
 `web.login: false` switches it off, for a page that already sits behind a login of its own
 (a reverse proxy with Authelia or Authentik, Tailscale). --check says so while it is off.
@@ -15,9 +19,14 @@ A login is a random token in an HttpOnly cookie; only its SHA-256 is kept, in th
 a restart or an upgrade logs nobody out. A browser stays in for SESSION_DAYS after its last
 visit. A new password, from either place, logs every browser out.
 
-Five wrong passwords in a row lock the login for 15 minutes, for every browser (the PIN's
-rule), and Telegram hears it once, with the address the last try came from. /password lifts
-the lock. A good login, a log out and a session that runs out send nothing.
+Five wrong passwords in a row lock the login for 15 minutes, for every browser, and Telegram
+hears it once, with the address the last try came from. /password lifts the lock. The lock is
+kept in the record, so a restart does not lift it. A good login, a log out and a session that
+runs out send nothing.
+
+A save in Settings asks the password again when this browser has not typed it in the last
+REAUTH_S (`recent`, `reauth`): a browser stays logged in for a month, and whoever holds it
+may not be the owner. Those tries count toward the same lock.
 
 The hash is scrypt from Python's standard library: `scrypt$n$r$p$salt$hash`, base64.
 """
@@ -44,6 +53,8 @@ MAX_FAILS = 5
 LOCK_S = 15 * 60
 MAX_SESSIONS = 50          # browsers remembered at once; the oldest goes first
 SEEN_SAVE_S = 3600         # a visit renews a login; written down at most once an hour
+REAUTH_S = 600             # a Settings save asks the password again after this
+_CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I/L: read off a terminal
 WAIT_S = 300               # after /password, the next message is the password
 N, R, P = 2 ** 15, 8, 1    # ~40-100 ms per try, 32 MB
 _HASH = re.compile(r"^scrypt\$(\d+)\$(\d+)\$(\d+)\$([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+)$")
@@ -95,6 +106,8 @@ class Login:
         self.cfg_raw = str(w.get("password_hash") or "").strip()
         self.cfg_hash = self.cfg_raw if valid_hash(self.cfg_raw) else ""
         self.tg_hash = ""                      # set with /password on Telegram: in the record
+        self.tg_by = "telegram"                # ...or on the page, when config.yaml was read-only
+        self.setup_code = ""                   # while there is no password (`ensure_code`)
         self.sessions: dict = {}               # sha256(token) -> {"made", "seen"}
         self._saved_seen: dict = {}            # sha256(token) -> the "seen" last written
         self._fails: list = []
@@ -112,7 +125,7 @@ class Login:
     def source(self) -> str:
         if not self.hash:
             return ""
-        return "config.yaml" if self.cfg_raw else "Telegram"
+        return "config.yaml" if self.cfg_raw else ("the dashboard" if self.tg_by == "dashboard" else "Telegram")
 
     @property
     def needed(self) -> bool:
@@ -158,24 +171,103 @@ class Login:
             return {"ok": False, "why": "locked", "until": self._locked_until}
         if ok:
             self._fails = []
-            token = secrets.token_urlsafe(32)
-            self.sessions[_tok(token)] = {"made": now, "seen": now}
-            self._save()
+            token = self._session(now)
             log.info("dashboard login from %s", ip or "?")
             return {"ok": True, "token": token}
+        return self._fail(ip, now, "password")
+
+    def _session(self, now: float) -> str:
+        token = secrets.token_urlsafe(32)
+        self.sessions[_tok(token)] = {"made": now, "seen": now, "authed": now}
+        self._save()
+        return token
+
+    def _fail(self, ip: str, now: float, what: str) -> dict:
+        """A wrong password or setup code: five in a row lock the login, for every browser."""
         self._fails = [t for t in self._fails if now - t < LOCK_S] + [now]
-        log.warning("dashboard: wrong password from %s (%d in a row)", ip or "?", len(self._fails))
+        log.warning("dashboard: wrong %s from %s (%d in a row)", what, ip or "?", len(self._fails))
         if len(self._fails) >= MAX_FAILS:
             self._fails = []
             self._locked_until = now + LOCK_S
+            self._save()
             chat = self._chat()
             self.a._emit_telegram("digest", (
                 f"🔒 <b>Dashboard login locked until {_hm(self._locked_until)}</b>\n"
-                f"{MAX_FAILS} wrong passwords in a row"
+                f"{MAX_FAILS} wrong {what}s in a row"
                 + (f", the last from {ip}" if ip else "") + "."
                 + (" /password sets a new one and lifts the lock." if chat and not self.cfg_raw else "")))
             return {"ok": False, "why": "locked", "until": self._locked_until}
+        self._save()
         return {"ok": False, "why": "wrong", "left": MAX_FAILS - len(self._fails)}
+
+    # --- the password again, for a Settings save ---------------------------------------
+    def recent(self, token: str, now: Optional[float] = None) -> bool:
+        """This browser typed the password in the last REAUTH_S. With the login off (a login
+        of the owner's own in front), that login is the guard: always recent."""
+        if not self.on:
+            return True
+        now = now or time.time()
+        s = self.sessions.get(_tok(token or ""))
+        if s is None:
+            return False
+        at = s.get("authed")
+        return now - float(s.get("made") or 0 if at is None else at) < REAUTH_S
+
+    def reauth(self, token: str, ok: bool, ip: str = "", now: Optional[float] = None) -> dict:
+        """The password typed again on a Settings save, once `verify` has said whether it
+        matched. {"ok"} or {"ok": False, "why": "wrong"|"locked", ...}."""
+        now = now or time.time()
+        s = self.sessions.get(_tok(token or ""))
+        if s is None:
+            return {"ok": False, "why": "out"}
+        if self.locked(now):
+            return {"ok": False, "why": "locked", "until": self._locked_until}
+        if not ok:
+            return self._fail(ip, now, "password")
+        self._fails = []
+        s["authed"] = now
+        self._save()
+        return {"ok": True}
+
+    # --- the first-run setup ---------------------------------------------------------
+    def ensure_code(self) -> str:
+        """The setup code, made once while the page has no password; kept in the record, so
+        it survives a restart and `lanowl --setup-code` (another process) can read it."""
+        if not self.needed:
+            return ""
+        if not self.setup_code:
+            self.setup_code = "".join(secrets.choice(_CODE_CHARS) for _ in range(8))
+            self._save()
+        return self.setup_code
+
+    def code_ok(self, code: str, ip: str = "", now: Optional[float] = None) -> dict:
+        """A setup code typed on the page. Wrong ones count toward the lock."""
+        now = now or time.time()
+        if not self.needed or not self.setup_code:
+            return {"ok": False, "why": "none"}
+        if self.locked(now):
+            return {"ok": False, "why": "locked", "until": self._locked_until}
+        typed = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())
+        if not hmac.compare_digest(typed, self.setup_code):
+            return self._fail(ip, now, "setup code")
+        self._fails = []
+        return {"ok": True}
+
+    def set_from_page(self, hashed: str, in_config: bool, now: Optional[float] = None,
+                      keep_in: bool = False) -> Optional[str]:
+        """A password set on the page (the first-run setup, or Settings): its hash went into
+        config.yaml (`in_config`), or — config.yaml read-only — into the record, like
+        /password's. Every browser is logged out; `keep_in` (the setup) hands this one a
+        login. Returns its token, or None."""
+        now = now or time.time()
+        if in_config:
+            self.cfg_raw = self.cfg_hash = hashed
+        else:
+            self.tg_hash, self.tg_by = hashed, "dashboard"
+        self.sessions, self.setup_code = {}, ""
+        self._fails, self._locked_until = [], 0.0
+        log.warning("dashboard password set on the page (%s)", "config.yaml" if in_config else "kept in the state")
+        return self._session(now) if keep_in else (self._save() or None)
 
     def logout(self, token: str, everywhere: bool = False):
         if everywhere:
@@ -201,17 +293,15 @@ class Login:
 
     def needed_text(self, chat: bool) -> str:
         """The Telegram message at a start while the page has no password."""
-        lines = ["🔑 <b>The dashboard is closed until you set a password</b>"]
+        lines = ["🔑 <b>The dashboard is closed until you set a password</b>",
+                 "Open it: it asks for a setup code, which <code>docker exec lanowl lanowl "
+                 "--setup-code</code> prints, and then for the password."]
         if self.cfg_raw:
             lines.append("config.yaml's <code>web.password_hash</code> is not a password hash, "
                          "so nothing opens it: make one with <code>lanowl --hash-password</code>.")
         elif chat:
-            lines.append("Send /password, then the password: I delete your message and keep only "
-                         "its hash. Or set <code>web.password_hash</code> in config.yaml "
-                         "(<code>lanowl --hash-password</code>).")
-        else:
-            lines.append("Set <code>web.password_hash</code> in config.yaml: "
-                         "<code>lanowl --hash-password</code> makes it.")
+            lines.append("Or send /password, then the password: I delete your message and keep "
+                         "only its hash.")
         return "\n".join(lines)
 
     def ask_text(self) -> Optional[str]:
@@ -238,6 +328,7 @@ class Login:
                                          "Nothing changed: /password to try again."}
         was = bool(self.tg_hash)
         self.tg_hash = hashed if valid_hash(hashed) else hash_password(pw)
+        self.tg_by, self.setup_code = "telegram", ""
         self.sessions = {}
         lifted = bool(self.locked(now))
         self._fails, self._locked_until = [], 0.0
@@ -258,11 +349,16 @@ class Login:
             return
         h = str(rec.get("password") or "")
         self.tg_hash = h if valid_hash(h) else ""
+        self.tg_by = "dashboard" if rec.get("by") == "dashboard" else "telegram"
+        self.setup_code = str(rec.get("setup") or "") if self.on and not self.hash else ""
+        now = time.time()
+        self._fails = [float(t) for t in (rec.get("fails") or []) if now - float(t) < LOCK_S]
+        until = float(rec.get("locked_until") or 0)
+        self._locked_until = until if until > now else 0.0
         # logins handed out under another password (config.yaml's changed while lanowl was
         # stopped) are not this password's
         if rec.get("under") != _tok(self.hash):
             return
-        now = time.time()
         self.sessions = {str(k): v for k, v in (rec.get("sessions") or {}).items()
                          if isinstance(v, dict) and now - float(v.get("seen") or 0) <= SESSION_S}
         self._saved_seen = {k: float(v.get("seen") or 0) for k, v in self.sessions.items()}
@@ -274,31 +370,48 @@ class Login:
                       key=lambda kv: -float(kv[1].get("seen") or 0))[:MAX_SESSIONS]
         self.sessions = dict(live)
         try:
-            self.a.state.save_record(RECORD, {"password": self.tg_hash, "under": _tok(self.hash),
-                                              "sessions": self.sessions})
+            self.a.state.save_record(RECORD, {"password": self.tg_hash, "by": self.tg_by,
+                                              "under": _tok(self.hash), "sessions": self.sessions,
+                                              "setup": self.setup_code, "fails": self._fails,
+                                              "locked_until": self._locked_until})
             self._saved_seen = {k: float(v.get("seen") or 0) for k, v in self.sessions.items()}
         except Exception as e:
             log.warning("login: record not saved: %s", e)
 
 
-# --- `lanowl --check` ------------------------------------------------------------------
-def _in_state(cfg: dict) -> bool:
-    """Whether /password set one: read from the state's record (--check is a process of its own)."""
+# --- `lanowl --check`, `lanowl --setup-code` ----------------------------------------------
+def _record(cfg: dict) -> dict:
+    """The login record, read from the state database (--check is a process of its own)."""
     import json
     import os
     import sqlite3
     path = (cfg.get("state") or {}).get("db_path", "lanowl_state.sqlite")
     if not os.path.exists(path):
-        return False
+        return {}
     try:
         con = sqlite3.connect(path, timeout=5)
         try:
             row = con.execute("SELECT value FROM records WHERE name=?", (RECORD,)).fetchone()
         finally:
             con.close()
-        return bool(row) and valid_hash(str(json.loads(row[0]).get("password") or ""))
+        return json.loads(row[0]) if row else {}
     except Exception:
-        return False
+        return {}
+
+
+def _in_state(cfg: dict) -> bool:
+    """Whether /password (or the page, with config.yaml read-only) set one."""
+    return valid_hash(str(_record(cfg).get("password") or ""))
+
+
+def setup_code(cfg: dict) -> str:
+    """`lanowl --setup-code`: the code the page asks for while there is no password."""
+    w = cfg.get("web") or {}
+    if not w.get("enabled") or not w.get("login", True):
+        return ""
+    if valid_hash(str(w.get("password_hash") or "").strip()) or _in_state(cfg):
+        return ""
+    return str(_record(cfg).get("setup") or "")
 
 
 def report(cfg: dict) -> tuple:
@@ -318,9 +431,11 @@ def report(cfg: dict) -> tuple:
         mark, text = "✗", ("web.password_hash is not a password hash, so the dashboard stays "
                            "closed: make one with lanowl --hash-password")
     elif _in_state(cfg):
-        mark, text = "✓", "password set on Telegram (/password)"
+        mark, text = "✓", ("password set on the dashboard (kept in the state)"
+                           if _record(cfg).get("by") == "dashboard" else "password set on Telegram (/password)")
     else:
-        mark, text = "✗", ("no password, so the dashboard stays closed: "
-                           + ("send /password to the bot on Telegram, or set " if chat else "set ")
-                           + "web.password_hash in config.yaml (lanowl --hash-password)")
+        mark, text = "✗", ("no password, so the dashboard stays closed: open it and type the setup "
+                           "code (lanowl --setup-code), "
+                           + ("send /password to the bot on Telegram, " if chat else "")
+                           + "or set web.password_hash in config.yaml (lanowl --hash-password)")
     return f"{head}\n  {mark} {'login':<15} {text}", int(mark == "✗")

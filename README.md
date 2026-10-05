@@ -60,8 +60,10 @@ cp docker/env.example docker/.env                # this host's address, the mode
 docker compose -f docker/compose.yaml up -d
 ```
 
-Then open `http://<this host>/`. It asks for a password first: send `/password` to your
-lanowl bot on Telegram, or set `web.password_hash` (`lanowl --hash-password`). On Linux, allow
+Then open `http://<this host>/`. It asks for a setup code (`docker exec lanowl lanowl
+--setup-code` prints it) and a password, then opens on a setup that reads your router's DHCP
+list and writes `inventory.yaml` with the devices you pick. Everything else in `config.yaml`
+can be changed from the gear, too. On Linux, allow
 unprivileged ping first
 (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
 

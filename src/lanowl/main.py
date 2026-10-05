@@ -65,6 +65,7 @@ from .sweep import (OLLAMA_KEY, CheckResult, _sweep_device, apply_offline_grace,
 from .tools import ToolExecutor
 from .hostlog import HostLogWatcher
 from .login import Login
+from .settings import Settings
 from .wanwatch import WanWatcher
 from .web import Dashboard
 
@@ -261,6 +262,12 @@ class Auditor:
         self.executor.hostlog = self.hostlog
         # the dashboard's password and the browsers logged in with it (login.py)
         self.login = Login(self)
+        # config.yaml and inventory.yaml, changed from the dashboard (settings.py): a save is
+        # written at once and runs from the next restart (request_restart)
+        self.settings = Settings(self, str(cfg.get("_path") or "config.yaml"),
+                                 str(getattr(inv, "path", "") or "inventory.yaml"))
+        self._restart_ev = asyncio.Event()
+        self.restart_asked = ""          # who asked; the loop ends, then main() starts over
         self.dashboard = Dashboard(self)
         # The owner's questions, over lanowl's own bot and the dashboard's Ask box.
         self.chat = Chat(self)
@@ -549,7 +556,7 @@ class Auditor:
     def rename(self, ip: str = "", name: str = "", site: str = "", mac: str = "",
                by: str = "dashboard", now: Optional[float] = None) -> dict:
         """Name a device: a watched one by its address, or one on a site's network by site
-        and MAC. "" = back to the inventory's name. No PIN and no Telegram: it changes a label,
+        and MAC. "" = back to the inventory's name. No Telegram: it changes a label,
         and the Timeline shows it. An open incident carries on under the
         new name — the gate, what the digests told, the sent and the queued alerts are
         re-keyed — so nothing is announced as new, nor as recovered."""
@@ -1645,6 +1652,34 @@ class Auditor:
         # interval
         return (now - self._last_digest) >= self.cad.get("llm_interval_s", 3600)
 
+    # --- Restart to apply (settings.py) -------------------------------------------
+    def restart_blockers(self, now: Optional[float] = None) -> list:
+        """What a restart would cut and must wait for: an action running, a backup, a device
+        held while it reboots (that hold lives in memory only)."""
+        now = now or time.time()
+        out = []
+        cur = getattr(self.actions, "_cur", None)
+        if cur:
+            out.append(f"an action is running: {self.actions.public(cur).get('title') or 'an action'}")
+        if getattr(self.backups, "running", False):
+            out.append("a backup is running")
+        for ip, (until, _why) in list(self._holds.items()):
+            if until > now:
+                d = self.inv.get(ip)
+                out.append(f"{d.name if d else ip} is rebooting (held until {time.strftime('%H:%M', time.localtime(until))})")
+        return out
+
+    def request_restart(self, by: str) -> dict:
+        """Restart to apply: the loop ends, everything is closed and saved, and lanowl starts
+        again in the same process (main). {"ok"} or {"ok": False, "waiting": [...]}."""
+        waiting = self.restart_blockers()
+        if waiting:
+            return {"ok": False, "waiting": waiting}
+        self.restart_asked = by or "?"
+        # a moment for the page to get its answer before the dashboard closes
+        asyncio.get_running_loop().call_later(0.5, self._restart_ev.set)
+        return {"ok": True}
+
     # --- main loop --------------------------------------------------------
     async def loop(self):
         interval = self.cad.get("sweep_interval_s", 60)
@@ -1657,22 +1692,32 @@ class Auditor:
         watcher = asyncio.ensure_future(self.wanwatch.run())
         hostlogs = asyncio.ensure_future(self.hostlog.run())
         chat = asyncio.ensure_future(self.poller.run()) if not self.no_telegram else None
-        if self.actions.needs_pin:
-            # switched on, and nothing to approve with on the dashboard: off until it is set
-            log.warning("actions: %s", self.actions.off_reason())
-            self._emit_telegram("digest", self.actions.pin_needed_text(self.poller.enabled))
         if self.dashboard.enabled and self.login.needed:
-            # on by default: the page shows nothing but how to set a password until there is one
-            log.warning("dashboard: closed until a password is set (/password on Telegram, "
-                        "or web.password_hash in config.yaml)")
+            # on by default: the page asks for the setup code and a password until there is one
+            self.login.ensure_code()
+            log.warning("dashboard: closed until a password is set: open it and type the setup "
+                        "code (`lanowl --setup-code` prints it), or /password on Telegram, or "
+                        "web.password_hash in config.yaml")
             self._emit_telegram("digest", self.login.needed_text(self.poller.enabled))
         try:
             await self.dashboard.start()
         except Exception:        # a port clash must not take the monitor down with it
             log.exception("web dashboard failed to start; monitoring continues without it")
+        body = asyncio.ensure_future(self._loop_body(interval))
+        asked = asyncio.ensure_future(self._restart_ev.wait())
         try:
-            await self._loop_body(interval)
+            # until the loop dies, or Restart to apply ends it (request_restart)
+            done, _ = await asyncio.wait({body, asked}, return_when=asyncio.FIRST_COMPLETED)
+            if body in done:
+                body.result()
+            else:
+                log.warning("restarting, asked from %s: config.yaml and inventory.yaml are read again",
+                            self.restart_asked or "?")
+                body.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await body
         finally:
+            asked.cancel()
             await self.dashboard.stop()
             self.wanwatch.stop()
             watcher.cancel()
@@ -1861,6 +1906,25 @@ async def _amain(args):
         await routeros.shared(cfg).stop()      # a clean logout, not a dropped socket
         mqtt.stop()
         state.close()
+    return "restart" if auditor.restart_asked else ""
+
+
+def check_report(cfg: dict, inv) -> tuple:
+    """(text, problems) of `lanowl --check` for a config and an inventory: what a start
+    would do with each device, the secrets, the model, the shell, actions and the login.
+    Settings runs it on a file before saving it (settings.py)."""
+    k = Kinds.load(cfg, inv, Access(cfg, inv))
+    parts = [kinds_report(k, inv)]
+    bad = int(bool(k.problems or any(p.problems for p in k.plans)))
+    from .actions import report as actions_report
+    from .login import report as login_report
+    from .shell import report as shell_report
+    for rep in (lambda: secrets_report(cfg, inv), lambda: model_report(cfg),
+                lambda: shell_report(cfg), lambda: actions_report(cfg), lambda: login_report(cfg)):
+        text, n = rep()
+        parts.append(text)
+        bad += n
+    return "\n\n".join(parts), bad
 
 
 def _check(args) -> int:
@@ -1869,23 +1933,9 @@ def _check(args) -> int:
     cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
     inv = load_inventory(args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
     logging.basicConfig(level=logging.ERROR)
-    k = Kinds.load(cfg, inv, Access(cfg, inv))
-    print(kinds_report(k, inv))
-    text, bad = secrets_report(cfg, inv)
-    print("\n" + text)
-    text, wrong = model_report(cfg)
-    print("\n" + text)
-    from .shell import report as shell_report
-    text, walls = shell_report(cfg)
-    print("\n" + text)
-    from .actions import report as actions_report
-    text, nopin = actions_report(cfg)
-    print("\n" + text)
-    from .login import report as login_report
-    text, nopw = login_report(cfg)
-    print("\n" + text)
-    return 1 if bad or wrong or walls or nopin or nopw or k.problems \
-        or any(p.problems for p in k.plans) else 0
+    text, bad = check_report(cfg, inv)
+    print(text)
+    return 1 if bad else 0
 
 
 def _ask_twice(what: str, check) -> str:
@@ -1915,14 +1965,24 @@ def _hash_password() -> int:
     return 0
 
 
-def _hash_pin() -> int:
-    """`lanowl --hash-pin`: the line to put under `actions:` in config.yaml."""
-    from .actions import PIN_DIGITS, pin_hash
-    pin = _ask_twice("Dashboard PIN", lambda v: "" if PIN_DIGITS.match(v) else
-                     "A PIN is 4 to 12 digits.")
-    print("Put this line under actions: in config.yaml, then restart lanowl:\n")
-    print(f'  pin_sha256: "{pin_hash(pin)}"')
-    return 0
+def _setup_code(args) -> int:
+    """`lanowl --setup-code`: what the dashboard's first page asks for, while it has no password."""
+    from .login import setup_code
+    cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
+    code = setup_code(cfg)
+    if code:
+        print(f"The dashboard's setup code: {code[:4]}-{code[4:]}")
+        print("Type it on the dashboard's first page, then choose the password. It works once.")
+        return 0
+    w = cfg.get("web") or {}
+    if not w.get("enabled") or not w.get("login", True):
+        print("No setup code: the dashboard or its login is switched off (web.enabled, web.login).")
+    elif str(w.get("password_hash") or "").strip():
+        print("No setup code: the dashboard already has a password (web.password_hash in config.yaml).")
+    else:
+        print("No setup code yet: start lanowl first (it makes one at start while there is no "
+              "password), or the dashboard already has a password.")
+    return 1
 
 
 def main():
@@ -1939,19 +1999,24 @@ def main():
                     help="say what lanowl will do with each device, and why not; then exit")
     ap.add_argument("--hash-password", action="store_true",
                     help="make web.password_hash for config.yaml from a password you type; then exit")
-    ap.add_argument("--hash-pin", action="store_true",
-                    help="make actions.pin_sha256 for config.yaml from a PIN you type; then exit")
+    ap.add_argument("--setup-code", action="store_true",
+                    help="print the code the dashboard asks for while it has no password; then exit")
     args = ap.parse_args()
     if args.hash_password:
         sys.exit(_hash_password())
-    if args.hash_pin:
-        sys.exit(_hash_pin())
+    if args.setup_code:
+        sys.exit(_setup_code(args))
     if args.check:
         sys.exit(_check(args))
     try:
-        asyncio.run(_amain(args))
+        again = asyncio.run(_amain(args))
     except KeyboardInterrupt:
-        pass
+        again = ""
+    if again == "restart":
+        # Restart to apply: the same process starts over, so it works the same under Docker,
+        # systemd or a shell — nothing outside has to bring it back
+        logging.shutdown()
+        os.execv(sys.executable, [sys.executable, "-m", "lanowl.main", *sys.argv[1:]])
 
 
 if __name__ == "__main__":

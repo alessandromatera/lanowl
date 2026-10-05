@@ -17,7 +17,7 @@ The owl is useful, and treated as if anything it reads could steer it.
   reboot is one request to its own endpoint. The model's words are only ever shown.
 - **Every change waits for a person.** A proposal is checked against the rules and the device
   itself before you see it, and again when you approve. Approval is a Telegram button from an
-  allowed user, or the dashboard with your PIN.
+  allowed user, or the dashboard behind its login, after a sheet that says what runs.
 - **It never sees a password.** Logins reach ssh through `SSH_ASKPASS` and sudo through
   standard input, and command output is scrubbed of them.
 - **Its shell is a sandbox.** A separate container with no key, no config and no state of
@@ -33,7 +33,9 @@ The owl is useful, and treated as if anything it reads could steer it.
 ## Secrets
 
 - One file, `secrets.yaml`, mode 600, mounted read-only. `config.yaml` and `inventory.yaml`
-  hold none and can be shared.
+  hold none and can be shared. Settings on the dashboard writes those two (each mounted
+  read-write on its own); it never reads or writes a secret, and shows only whether each one
+  is set.
 - `lanowl --check` reports where each secret comes from, never its value, and refuses a file
   or a key that others can read.
 - The router is read with a user whose group can only read; lanowl reports any change to that
@@ -44,20 +46,26 @@ The owl is useful, and treated as if anything it reads could steer it.
 The dashboard is closed until you log in, and it relies on these:
 
 - One password, kept as a scrypt hash: in `config.yaml`, or set with `/password` on Telegram,
-  whose message is deleted. Without one the page shows only how to set one.
+  whose message is deleted. Without one the page asks for a one-time setup code that only
+  lanowl's machine shows (`lanowl --setup-code`), then for the password: whoever sets it must
+  reach the machine, not only the page.
 - A login is a random token in an HttpOnly cookie, of which lanowl keeps only a hash. It
   lasts 30 days after the last visit. A new password, or Log out everywhere, ends every one.
-- Five wrong passwords lock the login for 15 minutes and tell you on Telegram, with the
-  address the last try came from.
+- Five wrong passwords (or setup codes) lock the login for 15 minutes and tell you on
+  Telegram, with the address the last try came from. The lock survives a restart.
 - It accepts only JSON for anything that does something, so another web page cannot submit a
   form to it (a cross-origin JSON request needs a permission it never grants).
 - It answers only requests that reached it by IP address or by a name you listed, which
   defeats DNS rebinding.
 - It cannot be framed by another site.
-- Approving anything needs the PIN; five wrong ones lock dashboard approvals and tell you on
-  Telegram.
-- Pausing a device, the one thing it changes without the PIN, is announced on Telegram, so
-  nobody on the LAN can quietly stop lanowl watching the alarm.
+- Approving anything is a second step: a sheet that names what runs, where, and the risk.
+- A save in Settings asks for the password again when the browser has not typed it in the
+  last ten minutes, shows its diff first, keeps the file as it was, and is announced on
+  Telegram (to the chat lanowl runs with, so moving the alerts elsewhere is still heard).
+  `lanowl --check`'s rules run on the new file, and a new problem stops the save. Values the
+  environment sets cannot be changed from the page.
+- Pausing a device is announced on Telegram, so nobody on the LAN can quietly stop lanowl
+  watching the alarm.
 
 ## Telegram
 

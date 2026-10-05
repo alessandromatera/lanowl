@@ -8,7 +8,7 @@ Pinned down here (access.py + reboot.py):
   2. the allow-list decides: listed devices only, the VPS included, never lanowl's own
      machine; a Shelly keeps its own shelly_reboot;
   3. asked by the owner: /reboot answers with the proposal and its buttons, the dashboard's
-     Reboot button proposes and then needs the PIN like any approval;
+     Reboot button proposes and then needs the confirm like any approval;
   4. the check: a login that works, sudo for a non-root user, never the backup link's router
      while the network's internet runs on it;
   5. a reboot holds the device's alerts (and its Wi-Fi clients') — shown as rebooting, never
@@ -84,7 +84,7 @@ def _auditor(d, mode="shadow"):
            "observer": {"host_ip": "192.168.10.103"},
            "access": {"secrets_file": creds, "known_hosts": os.path.join(d, "kh")},
            "actions": {"enabled": True, "mode": mode, "expire_min": 15, "max_pending": 10,
-                       "max_per_day": 20, "repeat_after_h": 24, "pin_sha256": A.pin_hash("2389"),
+                       "max_per_day": 20, "repeat_after_h": 24,
                        "catalog": {"shelly_reboot": {}, "reboot": {"hold_min": 5, "devices": {
                            "192.168.20.1": {"via": "routeros"},
                            "192.168.10.32": {"via": "routeros", "risk": "its Wi-Fi drops"},
@@ -260,7 +260,7 @@ def test_rules_and_owner_requests():
     check(out["shelly"].get("proposal") and out["shelly_action"] == "shelly_reboot",
           "a Shelly is rebooted by shelly_reboot, whose check protects its relays")
     check(out["dash"].get("proposal") and out["dash_sent"] == 0,
-          "the dashboard's Reboot proposes without a Telegram message (the PIN follows at once)")
+          "the dashboard's Reboot proposes without a Telegram message (the confirm follows at once)")
     check(out["reply"] == "" and "You asked for it" in out["tg_msg"]["text"]
           and "Asked by you on Telegram" in out["tg_msg"]["text"]
           and out["tg_msg"]["extra"].get("reply_markup", {}).get("inline_keyboard"),

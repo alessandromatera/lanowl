@@ -1,7 +1,9 @@
 # config.yaml
 
 One file says everything lanowl does. Copy `config.example.yaml` to `config/config.yaml`
-and edit it: the essentials come first, and every optional feature starts switched off.
+and edit it: the essentials come first, and every optional feature starts switched off. Or
+change it from the dashboard's gear: [Settings](../using/settings.md) shows every section as a
+form and keeps the file's comments.
 
 - **No secrets here.** Logins, tokens and lanowl's ssh key live in
   [`secrets.yaml`](secrets.md), so this file can be shared or kept in git.
@@ -64,9 +66,10 @@ web:
   login: true
 ```
 
-The dashboard. It is closed until you log in with its password: `password_hash`, made by
-`lanowl --hash-password`, or, when that is empty, the one set with `/password` on Telegram.
-With neither, it shows only how to set one. `login: false` switches the login off, for a
+The dashboard. It is closed until you log in with its password: `password_hash`, written by
+the dashboard's first page (after the setup code) or made by `lanowl --hash-password`, or,
+when that is empty, the one set with `/password` on Telegram. With neither, it asks for the
+setup code. `login: false` switches the login off, for a
 dashboard behind a login of your own. More: [Logging in](../using/dashboard.md#logging-in).
 
 It answers on any address of the host. By default it accepts requests only

@@ -9,7 +9,8 @@ audit, how long it has been running).
 **Search** (⌘K, or the magnifier on a phone) finds devices by name or address, jumps to a tab,
 or sends what you typed to the owl as a question.
 
-It is closed until you log in: see [Logging in](#logging-in).
+It is closed until you log in: see [Logging in](#logging-in). The **gear** in the header opens
+[Settings](settings.md): config.yaml, your devices, and the first-run setup.
 
 ![The Now tab](../img/home-wide.png)
 
@@ -42,14 +43,16 @@ What needs you, first.
 Every watched device, grouped, with its state now, its latency over 24 hours and seven days
 of answers. Filter by site, by what is down, by what went down this week, by what is asleep,
 or sort the least stable first. Under the list: each site's DHCP devices that nobody watches,
-with **Watch** and **Known**, and every named service.
+with **Watch** and **Known**, and every named service. **Watch** writes the device into
+`inventory.yaml` (after a sheet that shows the change) and pings it from then on; **Known**
+only stops it counting as unknown.
 
 Tap a device for its sheet:
 
 - **Overview**: down since when, the share of answers in 24 hours and seven days, its
   outages, a latency chart with lost probes, seven days of ups and downs.
 - **Manage**: pause its monitoring (Telegram is told), and the actions its kind allows,
-  such as Reboot or Update, each asking for your PIN.
+  such as Reboot or Update, each confirmed in a sheet that says what runs.
 - **Details**: its checks, its kind, its login type, and what lanowl may do with it and why
   not.
 - The pencil renames it. The inventory's name stays underneath.
@@ -109,8 +112,17 @@ More: [Asking the owl](asking.md).
 
 ## Logging in
 
-The dashboard has one password, and no user name. Until it has one, it shows only how to
-set one. There are two ways, like the PIN's:
+The dashboard has one password, and no user name. Until it has one, it asks for a **setup
+code** and then the password. The code proves you can reach lanowl's machine, not just the
+page; lanowl makes it at its first start and prints it on request:
+
+```bash
+docker exec lanowl lanowl --setup-code
+```
+
+The code works once. The password's hash goes into `config.yaml` (`web.password_hash`), and
+the dashboard opens on the [first-run setup](settings.md#the-first-run-setup). The other ways
+to set a password:
 
 - **Telegram:** send `/password` to the bot, then the password (8 characters or more). The
   bot deletes your message as soon as it has read it and keeps only a hash. `/password`
@@ -144,34 +156,17 @@ proxy with HTTPS if that matters to you (and list its name in `web.allowed_hosts
 `web.login: false` switches the login off, for a dashboard that already sits behind a login of
 your own (Authelia, Authentik, Tailscale). `--check` says so while it is off.
 
-## The PIN
+## Approving
 
 Anything on the dashboard that changes something (approving a proposal, a reboot, an update)
-asks for your PIN once per device and browser. With actions on, the PIN is required: without
-one, actions stay off and lanowl tells you so on Telegram when it starts.
-
-The simplest way is Telegram: send `/pin` to the bot, then the digits (4 to 12). The bot
-deletes your message as soon as it has read it and keeps only a hash of the PIN. `/pin`
-again changes it.
-
-Or put it in `config.yaml`, as a hash, so the digits themselves never sit in the file:
-
-```bash
-docker compose -f docker/compose.yaml run --rm lanowl lanowl --hash-pin
-```
-
-```yaml
-actions:
-  pin_sha256: "…"
-```
-
-A PIN in `config.yaml` wins: `/pin` then only points to it. `lanowl --check` says where the
-PIN comes from, or that there is none. Five wrong tries in a row (`actions.pin_max_failures`)
-lock dashboard approvals for `actions.pin_lockout_min` minutes (30 in the example), and
-Telegram is told.
+opens a sheet that says what runs, on which device, and the risk; your tap on its button is
+the approval. Reject, End and Cancel need no sheet: they can only stop something. There is no
+PIN: the page is behind its login.
 
 ## Who can reach it
 
 Only a browser logged in with the password. Keep it on your LAN all the same. It accepts only
 JSON requests and IP-address host names, which stops another web page from driving it through
-your browser. Pausing a device is told on Telegram; approving anything needs the PIN as well.
+your browser. Pausing a device is told on Telegram; every save in Settings is told on
+Telegram too, and asks for the password again when this browser has not typed it in the last
+ten minutes.

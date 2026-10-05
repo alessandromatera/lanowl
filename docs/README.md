@@ -38,6 +38,7 @@ cabin reached over WireGuard. None of it is a real network.
 
 - [How alerts work](using/alerts.md)
 - [The dashboard](using/dashboard.md)
+- [Settings: config, devices, the first-run setup](using/settings.md)
 - [Telegram commands](using/telegram-commands.md)
 - [Asking the owl](using/asking.md)
 - [Actions and approvals](using/actions.md)

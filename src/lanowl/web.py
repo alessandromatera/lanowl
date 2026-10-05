@@ -7,8 +7,8 @@ last model assessment with its diagnosis, the logbook and what Telegram was told
 things can be done from it: Check now, Ask — a conversation with the model, streamed and
 stoppable (conversations.py, `GET /api/chat`) — pausing the monitoring of a
 device switched off on purpose (pause.py), answering what the model proposes
-(actions.py): Reject freely, Approve only with the PIN — and reading and editing the
-model's memory (memory.py, More).
+(actions.py): Reject freely, Approve after a confirm that says what runs — and reading
+and editing the model's memory (memory.py, More).
 
 What cannot live here is the watchdog that notices lanowl itself dying: that one has to run
 on another machine, reading the retained heartbeat.
@@ -24,9 +24,8 @@ Safety, for a page on the LAN:
     one thing it changes: every pause and resume made here is also said on Telegram, so
     nobody on the LAN can quietly stop the monitor watching the alarm; and the model's memory,
     which changes what the model knows (and so how it reads a log), never what is watched;
-  - approving a proposed action needs the PIN as well (`actions.pin_sha256`, or /pin on
-    Telegram; without one actions stay off); the page remembers it once entered, and five
-    wrong ones lock dashboard approvals and say so on Telegram;
+  - approving a proposed action is a second step on the page: a sheet that names what runs,
+    where, and the risk, so a stray tap cannot approve anything;
   - POSTs must be JSON, so a web page elsewhere cannot fire them with a plain form
     (a cross-origin JSON POST needs a CORS preflight this server never grants);
   - the Host header must be an IP address (or a name in `web.allowed_hosts`), which is
@@ -48,6 +47,7 @@ from .conversations import Conversations
 from .login import COOKIE, SESSION_S, verify
 from .model import model_name, on_main_lan, wan_links
 from .report import label, match_diagnosis
+from .settingsweb import SettingsRoutes
 
 log = logging.getLogger("lanowl.web")
 
@@ -66,8 +66,9 @@ LLM_FRESH_S = 90 * 60      # an assessment older than this is shown, but as stal
 STATIC = {"/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
           "/icon.svg": ("icon.svg", "image/svg+xml"),
           "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png")}
-# What a browser that is not logged in may reach: the login itself and the home-screen icon.
-OPEN = set(STATIC) | {"/api/login"}
+# What a browser that is not logged in may reach: the login itself, the home-screen icon, and
+# the first-run setup's claim (the setup code and the first password; only while there is none).
+OPEN = set(STATIC) | {"/api/login", "/api/setup/claim"}
 
 
 def state_payload(a, now: float = 0.0) -> dict:
@@ -154,6 +155,8 @@ def state_payload(a, now: float = 0.0) -> dict:
         # the model's own looks (reviews.py), the fixes it wrote, its track record
         "drift": a.drift.view(),
         "configwatch": a.configwatch.view(),
+        # saved in Settings and not running yet: the dot on the gear
+        "settings": {"pending": bool(a.settings.pending()) if getattr(a, "settings", None) else False},
         "fixes": a.fixes.view(),
         "scorecard": a.scorecard.view(),
         "login": a.login.view() if getattr(a, "login", None) is not None else {"on": False},
@@ -270,6 +273,7 @@ class Dashboard:
         self._login_lock = asyncio.Lock()
         self._runner = None
         self.chats = Conversations(auditor)
+        self.settings_routes = SettingsRoutes(self)     # Settings, devices, the first run
         self._hist = (0.0, None)     # the Devices table's history: (when, body)
         self._hist_lock = asyncio.Lock()
         self._tl = (0.0, None)       # the Timeline: (when, body)
@@ -339,7 +343,7 @@ class Dashboard:
         out = {"tg": lg._telegram(), "chat": lg._chat(), "cfg": bool(lg.cfg_raw),
                "cfg_bad": bool(lg.cfg_raw and not lg.cfg_hash)}
         if not lg.hash:
-            return {**out, "state": "none"}
+            return {**out, "state": "none", "code": bool(lg.setup_code)}
         if request is not None and lg.check(request.cookies.get(COOKIE, "")):
             return {**out, "state": "in"}
         until = lg.locked()
@@ -419,6 +423,8 @@ class Dashboard:
                     msg = await asyncio.wait_for(q.get(), timeout=15)
                 except asyncio.TimeoutError:
                     msg = b"event: ping\ndata: 1\n\n"
+                if msg is None:          # lanowl stopping (a restart): the page reconnects
+                    break
                 await resp.write(msg)
         except (ConnectionError, RuntimeError):
             pass                     # the page went away
@@ -585,33 +591,25 @@ class Dashboard:
         return web.json_response(r, status=200 if r["ok"] else 409)
 
     async def api_action(self, request):
-        """{"id", "approve": true|false, "pin"} — a proposal's buttons on the page. Approving
-        needs the PIN; rejecting never does (it can only stop something). {"id", "end": true}
+        """{"id", "approve": true|false} — a proposal's buttons on the page, from a logged-in
+        browser; the page asks for the confirm before it sends an approval. {"id", "end": true}
         closes an open investigation session; {"id", "cancel": true} takes an approved action
         out of the queue before its turn."""
         body = await self._body(request)
         if body is not None and (body.get("end") is True or body.get("cancel") is True):
-            # End and Cancel: like Reject, they can only stop something — no PIN
+            # End and Cancel: like Reject, they can only stop something
             act = self.a.actions.end if body.get("end") is True else self.a.actions.cancel
             r = act(body.get("id"), "dashboard")
             return web.json_response(r, status=200 if r.get("ok") else 409)
         if body is None or not isinstance(body.get("approve"), bool):
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
-        if body["approve"]:
-            ok, why = self.a.actions.check_pin(body.get("pin"))
-            if not ok:
-                msg = {"none": "No dashboard PIN is set up: actions are off until one is — /pin "
-                               "on Telegram, or actions.pin_sha256 in config.yaml.",
-                       "locked": "Too many wrong PINs — dashboard approvals are locked for now.",
-                       "wrong": "Wrong PIN."}[why]
-                return web.json_response({"ok": False, "pin": why, "error": msg}, status=403)
         r = self.a.actions.decide(body.get("id"), body["approve"], "dashboard")
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
     async def api_reboot(self, request):
         """{"ip"} — the Reboot button in a device's sheet (and /api/upgrade: Install on the
         Updates card). Only PROPOSES it, with the same rules and check as the model's
-        proposals; the page then approves it with the PIN like any other (api_action).
+        proposals; the page then asks for the confirm like any other (api_action).
         {"ok", "id"} or {"ok": false, "error": why not}."""
         body = await self._body(request)
         ip = str((body or {}).get("ip") or "")
@@ -630,8 +628,8 @@ class Dashboard:
 
     async def api_updates(self, request):
         """{"scan": false} — the update check now; {"scan": true} — the vulnerability scan now.
-        Both read-only, like 'Run a full audit now': no PIN. {"dismiss": key, "note"} and
-        {"undismiss": key}: the owner's dismissal of one thing that matters — no PIN either,
+        Both read-only, like 'Run a full audit now'. {"dismiss": key, "note"} and
+        {"undismiss": key}: the owner's dismissal of one thing that matters,
         like pausing a device (LAN-only page, every change in the log)."""
         body = await self._body(request)
         if body is None:
@@ -666,7 +664,7 @@ class Dashboard:
     async def api_security(self, request):
         """{"handle": id, "pick": "me"|"fixed", "note"}: the owner has seen a security event the
         logs showed — it leaves What matters for Handled, with his words. {"unhandle": id} puts
-        it back. No PIN, like a dismissal: it changes what the page lists, nothing on a machine."""
+        it back. Like a dismissal, it changes what the page lists, nothing on a machine."""
         body = await self._body(request)
         if body is None:
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
@@ -682,7 +680,7 @@ class Dashboard:
     async def api_reviews(self, request):
         """The model's own looks (reviews.py): {"run": "drift"|"configwatch"} — now,
         read-only like Check now; {"dismiss": key, "note"} / {"undismiss": key} for a finding of
-        the first. No PIN, like a dismissal on the Security tab."""
+        the first, like a dismissal on the Security tab."""
         body = await self._body(request)
         if body is None:
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
@@ -703,7 +701,7 @@ class Dashboard:
 
     async def api_fix(self, request):
         """{"key": a finding's key}: the model writes its fix out (fixes.py). Nothing runs:
-        it is text for the owner to apply themselves — no PIN."""
+        it is text for the owner to apply themselves."""
         body = await self._body(request)
         if body is None or not body.get("key"):
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
@@ -751,7 +749,7 @@ class Dashboard:
 
     async def api_rename(self, request):
         """{"ip", "name"}: the owner's name for a watched device; {"site", "mac", "name"}: for
-        one on a site's network. "" = back to the inventory's name. No PIN and no Telegram: it
+        one on a site's network. "" = back to the inventory's name. No Telegram: it
         changes a label, and the Timeline shows it."""
         body = await self._body(request)
         if body is None:
@@ -762,7 +760,7 @@ class Dashboard:
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
     async def api_backups(self, request):
-        """{"ip": a machine} or {"ip": null} for all of them — Back up now. No PIN: it only
+        """{"ip": a machine} or {"ip": null} for all of them — Back up now. It only
         copies configurations onto the homehub's disk."""
         body = await self._body(request)
         if body is None:
@@ -779,8 +777,8 @@ class Dashboard:
 
     async def api_memory(self, request):
         """{"op": "add", "text"} · {"op": "edit", "id", "text"} · {"op": "delete", "id"} — the
-        owner's own changes to the model's memory (memory.py), from More. No PIN, like
-        pausing: the page is LAN-only, and every change is in the log."""
+        owner's own changes to the model's memory (memory.py), from More. Like pausing: one
+        step, behind the login, and every change is in the log."""
         body = await self._body(request)
         if body is None:
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
@@ -862,7 +860,7 @@ class Dashboard:
         async def guard(request, handler):
             return await self._guard(request, handler)
 
-        app = web.Application(middlewares=[guard], client_max_size=16 * 1024)
+        app = web.Application(middlewares=[guard], client_max_size=128 * 1024)
         app.router.add_get("/", self.index)
         app.router.add_get("/api/state", self.api_state)
         app.router.add_get("/api/device", self.api_device)
@@ -896,12 +894,19 @@ class Dashboard:
         app.router.add_post("/api/reviews", self.api_reviews)
         app.router.add_post("/api/fix", self.api_fix)
         app.router.add_post("/api/scorecard", self.api_scorecard)
+        self.settings_routes.routes(app)
         self._runner = web.AppRunner(app, access_log=None)
         await self._runner.setup()
-        await web.TCPSite(self._runner, self.host, self.port).start()
+        # a request still running at a stop gets 5 s, not a minute: a restart waits for it
+        await web.TCPSite(self._runner, self.host, self.port, shutdown_timeout=5).start()
         log.info("web dashboard on http://%s:%d/", self.host, self.port)
 
     async def stop(self):
+        # the live streams first: each would hold the shutdown until its next ping (15 s)
+        for q in list(self._streams):
+            while q.full():
+                q.get_nowait()
+            q.put_nowait(None)
         if self._push_task is not None:
             self._push_task.cancel()
         if self._runner is not None:

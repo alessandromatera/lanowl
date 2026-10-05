@@ -809,6 +809,125 @@ html.modal{overflow:hidden}
 @keyframes drawerin{from{transform:translateX(48px);opacity:.3}to{transform:none;opacity:1}}
 @media (max-width:380px){.shl h1{font-size:23px}.tv{font-size:18px}.gt-h b{font-size:13.5px}}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ---- Settings (settings.py): behind the gear, not a tab ---- */
+.gearbtn{position:relative;display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:9px;border:1px solid var(--sep);background:var(--card);color:var(--ink2);padding:0;margin-left:6px}
+.gearbtn .ic{width:18px;height:18px}
+.gearbtn[aria-pressed=true]{color:var(--ink);border-color:var(--ink3)}
+.gdot{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:var(--blue);border:2px solid var(--bg)}
+.gdot[hidden]{display:none}
+.live{margin-left:6px}
+.setw .sub,.setw .box2{overflow-wrap:anywhere}
+.sback{display:inline-flex;align-items:center;gap:2px;border:0;background:none;color:var(--blue-t);font-size:15.5px;font-weight:550;padding:12px 0 0;margin:0 0 -6px -4px}
+.sback .ic{width:18px;height:18px;stroke-width:2.4;transform:rotate(180deg)}
+.pend{display:flex;align-items:center;gap:12px;border-radius:var(--r);padding:12px 12px 12px 14px;margin:2px 0 12px;
+  background:color-mix(in srgb,var(--blue) 10%,var(--card));border:1px solid color-mix(in srgb,var(--blue) 30%,var(--sep))}
+.pend .pt{flex:1;min-width:0;font-size:14px;line-height:1.35;color:var(--ink2)}
+.pend .pt b{display:block;color:var(--blue-t);font-size:14.5px}
+.swarn{border-radius:var(--r);padding:12px 14px;margin:2px 0 12px;font-size:14px;background:color-mix(in srgb,var(--orange) 12%,var(--card));color:var(--orange-t)}
+.rico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--fill);color:var(--ink2)}
+.rico .ic{width:17px;height:17px}
+.rs .k{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px}
+.rv.on{color:var(--green-t);font-weight:600}
+.fld{padding:11px 14px 12px;position:relative}
+.fld+.fld{border-top:.5px solid var(--sep)}
+.fld.changed{box-shadow:inset 3px 0 0 var(--blue)}
+.fh{display:flex;align-items:center;gap:8px;margin-bottom:7px;min-width:0}
+.fh .lab{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.fh .src{margin-left:auto}
+.src{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;border-radius:6px;padding:2px 7px;white-space:nowrap;flex:none;background:var(--fill);color:var(--ink2)}
+.src .ic{width:12px;height:12px;stroke-width:2.4}
+.src.def{background:none;box-shadow:inset 0 0 0 1px var(--ink3)}
+.src.env{background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange-t)}
+.src.chg{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue-t)}
+.src.ok{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green-t)}
+.src.miss{background:color-mix(in srgb,var(--red) 13%,transparent);color:var(--red-t)}
+.fin,.fsel,.fta{display:block;width:100%;font:inherit;font-size:16px;padding:9px 11px;border-radius:10px;border:1px solid var(--sep);background:var(--bg);color:var(--ink);min-width:0;-webkit-appearance:none;appearance:none}
+.fin::placeholder,.fta::placeholder{color:var(--ink3)}
+.fin:disabled{color:var(--ink2);background:var(--fill2);cursor:not-allowed}
+.fin:focus,.fsel:focus,.fta:focus{outline:none;border-color:var(--blue)}
+.fta{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.5;min-height:110px;resize:vertical}
+.fta.prose{font-family:inherit;font-size:15px}
+.fsw{position:relative}
+.fsw::after{content:"";position:absolute;right:13px;top:50%;width:7px;height:7px;margin-top:-6px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(45deg);pointer-events:none}
+.fsel{padding-right:32px}
+.funit{display:flex;align-items:center;gap:8px}
+.funit .fin{flex:1}
+.funit span{color:var(--ink2);font-size:14px;white-space:nowrap}
+.fhelp{font-size:13px;color:var(--ink2);margin-top:6px;line-height:1.38}
+.fhelp .q{color:var(--ink3)}
+.fwas{font-size:12.5px;color:var(--blue-t);margin-top:5px;font-weight:550}
+.fswr{display:flex;align-items:center;gap:12px}
+.fswr .fb{flex:1;min-width:0}
+.fswr .fh{margin-bottom:0}
+.flnk{border:0;background:none;padding:0;color:var(--blue-t);font-weight:600;font-size:12.5px}
+.fsub{font-size:12.5px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--ink2);padding:12px 14px 2px;border-top:.5px solid var(--sep);background:var(--card2)}
+.sadv{margin:6px 0 12px}
+.sadv>summary{list-style:none;cursor:pointer;color:var(--ink2);font-weight:600;font-size:13.5px;padding:8px 4px;display:flex;align-items:center;gap:6px}
+.sadv>summary::-webkit-details-marker{display:none}
+.sadv>summary .ic{width:12px;height:12px;stroke-width:2.6;transition:transform .2s}
+.sadv[open]>summary .ic{transform:rotate(90deg)}
+.sbar{position:sticky;bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 10px);z-index:6;display:flex;align-items:center;gap:10px;margin:14px 0 6px;padding:10px 10px 10px 14px;
+  border-radius:14px;background:var(--bar);border:1px solid var(--sep);box-shadow:0 10px 30px -14px rgba(0,0,0,.35);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+.sbar[hidden]{display:none}
+.sbar .cnt{flex:1;font-size:14px;color:var(--ink2)}
+.sbar .cnt b{color:var(--ink)}
+.sbar .btn{margin-top:0;width:auto;min-height:40px;padding:0 18px;font-size:15px;border-radius:11px}
+.schips{display:flex;gap:7px;flex-wrap:wrap}
+.schip{border:0;border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:600;background:var(--card);box-shadow:inset 0 0 0 1px var(--sep);color:var(--ink);min-height:34px;white-space:nowrap}
+.schip[aria-pressed=true]{background:var(--ink);color:var(--bg);box-shadow:none}
+.schip:disabled{opacity:.45}
+.ckl{display:flex;flex-direction:column;gap:6px}
+.ck{display:flex;align-items:center;gap:8px;background:var(--fill2);border-radius:9px;padding:6px 6px 6px 11px;font-size:14px}
+.ck .t{flex:1;min-width:0;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;overflow-wrap:anywhere}
+.ck button{border:0;background:none;color:var(--ink3);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;padding:0}
+.ck button .ic{width:13px;height:13px;stroke-width:2.6}
+.ckadd{display:flex;gap:6px;margin-top:8px}
+.ckadd .fsw{flex:1}
+.ckadd .fin{width:96px;flex:none}
+.sdiff{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11.5px;line-height:1.6;background:var(--card);border:1px solid var(--sep);border-radius:12px;overflow-x:auto;padding:7px 0;max-height:46vh}
+.sdiff div{white-space:pre;padding:0 10px 0 6px;min-width:max-content}
+.sdiff .dxa{background:color-mix(in srgb,var(--green) 15%,transparent)}
+.sdiff .dxd{background:color-mix(in srgb,var(--red) 13%,transparent)}
+.sdiff .dxh{color:var(--ink3)}
+/* a phone's header with the gear: the "swept …" words give way, its dot stays */
+@media (max-width:430px){#ago{display:none}.live{padding-left:4px}}
+.dlab{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--ink2);margin:14px 4px 6px}
+.dlab span{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.chkok{display:flex;gap:8px;align-items:flex-start;font-size:14px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--green) 11%,var(--card));color:var(--green-t)}
+.chkno{display:flex;gap:8px;align-items:flex-start;font-size:14px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--red) 11%,var(--card));color:var(--red-t)}
+.chkok .ic,.chkno .ic{width:17px;height:17px;margin-top:1px}
+.klist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14.5px}
+.klist li{display:flex;gap:8px;align-items:flex-start}
+.klist .ic{width:16px;height:16px;margin-top:2px;color:var(--green)}
+.klist.cut .ic{color:var(--orange)}
+.sfield{display:block;width:100%;font:inherit;font-size:17px;padding:11px 13px;border-radius:12px;border:1px solid var(--sep);background:var(--card);color:var(--ink)}
+.ssteps{display:flex;gap:6px;margin:12px 0 4px;overflow-x:auto;scrollbar-width:none}
+.ssteps::-webkit-scrollbar{display:none}
+.ssteps span{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink3);padding:4px 10px 4px 5px;border-radius:999px;background:var(--fill2)}
+.ssteps i{font-style:normal;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:11px}
+.ssteps .on{color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1px var(--sep)}
+.ssteps .on i{background:var(--blue);color:#fff}
+.ssteps .done{color:var(--green-t)}
+.box2{padding:12px 14px;border-radius:var(--r);background:var(--card);border:1px solid var(--sep);box-shadow:var(--shadow);font-size:14px;margin-bottom:10px}
+.box2 pre{margin:8px 0 0;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;line-height:1.55;background:var(--fill2);border-radius:9px;padding:8px 10px;overflow-x:auto;white-space:pre}
+.box2.miss{border-color:color-mix(in srgb,var(--red) 35%,var(--sep))}
+.pk{display:flex;align-items:flex-start;gap:11px;padding:10px 12px 10px 13px;position:relative}
+.pk+.pk{border-top:.5px solid var(--sep)}
+.cb{width:22px;height:22px;border-radius:7px;border:2px solid var(--ink3);background:none;flex:none;margin-top:2px;display:grid;place-items:center;padding:0;color:#fff}
+.cb .ic{width:14px;height:14px;stroke-width:3;opacity:0}
+.pk.on .cb{background:var(--blue);border-color:var(--blue)}
+.pk.on .cb .ic{opacity:1}
+.pk .rt{gap:2px}
+.pk .rn{font-size:15px}
+.pk .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2)}
+.pk .here{color:var(--green-t);font-weight:600}
+.pk .pkm{display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.pk.on .pkm{display:grid}
+.pk .pkm .wide{grid-column:1/-1}
+.pk .pkm .fin,.pk .pkm .fsel{font-size:14px;padding:7px 9px;border-radius:9px}
+.guess{font-size:11.5px;color:var(--indigo-t);font-weight:600}
+@media (min-width:900px){.sbar{bottom:14px}.setw{max-width:760px}}
 </style>
 </head>
 <body data-tab="home">
@@ -818,6 +937,7 @@ html.modal{overflow:hidden}
     <span class="ptitle" id="ptitle">Now</span>
     <span id="hchip" class="hchip c-gray">Connecting</span>
     <button class="palbtn" id="palbtn" type="button" data-act="pal" aria-label="Search" title="Search (⌘K)"><span data-ic="search"></span><span class="pt">Search devices, addresses, or ask…</span><kbd>⌘K</kbd></button>
+    <button class="gearbtn" id="gearbtn" type="button" data-sact="gear" aria-label="Settings" title="Settings" aria-pressed="false" data-ic="gear"><i class="gdot" id="gdot" hidden></i></button>
     <button id="live" class="live" type="button" title="Refresh now"><span class="pulse"></span><span id="ago">connecting…</span></button>
   </div>
   <div id="stale" class="stale" hidden></div>
@@ -929,17 +1049,20 @@ html.modal{overflow:hidden}
     </aside>
     </div>
   </section>
+  <!-- Settings, behind the gear (settings.py): config.yaml, the devices, the first-run setup -->
+  <section class="view" id="v-set" role="tabpanel" aria-label="Settings"><div id="set"></div></section>
 </main>
 
+<!-- a save from Settings: its diff, the confirm, the password when it is asked again -->
+<dialog id="setdlg" class="sheet" aria-label="Save"><form class="sheet-in" id="setf" autocomplete="off"><div id="set-in"></div></form></dialog>
 <dialog id="sheet" class="sheet drawer" aria-labelledby="sh-title"><div class="sheet-in" id="sheet-in"></div></dialog>
 <dialog id="chats" class="sheet" aria-labelledby="ch-title"><div class="sheet-in" id="chats-in"></div></dialog>
+<!-- approving: one deliberate tap on a sheet that says what runs, where, and the risk -->
 <dialog id="pin" class="sheet" aria-labelledby="pin-title"><form class="sheet-in" id="pinf" autocomplete="off">
   <div class="shd"><div class="grab"></div><div class="shd-row"><h2 id="pin-title">Approve</h2><button class="x" type="button" data-act="pinclose" aria-label="Close" data-ic="x"></button></div></div>
   <p class="sub" id="pin-what" style="margin-top:0"></p>
-  <input id="pinq" class="pinin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off" placeholder="PIN" aria-label="PIN">
   <div class="pinerr" id="pinerr" role="alert"></div>
-  <button class="btn" id="pinb" type="submit" style="margin-top:6px">Approve</button>
-  <p class="fine" style="text-align:center;margin-top:12px">Asked once — this device remembers it.</p>
+  <div class="pbtns"><button class="pbtn" type="button" data-act="pinclose">Cancel</button><button class="pbtn ok" id="pinb" type="submit">Approve</button></div>
 </form></dialog>
 <dialog id="memdlg" class="sheet" aria-labelledby="mem-title"><form class="sheet-in" id="memf" autocomplete="off">
   <div class="shd"><div class="grab"></div><div class="shd-row"><h2 id="mem-title">Note</h2><button class="x" type="button" data-act="memclose" aria-label="Close" data-ic="x"></button></div></div>
@@ -1030,6 +1153,10 @@ const P = {
   bolt: '<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/>',
   plus: '<circle cx="12" cy="12" r="8.6"/><path d="M12 8v8M8 12h8"/>',
   shield: '<path d="M12 3.2 5 6v5.3c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6z"/><path d="m9 12 2.2 2.2 3.9-4"/>',
+  gear: '<circle cx="12" cy="12" r="3.1"/><path d="M19.3 13.4a7.4 7.4 0 0 0 0-2.8l2-1.5-2-3.5-2.3.9a7.4 7.4 0 0 0-2.4-1.4L14.2 2.7h-4l-.4 2.4a7.4 7.4 0 0 0-2.4 1.4l-2.3-.9-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2.8l-2 1.5 2 3.5 2.3-.9a7.4 7.4 0 0 0 2.4 1.4l.4 2.4h4l.4-2.4a7.4 7.4 0 0 0 2.4-1.4l2.3.9 2-3.5z"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"/>',
+  key: '<circle cx="8" cy="15.5" r="4"/><path d="m11 12.5 8.5-8.5M16.2 7.3l2.4 2.4M14 9.5l2 2"/>',
+  undo: '<path d="M9 14 4.5 9.5 9 5"/><path d="M4.5 9.5h10a5.5 5.5 0 0 1 0 11H11"/>',
 };
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
 // on what the monitor measured — that keeps its 🔴🟡🟢.
@@ -1189,16 +1316,25 @@ function tickAgo() {
 
 function setTab(t, fromHash) {
   if (t === "more") { S.askp = "model"; save("askp", "model"); t = "ask"; renderAskPanel(); }   // More lives in Ask now
-  if (!TABS.includes(t)) t = "home";
+  // Settings (#set, #set/..., #setup) is a view of its own, behind the gear: no tab
+  const sub = /^set(up)?(\/|$)/.test(t || "") ? t : null;
+  if (sub) {
+    const was = S.setp;
+    S.setp = sub;
+    if (S.tab === "set") { if (was !== sub) window.scrollTo(0, 0); renderSet(); return; }
+    t = "set";
+  } else if (!TABS.includes(t)) t = "home";
+  if (t !== "set") $("gearbtn").setAttribute("aria-pressed", "false");
   if (t === S.tab && document.querySelector(".view.on")) { if (!fromHash) window.scrollTo({top: 0, behavior: "smooth"}); return; }
   S.scroll[S.tab] = window.scrollY;
   S.tab = t;
   document.body.dataset.tab = t;
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + t));
   document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
-  $("ptitle").textContent = {home: "Now", devices: "Devices", log: "Timeline", sec: "Security", ask: "Ask the owl"}[t];
-  if (!fromHash && location.hash.slice(1) !== t) history.replaceState(null, "", "#" + t);
-  window.scrollTo(0, S.scroll[t] || 0);
+  $("ptitle").textContent = {home: "Now", devices: "Devices", log: "Timeline", sec: "Security", ask: "Ask the owl", set: "Settings"}[t];
+  if (!fromHash && location.hash.slice(1) !== (sub || t)) history.replaceState(null, "", "#" + (sub || t));
+  window.scrollTo(0, t === "set" ? 0 : S.scroll[t] || 0);
+  if (t === "set") renderSet();
   if (t === "ask") { CH.bottom = true; renderAsk(); chatRefresh(); } else chatSchedule();
 }
 
@@ -2159,18 +2295,17 @@ function renderActs(d) {
   // the model's own requests the rules refused are its noise, not the owner's business: one
   // line for them — Ask can still list each
   const r = all.filter(p => !(p.status === "refused" && !p.owner)), hid = all.length - r.length;
-  put("act-n", !A.enabled ? "off" : (A.mode === "live" ? "live" : "dry run") + (A.locked_until ? ` · PIN locked until ${hm(A.locked_until)}` : ""));
-  put("acts", !A.enabled ? `<div class="list"><div class="empty">${A.needs_pin ? "Actions are off until a dashboard PIN is set: send /pin to the bot on Telegram, or set actions.pin_sha256 in config.yaml." : "Actions are off (actions.enabled)."}</div></div>` :
+  put("act-n", !A.enabled ? "off" : (A.mode === "live" ? "live" : "dry run"));
+  put("acts", !A.enabled ? `<div class="list"><div class="empty">Actions are off (actions.enabled).</div></div>` :
     (r.length ? `<div class="card props">` + r.slice(0, 15).map(propHtml).join("") + `</div>` :
     `<div class="list"><div class="empty">The model has not proposed anything yet.</div></div>`) +
     (hid ? `<div class="fine" style="margin:6px 4px 0">${hid} of the model's own request${hid > 1 ? "s" : ""} refused by the rules, not shown — ask about them in Ask if you want to know.</div>` : ""));
 }
-async function decideProp(id, approve, pin) {
+async function decideProp(id, approve) {
   PBUSY[id] = true; renderAll();
-  const r = await post("/api/action", {id, approve, pin}).catch(() => ({ok: false, error: "lanowl is not answering."}));
+  const r = await post("/api/action", {id, approve}).catch(() => ({ok: false, error: "lanowl is not answering."}));
   delete PBUSY[id];
   if (r.ok) {
-    if (approve && pin) save("pin", pin);
     const sess = (propById(id) || {}).action === "investigate";
     toast(!approve ? "Rejected." : sess ? "Session open — the model is investigating." : isLive() ? "Approved — running it now. Telegram is told too." : "Approved — dry run: nothing is executed.");
   }
@@ -2192,19 +2327,11 @@ async function endSess(id) {
   toast(r.ok ? "Session ended — no more checks." : r.error || "Could not end it.");
   refresh();
 }
-// What changes something — always confirmed in the sheet, even with a PIN saved (pre-filled):
-// one deliberate tap. Scans and sessions only look.
+// Every approval is confirmed in the sheet: the page is behind its login, and the tap on the
+// sheet's button is the owner's explicit yes to what it names. CHANGES change something.
 const CHANGES = ["reboot", "shelly_reboot", "apt_upgrade", "routeros_upgrade", "restart_service", "vps_restart"];
-async function approveProp(id, prop) {
-  const pin = load("pin", ""), p = prop || propById(id);
-  // a change, or anything with a warning (the whole network offline, a snapshot replaced …), is
-  // shown first even with a remembered PIN: the tap on the button is the owner's explicit yes
-  if (!pin || !p || CHANGES.includes(p.action) || (p.risk || []).length) { openPin(id, "", p); return; }
-  const r = await decideProp(id, true, pin);
-  if (r.ok) return;
-  if (r.pin === "wrong") { save("pin", ""); openPin(id, "The saved PIN is no longer right."); }
-  else toast(r.error || "Could not approve it.");
-}
+try { localStorage.removeItem("lanowl.pin"); } catch (e) {}     // the PIN of earlier versions
+function approveProp(id, prop) { openPin(id, "", prop || propById(id)); }
 function openPin(id, err, prop) {
   const p = prop || propById(id), dlg = $("pin");
   if (dlg.open && S.pinFor != null && S.pinFor !== id) {
@@ -2222,22 +2349,19 @@ function openPin(id, err, prop) {
       + (p.check ? `<br><span class="fine">${esc(p.check)}</span>` : "")
       + (p.risk || []).map(r => `<br><b style="color:var(--orange-t)">⚠️ ${esc(r)}</b>`).join("");
   $("pinerr").textContent = err || "";
-  $("pinq").value = load("pin", "");
   if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add("modal"); }
-  setTimeout(() => $("pinq").focus(), 60);
 }
 function closePin() { const dlg = $("pin"); if (dlg.open) dlg.close(); }
 $("pin").addEventListener("close", () => document.documentElement.classList.remove("modal"));
 $("pin").addEventListener("click", e => { if (e.target === $("pin")) closePin(); });
 $("pinf").addEventListener("submit", async e => {
   e.preventDefault();
-  const pin = $("pinq").value.trim();
-  if (!pin || S.pinFor == null) return;
+  if (S.pinFor == null) return;
   $("pinb").disabled = true;
-  const r = await decideProp(S.pinFor, true, pin);
+  const r = await decideProp(S.pinFor, true);
   $("pinb").disabled = false;
   if (r.ok) closePin();
-  else { $("pinerr").textContent = r.error || "Could not approve it."; if (r.pin === "wrong") { $("pinq").value = ""; $("pinq").focus(); } }
+  else $("pinerr").textContent = r.error || "Could not approve it.";
 });
 
 // ---------------------------------------------------------------- the Ask panel
@@ -2352,7 +2476,7 @@ function startLive() {
 
 // ---------------------------------------------------------------- names (names.py)
 // The owner's name for a device: a watched one from its sheet's pencil, one on a
-// network from its row's Name. No PIN and no Telegram — it changes a label; the Timeline shows it.
+// network from its row's Name. No Telegram — it changes a label; the Timeline shows it.
 function openRename(o) {
   const d = S.d || {}, x = o.ip ? (d.devices || []).find(v => v.ip === o.ip) : null, dlg = $("rndlg");
   S.rnFor = o;
@@ -3191,6 +3315,7 @@ function drawChart(outs) {
 function renderAll() {
   const d = S.d;
   if (!d) return;
+  $("gdot").hidden = !((d.settings || {}).pending);
   renderHeader(d); tickAgo();
   renderSites(d); renderStatus(d); renderInbox(d); renderPaused(d); renderNet(d); renderModel(d); renderLooks(d); renderLanes24(d); renderSys(d);
   renderDevices(d); renderLog(d); renderSec(d); renderAsk(); renderAskPanel(); renderMore(d); renderMemory(d); renderShell(d); renderActs(d); renderScore(d);
@@ -3440,7 +3565,9 @@ document.addEventListener("click", async e => {
   } else if (act === "site" || act === "gosite") {
     if (act === "gosite") { S.group = null; setTab("devices"); }
     setSite(t.dataset.sk);
-  } else if (["watch", "unwatch", "siteread", "sitescan", "known", "unknown"].includes(act)) {
+  } else if (act === "watch") {
+    watchDevice(t.dataset.sk, t.dataset.mac, t.dataset.nm);
+  } else if (["unwatch", "siteread", "sitescan", "known", "unknown"].includes(act)) {
     t.disabled = true;
     const body = act === "watch" ? {watch: {site: t.dataset.sk, mac: t.dataset.mac, name: t.dataset.nm}}
       : act === "unwatch" ? {unwatch: t.dataset.wip}
@@ -3606,6 +3733,652 @@ $("askf").addEventListener("submit", ev => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && S.tab === "ask" && pendingTurn() && !$("sheet").open && !$("chats").open && !$("pin").open && !$("memdlg").open && !$("disdlg").open) { e.preventDefault(); stopAsk(); }
 });
+
+
+// ---------------------------------------------------------------- Settings (settings.py)
+// Behind the gear: config.yaml's sections as forms (read from config.example.yaml on the
+// server), the devices of inventory.yaml, the first-run setup. Every save shows its diff and
+// is confirmed in a sheet — with the password again when this browser has not typed it in the
+// last ten minutes — and runs from the next restart (Restart to apply).
+const ST = {data: null, devs: null, setup: null, edits: {}, dev: null, rows: null, picked: {}, router: null,
+            sheet: null, busy: false, restarting: false, src: ""};
+const sameV = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const pkey = p => p.join(".");
+const fmtV = v => v === null || v === undefined ? "" : typeof v === "boolean" ? (v ? "on" : "off") : Array.isArray(v) ? v.join(", ") : typeof v === "object" ? "{…}" : String(v);
+async function getJ(path) {
+  const r = await fetch(path, {cache: "no-store"});
+  return r.json().catch(() => ({ok: false, error: "lanowl did not answer"}));
+}
+async function setData(force) {
+  if (!ST.data || force) ST.data = await getJ("/api/settings");
+  return ST.data;
+}
+function setNav(to) { location.hash = to; }
+function back(to, label) { return `<button class="sback" type="button" data-sgo="${esc(to)}">${ic("chev")}${esc(label)}</button>`; }
+function setHead(title, sub) { return `<h1 class="ttl">${esc(title)}</h1>${sub ? `<p class="sub">${sub}</p>` : ""}`; }
+function renderSet() {
+  const p = S.setp || "set";
+  $("gearbtn").setAttribute("aria-pressed", "true");
+  if (p === "set") return setHome();
+  if (p.startsWith("set/s/")) return setSection(p.slice(6));
+  if (p === "set/devices") return setDevices();
+  if (p.startsWith("set/device/")) return setDevice(decodeURIComponent(p.slice(11)));
+  if (p === "set/history") return setHistory();
+  if (p === "set/secrets") return setSecrets();
+  if (p === "setup/pick") return setupPick();
+  if (p === "setup/write") return setupWrite();
+  if (p === "setup/done") return setupDone();
+  return setupRouter();
+}
+const SKEL = `<div class="skel" style="margin-top:22px"></div>`;
+function pendHtml(D) {
+  const P = D.pending || {}, names = Object.keys(P);
+  if (!names.length) return "";
+  const what = names.map(n => (n === "config" ? "config.yaml" : "inventory.yaml") + (P[n].hand && !P[n].saves.length ? " (changed on the host)" : "")).join(" and ");
+  return `<div class="pend"><div class="pt"><b>Saved, not running yet</b>${esc(what)} changed since lanowl started. Restart lanowl to apply.</div>
+    <button class="sbtn pri" type="button" data-sact="restart">Restart</button></div>`;
+}
+function fileWarn(D) {
+  return ["config", "inventory"].map(k => (D.files || {})[k]).filter(f => f && !f.writable)
+    .map(f => `<div class="swarn">${esc(f.why_text)}</div>`).join("");
+}
+
+// -- the Settings page: the sections under the example's headings --
+async function setHome() {
+  const D = await setData();
+  if (!D || !D.ok) { put("set", back("home", "Now") + setHead("Settings") + `<div class="list"><div class="empty">${esc((D || {}).error || "Settings did not load.")}</div></div>`); return; }
+  let h = back("home", "Now") + setHead("Settings", "config.yaml and inventory.yaml. A save takes effect at the next restart.");
+  h += pendHtml(D) + fileWarn(D);
+  h += `<div class="sh">Devices</div><div class="list">
+    <button class="row" type="button" data-sgo="set/devices"><span class="rico">${ic("grid")}</span><span class="rt"><span class="rn">Devices</span><span class="rs"><span class="k">inventory.yaml</span> · what lanowl watches, and what it does with each</span></span>${ic("chev", "chev")}</button>
+    <button class="row" type="button" data-sgo="setup"><span class="rico">${ic("plus")}</span><span class="rt"><span class="rn">Add from the router's list</span><span class="rs">the first-run setup: pick devices from its DHCP list</span></span>${ic("chev", "chev")}</button></div>`;
+  let heading = null;
+  for (const sec of D.sections || []) {
+    if (sec.heading !== heading) {
+      if (heading !== null) h += `</div>`;
+      heading = sec.heading;
+      h += `<div class="sh">${esc(heading.replace(/\s*\(.*\)$/, "") || "Settings")}</div><div class="list">`;
+    }
+    const en = sec.fields.find(f => f.path && f.path.length === 2 && f.path[1] === "enabled" && f.type === "bool");
+    const on = en ? (en.source === "file" ? en.value : en.example) : null;
+    const nf = sec.fields.filter(f => f.type !== "group").length;
+    h += `<button class="row" type="button" data-sgo="set/s/${esc(sec.key)}"><span class="rt"><span class="rn">${esc(sec.title)}</span>
+      <span class="rs"><span class="k">${esc(sec.key)}</span> · ${nf} setting${nf === 1 ? "" : "s"}${sec.present ? "" : " · not in your file"}</span></span>
+      ${en ? `<span class="rv${on ? " on" : ""}">${on ? "on" : "off"}</span>` : ""}${ic("chev", "chev")}</button>`;
+  }
+  if (heading !== null) h += `</div>`;
+  h += `<div class="sh">lanowl</div><div class="list">
+    <button class="row" type="button" data-sgo="set/secrets"><span class="rico">${ic("key")}</span><span class="rt"><span class="rn">Secrets</span><span class="rs"><span class="k">secrets.yaml</span> · set or missing, never a value</span></span>${secMissing(D) ? `<span class="rv bad">${secMissing(D)} missing</span>` : ""}${ic("chev", "chev")}</button>
+    <button class="row" type="button" data-sgo="set/history"><span class="rico">${ic("undo")}</span><span class="rt"><span class="rn">History</span><span class="rs">${(D.history || []).length} save${(D.history || []).length === 1 ? "" : "s"} · undo any of them</span></span>${ic("chev", "chev")}</button>
+    ${D.login.on ? `<button class="row" type="button" data-sact="password"><span class="rico">${ic("lock")}</span><span class="rt"><span class="rn">Change the password</span><span class="rs">every browser logs in again</span></span></button>` : ""}
+    <button class="row" type="button" data-sact="restart"><span class="rico">${ic("refresh")}</span><span class="rt"><span class="rn">Restart lanowl</span><span class="rs">running since ${esc(clock(D.restart.since))}</span></span></button></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+const secMissing = D => ((D.secrets || {}).logins || []).filter(x => !x.set).length + ((D.secrets || {}).tokens || []).filter(x => x.needed && !x.set).length;
+
+// -- one section: its fields, typed from the example, each saying where its value comes from --
+function fieldVal(f) {
+  const e = ST.edits[pkey(f.path)];
+  if (e) return e.del ? null : e.value;
+  return f.source === "default" ? null : f.value;
+}
+function srcChip(f) {
+  const e = ST.edits[pkey(f.path)];
+  if (e) return `<span class="src chg">${e.del ? "back to default" : "changed"}</span>`;
+  if (f.source === "env") return `<span class="src env">${ic("lock")}${esc(f.env)}</span>`;
+  if (f.source === "file") return `<span class="src">config.yaml</span>`;
+  return `<span class="src def">not in your file</span>`;
+}
+function fieldHtml(f) {
+  const k = pkey(f.path), e = ST.edits[k], v = fieldVal(f), id = "f-" + k.replace(/[^A-Za-z0-9_]/g, "_");
+  const lock = f.source === "env";
+  const ex = f.source === "default" && f.example !== null && f.example !== undefined && f.example !== "" ? fmtV(f.example) : "";
+  const help = (f.help ? esc(f.help) : "") + (lock ? `<br><span class="q">Set in the environment (docker/.env), which wins over config.yaml: change it there.</span>`
+    : f.source === "default" ? `<br><span class="q">Not in your file: lanowl uses its built-in default${ex ? ` (the example file has ${esc(ex)})` : ""}.</span>` : "");
+  const was = e ? `<div class="fwas">was ${esc(f.source === "default" ? "not in your file" : fmtV(f.value) || '""')}</div>` : "";
+  const head = `<div class="fh"><label class="lab" for="${id}">${esc(f.label)}</label>${srcChip(f)}</div>`;
+  const cls = `fld${e ? " changed" : ""}`;
+  if (f.hash) {
+    return `<div class="${cls}"><div class="fh"><span class="lab">${esc(f.label)}</span><span class="src ${f.value ? "ok" : "miss"}">${f.value ? "set" : "not set"}</span></div>
+      <button class="sbtn" type="button" data-sact="password">${ic("lock")}Change the password</button><div class="fhelp">Never shown here: only its hash is kept.</div></div>`;
+  }
+  if (f.type === "bool") {
+    const on = v === null ? !!f.example : !!v;
+    return `<div class="${cls} fswr"><div class="fb">${head}${was}${help ? `<div class="fhelp">${help}</div>` : ""}</div>
+      <label class="sw"><input type="checkbox" id="${id}" data-k="${esc(k)}" data-t="bool"${on ? " checked" : ""}${lock ? " disabled" : ""}><span></span></label></div>`;
+  }
+  let ctl;
+  if (f.choices) {
+    ctl = `<div class="fsw"><select class="fsel" id="${id}" data-k="${esc(k)}" data-t="choice"${lock ? " disabled" : ""}>` +
+      (v === null ? `<option value="" selected>${esc("default" + (ex ? " (example: " + ex + ")" : ""))}</option>` : "") +
+      f.choices.map(c => `<option value="${esc(c)}"${v === c ? " selected" : ""}>${esc(c === "" ? "(none)" : c)}</option>`).join("") + `</select></div>`;
+  } else if (f.type === "text" || f.type === "yaml") {
+    const txt = f.type === "yaml" ? (e ? e.text : (v === null ? "" : f.text || "")) : (v === null ? "" : String(v));
+    ctl = `<textarea class="fta${f.type === "text" ? " prose" : ""}" id="${id}" data-k="${esc(k)}" data-t="${f.type}" rows="${f.type === "text" ? 4 : 5}" spellcheck="${f.type === "text"}"
+      placeholder="${esc(f.type === "yaml" ? (f.example_text || "") : ex)}"${lock ? " disabled" : ""}>${esc(txt)}</textarea>`;
+  } else {
+    const shown = v === null ? "" : f.type === "list" ? (v || []).join(", ") : String(v);
+    const inp = `<input class="fin" id="${id}" data-k="${esc(k)}" data-t="${f.type}" value="${esc(shown)}" placeholder="${esc(ex || (f.type === "list" ? "comma, separated" : ""))}"
+      ${f.type === "int" || f.type === "float" ? `inputmode="${f.type === "int" ? "numeric" : "decimal"}"` : ""} autocomplete="off" spellcheck="false"${lock ? " disabled" : ""}>`;
+    ctl = f.unit ? `<div class="funit">${inp}<span>${esc(f.unit)}</span></div>` : inp;
+  }
+  return `<div class="${cls}">${head}${ctl}${was}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
+}
+function editCount() { return Object.keys(ST.edits).length; }
+function barHtml(n, act) {
+  return `<div class="sbar" id="sbar"${n ? "" : " hidden"}><span class="cnt"><b>${n} change${n === 1 ? "" : "s"}</b>, not saved</span>
+    <button class="sbtn" type="button" data-sact="discard">Discard</button><button class="btn" type="button" data-sact="${act}">Review</button></div>`;
+}
+async function setSection(key) {
+  const D = await setData();
+  const sec = ((D || {}).sections || []).find(x => x.key === key);
+  if (!sec) { put("set", back("set", "Settings") + setHead("Settings") + `<div class="list"><div class="empty">No such section.</div></div>`); return; }
+  ST.cur = sec;
+  const fields = sec.fields.filter(f => !f.advanced), adv = sec.fields.filter(f => f.advanced && f.type !== "group");
+  let h = back("set", "Settings") + setHead(sec.title, esc(sec.help || ""));
+  h += pendHtml(D) + fileWarn(D);
+  let body = "";
+  for (const f of fields) body += f.type === "group" ? `<div class="fsub">${esc(f.group)}${f.help ? `<div class="fhelp" style="text-transform:none;letter-spacing:0;font-weight:400">${esc(f.help)}</div>` : ""}</div>` : fieldHtml(f);
+  h += `<div class="list">${body}</div>`;
+  if (adv.length) h += `<details class="sadv"><summary>${ic("chev")}Advanced · paths and plumbing inside the container</summary><div class="list">${adv.map(fieldHtml).join("")}</div></details>`;
+  h += barHtml(editCount(), "review");
+  put("set", `<div class="setw">${h}</div>`);
+}
+function parseField(t, raw, f) {
+  if (t === "bool") return raw;
+  if (t === "choice") return raw;
+  if (t === "int") { const n = raw.trim(); if (n === "") return undefined; if (!/^-?\d+$/.test(n)) throw new Error(`${f.label}: a whole number`); return +n; }
+  if (t === "float") { const n = raw.trim(); if (n === "") return undefined; if (isNaN(+n)) throw new Error(`${f.label}: a number`); return +n; }
+  if (t === "list") {
+    const parts = raw.split(",").map(x => x.trim()).filter(Boolean);
+    const nums = (f.example || []).length ? (f.example || []).every(x => typeof x === "number") : /_ids$/.test(f.label);
+    return parts.map(x => nums && /^-?\d+$/.test(x) ? +x : x);
+  }
+  return raw;
+}
+function onField(el) {
+  const k = el.dataset.k, f = (ST.cur || {fields: []}).fields.find(x => x.path && pkey(x.path) === k);
+  if (!f) return;
+  const t = el.dataset.t;
+  if (t === "yaml") {
+    const orig = f.source === "default" ? "" : (f.text || "");
+    if (el.value.trim() === orig.trim()) delete ST.edits[k]; else ST.edits[k] = {path: f.path, yaml: true, text: el.value};
+  } else {
+    let v;
+    try { v = parseField(t, t === "bool" ? el.checked : el.value, f); } catch (e) { v = el.value; }
+    const orig = f.source === "default" ? undefined : f.value;
+    if (t === "choice" && el.value === "" && f.source === "default") v = undefined;
+    if (v === undefined) { if (f.source === "default") delete ST.edits[k]; else ST.edits[k] = {path: f.path, del: true}; }
+    else if (sameV(v, orig) || (f.source === "default" && t === "bool" && v === !!f.example && false)) delete ST.edits[k];
+    else ST.edits[k] = {path: f.path, value: v};
+  }
+  const fld = el.closest(".fld");
+  if (fld) {
+    fld.classList.toggle("changed", !!ST.edits[k]);
+    const chip = fld.querySelector(".fh .src");
+    if (chip) chip.outerHTML = srcChip(f);
+  }
+  const bar = $("sbar"), n = editCount();
+  if (bar) { bar.hidden = !n; bar.querySelector(".cnt").innerHTML = `<b>${n} change${n === 1 ? "" : "s"}</b>, not saved`; }
+}
+function opsFromEdits() {
+  const ops = [];
+  for (const e of Object.values(ST.edits)) {
+    if (e.del) ops.push({op: "del", path: e.path});
+    else if (e.yaml) ops.push({op: "set", path: e.path, yaml: e.text});
+    else ops.push({op: "set", path: e.path, value: e.value});
+  }
+  return ops;
+}
+// numbers typed in a box that does not take them: said before anything is planned
+function badEdits() {
+  for (const e of Object.values(ST.edits)) {
+    const f = ((ST.cur || {}).fields || []).find(x => x.path && pkey(x.path) === pkey(e.path));
+    if (!f || e.del || e.yaml) continue;
+    if ((f.type === "int" || f.type === "float") && typeof e.value !== "number") return `${f.label} is a number`;
+  }
+  return "";
+}
+
+// -- the sheet: the diff, what it changes, --check's new ✗, the password when needed --
+function diffHtml(lines) {
+  return `<div class="sdiff">${(lines || []).map(l => `<div class="${l[0] === "+" ? "dxa" : l[0] === "-" ? "dxd" : l.startsWith("@@") ? "dxh" : ""}">${esc(l)}</div>`).join("") || `<div class="dxh">  (no change)</div>`}</div>`;
+}
+function planHtml(p, fname) {
+  const n = (p.changes || []).length;
+  return ((p.problems || []).length ? `<div class="chkno">${ic("warn")}<span>lanowl --check would say: ${esc(p.problems.join("; "))}. Nothing can be saved like this.</span></div>`
+    : `<div class="chkok">${ic("check")}<span>lanowl --check finds nothing new wrong with it.</span></div>`) +
+    `<div class="dlab">${esc(fname)}<span>${n} change${n === 1 ? "" : "s"}</span></div>` + diffHtml(p.diff);
+}
+function openSet(title, body, go, opts) {
+  ST.sheet = {go, opts: opts || {}};
+  const need = !(ST.data || ST.devs || ST.setup || {}).recent && !(opts || {}).noAuth && !ST.authed;
+  put("set-in", `<div class="shd"><div class="grab"></div><div class="shd-row"><h2>${esc(title)}</h2><button class="x" type="button" data-sact="sclose" aria-label="Close">${ic("x")}</button></div></div>
+    ${body}
+    <div id="sauth"${need ? "" : " hidden"}><div class="dlab">Your password</div><p class="fine" style="margin:0 4px 7px">Asked again: this browser has not typed it in the last ten minutes.</p>
+      <input class="sfield" id="spw" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password"></div>
+    <div class="pinerr" id="serr" role="alert"></div>
+    <button class="btn" id="sgo" type="submit"${(opts || {}).blocked ? " disabled" : ""}>${esc((opts || {}).label || "Save")}</button>
+    ${(opts || {}).note ? `<p class="fine" style="text-align:center;margin-top:10px">${esc(opts.note)}</p>` : `<p class="fine" style="text-align:center;margin-top:10px">Telegram gets one line saying what changed.</p>`}`);
+  const dlg = $("setdlg");
+  if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add("modal"); }
+  dlg.scrollTop = 0;
+}
+function closeSet() { const d = $("setdlg"); if (d.open) d.close(); }
+$("setdlg").addEventListener("close", () => { ST.sheet = null; document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
+$("setdlg").addEventListener("click", e => { if (e.target === $("setdlg")) closeSet(); });
+$("setf").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!ST.sheet || ST.busy) return;
+  const pw = ($("spw") || {}).value || "";
+  ST.busy = true; $("sgo").disabled = true; $("serr").textContent = "";
+  let r;
+  try { r = await ST.sheet.go(pw); } catch (err) { r = {ok: false, error: "lanowl did not answer."}; }
+  ST.busy = false; if ($("sgo")) $("sgo").disabled = false;
+  if (!r) return;
+  if (r.auth) {
+    $("sauth").hidden = false;
+    $("serr").textContent = r.auth === "needed" ? "Type your password to save." : r.auth === "locked" ? `Too many wrong passwords: locked until ${hm(r.until)}.`
+      : r.auth === "wrong" ? "Wrong password. " + (r.left === 1 ? "One more wrong one locks the login for 15 minutes." : `${r.left} tries left before the login locks.`) : "Log in again.";
+    if ($("spw")) { $("spw").value = ""; $("spw").focus(); }
+    return;
+  }
+  if (!r.ok) { $("serr").textContent = r.error || "Could not save it."; return; }
+  if (pw) ST.authed = true;
+  closeSet();
+});
+async function saveCall(path, body, pw) {
+  const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...body, ...(pw ? {password: pw} : {})})});
+  return r.json().catch(() => ({ok: r.ok}));
+}
+async function reviewSection() {
+  const bad = badEdits();
+  if (bad) { toast(bad + "."); return; }
+  const ops = opsFromEdits();
+  const p = await post("/api/settings/plan", {file: "config", ops}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
+  openSet("Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">The config.yaml it replaces is kept: History can put it back.</p>`, async pw => {
+    const r = await saveCall("/api/settings/save", {file: "config", ops, base: p.base}, pw);
+    if (r.ok) { ST.edits = {}; await setData(true); renderSet(); refresh(); toast("Saved. Restart lanowl to apply."); }
+    else if (r.why === "changed") { await setData(true); renderSet(); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0});
+}
+
+// -- Restart to apply --
+function restartSheet() {
+  const D = ST.data || {}, wait = ((D.restart || {}).waiting) || [];
+  openSet("Restart lanowl?", `<p style="margin:0 2px 4px;font-size:15px">It reads config.yaml and inventory.yaml again. The dashboard is back in about ten seconds; nothing is watched for that long.</p>
+    <div class="dlab">Kept</div><ul class="klist">
+      <li>${ic("check")}Open incidents, and what Telegram was already told about them</li>
+      <li>${ic("check")}Paused devices, names, the model's switch</li>
+      <li>${ic("check")}Logins: nobody is logged out</li>
+      <li>${ic("check")}Proposals waiting for you, the history, the Timeline</li></ul>
+    <div class="dlab">Cut</div><ul class="klist cut"><li>${ic("warn")}An answer the owl is writing, if there is one</li></ul>
+    ${wait.length ? `<div class="chkno" style="margin-top:12px">${ic("warn")}<span>It waits: ${esc(wait.join("; "))}.</span></div>` : ""}`,
+    async () => {
+      const r = await post("/api/restart", {}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+      if (!r.ok) return {ok: false, error: r.waiting ? "It waits: " + r.waiting.join("; ") + "." : r.error};
+      waitBack((S.d || {}).sweep ? S.d.sweep.started : 0);
+      return r;
+    }, {label: "Restart now", noAuth: true, blocked: wait.length > 0, note: "No password needed: it only applies what was saved."});
+}
+async function waitBack(started) {
+  ST.restarting = true;
+  const t0 = Date.now();
+  toast("Restarting…");
+  for (;;) {
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      const r = await fetch("/api/state", {cache: "no-store"});
+      if (r.ok) { const d = await r.json(); if (d.sweep && d.sweep.started !== started) { applyState(d); break; } }
+    } catch (e) {}
+    if (Date.now() - t0 > 60000) { ST.restarting = false; toast("lanowl has not come back after a minute: its log says why (docker exec lanowl tail /state/lanowl.log)."); return; }
+  }
+  ST.restarting = false;
+  await setData(true); ST.devs = null;
+  if (S.tab === "set") renderSet();
+  toast("lanowl is back, running what was saved.");
+}
+
+// -- the password --
+function passwordSheet() {
+  openSet("Change the password", `<p class="fine" style="margin:0 4px 10px">Every browser is logged out, this one too, and logs in with the new one.</p>
+    <input class="sfield" id="npw1" type="password" autocomplete="new-password" placeholder="New password: 8 characters or more" aria-label="New password">
+    <input class="sfield" id="npw2" type="password" autocomplete="new-password" placeholder="The same again" aria-label="New password again" style="margin-top:8px">`,
+    async pw => {
+      const a = $("npw1").value, b = $("npw2").value;
+      if (a.length < 8) return {ok: false, error: "The new password needs 8 characters or more."};
+      if (a !== b) return {ok: false, error: "The two are not the same."};
+      const r = await saveCall("/api/settings/password", {new: a}, pw);
+      if (r.ok) { toast("Password changed: log in with the new one."); setTimeout(() => location.reload(), 1500); }
+      return r;
+    }, {label: "Change it", note: "Only its hash is kept, in config.yaml."});
+}
+
+// -- History and undo --
+async function setHistory() {
+  const D = await setData(true);
+  const H = D.history || [];
+  const how = {save: "", restore: "put back · ", setup: "first-run setup · ", watch: "Watch · "};
+  const latest = {};
+  H.forEach(x => { if (!(x.file in latest)) latest[x.file] = x.id; });
+  let h = back("set", "Settings") + setHead("History", "Every save from the dashboard, the newest first. The file as it was before each one is kept: the last 30 of each.");
+  h += H.length ? `<div class="list">` + H.map(x => `<div class="row" style="align-items:flex-start"><span class="rt"><span class="rn" style="white-space:normal">${esc((x.changes || []).slice(0, 3).join("; ") || "no change")}${(x.changes || []).length > 3 ? esc(` and ${x.changes.length - 3} more`) : ""}</span>
+      <span class="rs" style="white-space:normal">${esc(how[x.how] || "")}${esc(clock(x.ts))} · ${x.file === "config" ? "config.yaml" : "inventory.yaml"}${x.from ? " · from " + esc(x.from) : ""}${x.hand ? " · edited on the host before it" : ""}</span></span>
+      ${x.kept ? `<button class="rowbtn" type="button" data-sact="undo" data-id="${esc(x.id)}">${latest[x.file] === x.id ? "Undo" : "Restore"}</button>` : `<span class="rv">not kept</span>`}</div>`).join("") + `</div>`
+    : `<div class="list"><div class="empty">Nothing saved from the dashboard yet.</div></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+async function undoSheet(id) {
+  const p = await post("/api/settings/restore", {id, preview: true}).catch(() => ({ok: false}));
+  if (!p.ok) { toast(p.error || "That version is not kept any more."); return; }
+  const fname = p.file === "config" ? "config.yaml" : "inventory.yaml";
+  openSet(`Put ${fname} back`, planHtml(p, fname) + `<p class="fine" style="margin:10px 4px 0">The file as it was before that save — and everything saved after it goes back with it.</p>`, async pw => {
+    const r = await saveCall("/api/settings/restore", {id, base: p.base}, pw);
+    if (r.ok) { await setData(true); ST.devs = null; renderSet(); refresh(); toast("Put back. Restart lanowl to apply."); }
+    return r;
+  }, {label: "Put it back", blocked: (p.problems || []).length > 0});
+}
+
+// -- Secrets: by name, set or missing --
+async function setSecrets() {
+  const D = await setData(true), X = D.secrets || {};
+  const row = (n, sub, ok, miss) => `<div class="row"><span class="rt"><span class="rn">${esc(n)}</span><span class="rs" style="white-space:normal">${esc(sub)}</span></span><span class="src ${ok ? "ok" : miss ? "miss" : "def"}">${ok ? "set" : miss ? "missing" : "not used"}</span></div>`;
+  let h = back("set", "Settings") + setHead("Secrets", `What ${esc(X.path || "secrets.yaml")} holds, by name: set or missing, never a value. Edit the file on lanowl's machine; lanowl reads it again by itself, no restart.`);
+  if (X.error) h += `<div class="swarn">${esc(X.error)}</div>`;
+  h += `<div class="sh">Logins</div><div class="list">` + ((X.logins || []).map(x => row(x.name, (x.set ? x.type : "named here, not in the file") + ((x.used_by || []).length ? " · " + x.used_by.slice(0, 4).join(", ") + (x.used_by.length > 4 ? "…" : "") : ""), x.set, !x.set)).join("") || `<div class="empty">No logins.</div>`) + `</div>`;
+  h += `<div class="sh">Tokens · key</div><div class="list">` + (X.tokens || []).map(t => row(t.name, t.set ? "from " + t.where : t.needed ? "needed: " + (t.name === "telegram" ? "telegram.chat_id is set" : "access.ha_url is set") : "not needed", t.set, t.needed && !t.set)).join("") +
+    row("ssh_key", X.ssh_key && X.ssh_key.path ? X.ssh_key.path : "none", X.ssh_key && X.ssh_key.exists, X.ssh_key && X.ssh_key.path && !X.ssh_key.exists) + `</div>`;
+  const miss = (X.logins || []).filter(x => !x.set);
+  if (miss.length) h += `<div class="box2 miss"><b>Add what is missing</b> to secrets.yaml:<pre>logins:\n${miss.map(x => `  ${x.name}: {user: …, password: "…"}`).join("\n")}</pre></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+
+// -- devices: inventory.yaml --
+const GUESSABLE = ["mikrotik", "openwrt", "linux", "esxi", "unifi", "homeassistant", "reolink", "shelly", "generic"];
+async function devData(force) { if (!ST.devs || force) ST.devs = await getJ("/api/settings/devices"); return ST.devs; }
+async function setDevices() {
+  const V = await devData(true);
+  if (!V.ok) { put("set", back("set", "Settings") + setHead("Devices") + `<div class="list"><div class="empty">${esc(V.error || "Did not load.")}</div></div>`); return; }
+  let h = back("set", "Settings") + setHead("Devices", `inventory.yaml · ${V.devices.length} device${V.devices.length === 1 ? "" : "s"}. Tap one to change it.`);
+  h += await (async () => { const D = await setData(); return pendHtml(D) + fileWarn(D); })();
+  if ((V.watched || []).length) h += `<div class="pend"><div class="pt"><b>${V.watched.length} device${V.watched.length === 1 ? "" : "s"} watched from the dashboard live only in lanowl's state</b>Move them into inventory.yaml, so every device is in one place.</div><button class="sbtn pri" type="button" data-sact="migrate">Move</button></div>`;
+  h += `<div style="display:flex;gap:8px;margin:0 0 6px;flex-wrap:wrap"><button class="sbtn" type="button" data-sgo="set/device/new">${ic("plus")}Add a device</button><button class="sbtn" type="button" data-sgo="setup">From the router's list</button></div>`;
+  const groups = {};
+  V.devices.forEach(d => { (groups[d.group || "misc"] = groups[d.group || "misc"] || []).push(d); });
+  for (const [g, ds] of Object.entries(groups)) {
+    h += `<div class="sh">${esc(g)}</div><div class="list">` + ds.map(d => `<button class="row" type="button" data-sgo="set/device/${esc(encodeURIComponent(d.ip))}"><span class="rt"><span class="rn">${esc(d.name || d.ip)}</span><span class="rs">${esc(d.ip)}${d.kind ? " · " + esc(d.kind) : ""}${d.site ? " · " + esc(d.site) : ""}</span></span><span class="tagx${d.criticality === "critical" ? " c-red" : d.criticality === "high" ? " c-orange" : " c-gray"}">${esc(d.criticality || "low")}</span>${ic("chev", "chev")}</button>`).join("") + `</div>`;
+  }
+  if (!V.devices.length) h += `<div class="list"><div class="empty">No devices yet: add them from the router's list.</div></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+function devStart(ip) {
+  const V = ST.devs || {};
+  const orig = ip === "new" ? null : (V.devices || []).find(d => String(d.ip) === ip) || null;
+  if (!ST.dev || ST.dev.key !== ip) ST.dev = {key: ip, orig, d: JSON.parse(JSON.stringify(orig || {ip: "", name: "", group: (V.groups || [])[0] || "home", criticality: "low", checks: [{type: "icmp"}]})), ckt: "icmp"};
+  return ST.dev;
+}
+const CRITH = {critical: "pages at once", high: "pages", warning: "in the digest", low: "in the digest, never pages", info: "reported once, never pages"};
+async function setDevice(ip) {
+  const V = await devData();
+  if (!V.ok) { renderSet(); return; }
+  const S2 = devStart(ip), d = S2.d, can = (V.kinds || {})[d.kind || ""] || [];
+  const changed = !sameV(S2.d, S2.orig || null) && (S2.orig || d.ip || d.name);
+  const inp = (k, ph, mode) => `<input class="fin" data-dk="${k}" value="${esc(d[k] == null ? "" : d[k])}" placeholder="${esc(ph || "")}"${mode ? ` inputmode="${mode}"` : ""} autocomplete="off" spellcheck="false">`;
+  const fld = (k, body, help) => `<div class="fld"><div class="fh"><span class="lab">${esc(k)}</span></div>${body}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
+  const groups = Array.from(new Set([...(V.groups || []), d.group || "misc"]));
+  const logins = V.logins || [];
+  let h = back("set/devices", "Devices") + setHead(S2.orig ? (S2.orig.name || S2.orig.ip) : "A new device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "It goes into inventory.yaml.");
+  h += `<div class="sh">Watching</div><div class="list">` +
+    fld("name", inp("name", "A name you will recognise")) + fld("ip", inp("ip", "192.168.88.10", "decimal")) +
+    fld("mac", inp("mac", "optional"), "follows it when DHCP moves it") +
+    fld("group", `<div class="fsw"><select class="fsel" data-dk="group">${groups.map(g => `<option${g === d.group ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">A new group…</option></select></div>`) +
+    fld("criticality", `<div class="segc" role="group">${["critical", "high", "warning", "low", "info"].map(c => `<button type="button" data-sact="crit" data-v="${c}" aria-pressed="${(d.criticality || "low") === c}">${c}</button>`).join("")}</div>`, esc(CRITH[d.criticality || "low"])) +
+    fld("checks", `<div class="ckl">${(d.checks || []).map((c, i) => `<div class="ck"><span class="t">${esc(c.type)}${c.port ? " " + esc(c.port) : ""}${c.path ? " " + esc(c.path) : ""}${c.name ? ` · ${esc(c.name)}` : ""}</span><button type="button" data-sact="ckdel" data-i="${i}" aria-label="Remove">${ic("x")}</button></div>`).join("")}</div>
+      <div class="ckadd"><div class="fsw"><select class="fsel" id="ckt">${["icmp", "tcp", "http", "snmp", "arp", "link", "lease"].map(t => `<option${t === S2.ckt ? " selected" : ""}>${t}</option>`).join("")}</select></div><input class="fin" id="ckp" placeholder="port" inputmode="numeric"><button class="sbtn" type="button" data-sact="ckadd">Add</button></div>`) +
+    fld("depends_on", inp("depends_on", "nothing, wan, or an address"), "down because what it is reached through is down: one message, not many") +
+    fld("expect_offline", `<div class="segc" role="group">${[["", "never"], ["sun", "at night"], ["day", "by day"]].map(([v, l]) => `<button type="button" data-sact="eo" data-v="${v}" aria-pressed="${(d.expect_offline || "") === v}">${l}</button>`).join("")}</div>`) +
+    fld("role", inp("role", "optional")) + fld("note", inp("note", "optional")) + `</div>`;
+  h += `<div class="sh">Managing</div><div class="list">` +
+    fld("kind", `<div class="fsw"><select class="fsel" data-dk="kind"><option value=""${!d.kind ? " selected" : ""}>none: watched only</option>${Object.keys(V.kinds || {}).map(k => `<option${k === d.kind ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></div>`) +
+    fld("credentials", `<div class="fsw"><select class="fsel" data-dk="credentials"><option value="">none</option>${logins.map(l => `<option value="${esc(l.name)}"${l.name === d.credentials ? " selected" : ""}>${esc(l.name)} · ${esc(l.type)}</option>`).join("")}${d.credentials && !logins.find(l => l.name === d.credentials) ? `<option selected>${esc(d.credentials)} (missing in secrets.yaml)</option>` : ""}</select></div>`, "its login, by name, in secrets.yaml. Never a password on this page.") +
+    fld("manage", can.length ? `<div class="schips">${can.map(f => `<button class="schip" type="button" data-sact="man" data-f="${f}" aria-pressed="${(d.manage || []).includes(f)}">${f}</button>`).join("")}</div>` : `<span class="fine">${d.kind ? "a " + esc(d.kind) + " device is watched only" : "pick a kind first"}</span>`,
+      (d.manage || []).filter(f => V.switches && V.switches[f] === false).map(f => `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`).join("<br>")) +
+    ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
+  if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
+  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Review</button></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+function onDevField(el) {
+  const S2 = ST.dev; if (!S2) return;
+  const k = el.dataset.dk;
+  if (k === "group" && el.value === "__new") {
+    // a box for the new group's name, under the list
+    el.value = S2.d.group || "";
+    const box = document.createElement("input");
+    box.className = "fin"; box.placeholder = "the new group's name"; box.style.marginTop = "8px"; box.dataset.dk = "group";
+    el.closest(".fld").appendChild(box); box.focus();
+    return;
+  }
+  if (k === "units") S2.d.restart = {...(S2.d.restart || {}), units: el.value.split(",").map(x => x.trim()).filter(Boolean)};
+  else if (el.value === "") delete S2.d[k];
+  else S2.d[k] = el.value;
+  if (k === "kind") { const can = ((ST.devs || {}).kinds || {})[el.value] || []; S2.d.manage = (S2.d.manage || []).filter(f => can.includes(f)); if (!S2.d.manage.length) delete S2.d.manage; setDevice(S2.key); return; }
+  const bar = $("sbar"); if (bar) bar.hidden = false;
+}
+async function devReview(remove) {
+  const S2 = ST.dev, V = ST.devs;
+  const body = {ip: S2.orig ? S2.orig.ip : null, device: remove ? null : S2.d};
+  const p = await post("/api/settings/device", {...body, preview: true}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
+  openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : "Save to inventory.yaml", planHtml(p, "inventory.yaml"), async pw => {
+    const r = await saveCall("/api/settings/device", {...body, base: p.base}, pw);
+    if (r.ok) { ST.dev = null; await devData(true); await setData(true); setNav("set/devices"); refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0, label: remove ? "Remove it" : "Save"});
+  return V;
+}
+async function migrateSheet() {
+  const p = await post("/api/settings/migrate", {preview: true}).catch(() => ({ok: false}));
+  if (!p.ok) { toast(p.error || "Nothing to move."); return; }
+  openSet("Move them into inventory.yaml", planHtml(p, "inventory.yaml") + `<p class="fine" style="margin:10px 4px 0">They keep being watched as they are; from the next restart they come from the file.</p>`, async pw => {
+    const r = await saveCall("/api/settings/migrate", {base: p.base}, pw);
+    if (r.ok) { await devData(true); await setData(true); renderSet(); refresh(); toast("Moved into inventory.yaml."); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0, label: "Move them"});
+}
+
+// -- Watch, from a site's DHCP list on the Devices tab: a device into inventory.yaml --
+async function watchDevice(siteKey, mac, name) {
+  const d = S.d || {}, site = (d.sites || []).find(x => x.key === siteKey) || {};
+  const row = (((site.dhcp || {}).rows) || []).find(r => r.mac === mac) || {};
+  if (!row.ip) { toast("That device is not on the list any more."); return; }
+  const home = siteKey === "home";
+  const dev = {ip: row.ip, name: name || row.name || (row.vendor ? row.vendor + " " + row.ip : row.ip), mac: mac.toUpperCase(),
+               group: home ? "home" : "remote", criticality: home ? "low" : (site.criticality || "info"), checks: [{type: "icmp"}],
+               ...(home ? {} : {site: siteKey, debounce_fails: 5, ...(site.router ? {depends_on: site.router} : {})})};
+  const p = await post("/api/settings/device", {ip: null, device: dev, preview: true, how: "watch"}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  if (!p.ok) { toast(p.error || "It cannot be watched."); return; }
+  ST.data = ST.data || {recent: false};
+  openSet(`Watch ${dev.name}?`, `<p class="fine" style="margin:0 4px 10px">Pinged from now on, and written into inventory.yaml so it stays after a restart. Change it later in Settings → Devices.</p>` + planHtml(p, "inventory.yaml"), async pw => {
+    const r = await saveCall("/api/settings/device", {ip: null, device: dev, base: p.base, how: "watch"}, pw);
+    if (r.ok) { refresh(); toast(`Watching ${dev.name}.`); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0, label: "Watch it"});
+}
+
+// -- the first-run setup: the router, its DHCP list, your picks, inventory.yaml --
+function steps(n) {
+  return `<div class="ssteps">${["The router", "Your devices", "Write"].map((s, i) => `<span class="${i + 1 === n ? "on" : i + 1 < n ? "done" : ""}"><i>${i + 1}</i>${s}</span>`).join("")}</div>`;
+}
+async function setupData(force) { if (!ST.setup || force) ST.setup = await getJ("/api/setup"); return ST.setup; }
+async function setupRouter() {
+  const U = await setupData(true);
+  if (!ST.router) ST.router = {dhcp_source: U.dhcp_source || "", credentials: U.credentials || "router-read", result: null};
+  const R = ST.router, res = R.result;
+  let h = back("set", "Settings") + steps(1) + setHead("Find your devices", "lanowl reads your router's DHCP list, you pick what to watch, and it writes inventory.yaml.");
+  if (U.needed) h += `<div class="pend"><div class="pt"><b>${U.needed === "example" ? "inventory.yaml still has the example's devices" : "inventory.yaml has no devices yet"}</b>${U.needed === "example" ? "The setup replaces them with yours; the file's comments stay." : "Pick them from your router's list."}</div><button class="sbtn" type="button" data-sact="later">Not now</button></div>`;
+  h += `<div class="list"><div class="fld"><div class="fh"><span class="lab">mikrotik.dhcp_source</span></div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="http://192.168.88.1" autocomplete="off" spellcheck="false"><div class="fhelp">the router's REST base: DHCP leases, routes, the log</div></div>
+    <div class="fld"><div class="fh"><span class="lab">mikrotik.credentials</span>${res && res.login === false ? `<span class="src miss">missing in secrets.yaml</span>` : res && res.login ? `<span class="src ok">set in secrets.yaml</span>` : U.login_set ? `<span class="src ok">set in secrets.yaml</span>` : `<span class="src miss">missing in secrets.yaml</span>`}</div>
+      <input class="fin" id="rcred" value="${esc(R.credentials)}" autocomplete="off" spellcheck="false"><div class="fhelp">its read-only user: a login of that name in secrets.yaml</div></div></div>`;
+  if ((res && res.login === false) || (!res && !U.login_set)) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml on lanowl's machine:<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">lanowl reads secrets.yaml again by itself: no restart. No such user on the router yet? The docs say how to make a read-only one (docs/setup/mikrotik.md).</p></div>`;
+  if (res && res.ok) h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Logged in as <b>${esc(res.user)}</b>${res.version ? " · RouterOS " + esc(res.version) : ""} · ${res.leases} address${res.leases === 1 ? "" : "es"} on its DHCP list</span></div>`;
+  else if (res && res.error && res.login !== false) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(res.error)}</span></div>`;
+  h += `<button class="btn ghost" type="button" data-sact="rtry">${res && res.ok ? "Try again" : "Try the router"}</button>`;
+  h += `<button class="btn" type="button" data-sact="rnext"${res && res.ok ? "" : " disabled"}>Next</button>`;
+  h += `<p class="fine" style="margin:16px 4px">Not a MikroTik? lanowl reads DHCP only from RouterOS. <button class="flnk" type="button" data-sact="sweep">Sweep the network instead</button>: every address of the main network gets one ping, and lanowl's machine says who answered (address, maker; no names).</p>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+async function routerTry() {
+  const R = ST.router;
+  R.dhcp_source = $("rsrc").value.trim(); R.credentials = $("rcred").value.trim();
+  R.result = {pending: true};
+  R.result = await post("/api/setup/router", {dhcp_source: R.dhcp_source, credentials: R.credentials}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  ST.rows = null;
+  setupRouter();
+}
+async function setupPick() {
+  if (!ST.router) { setNav("setup"); return; }
+  if (!ST.rows) {
+    put("set", `<div class="setw">${back("setup", "The router")}${steps(2)}${setHead("Pick what to watch")}${SKEL}</div>`);
+    const r = await post("/api/setup/leases", {dhcp_source: ST.router.dhcp_source, credentials: ST.router.credentials}).catch(() => ({ok: false}));
+    if (!r.ok) { toast(r.error || "The router's list could not be read."); setNav("setup"); return; }
+    ST.rows = r; ST.picked = {};
+    if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", fixed: true};
+  }
+  const R = ST.rows, rows = R.rows || [], F = ST.pf || "all";
+  const shown = rows.filter(x => F === "all" || (F === "static" && x.static) || (F === "here" && x.here));
+  const one = x => {
+    const P = ST.picked[x.ip], on = !!P, v = P || {name: x.name || (x.vendor ? x.vendor + " " + x.ip.split(".").pop() : x.ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || ""};
+    return `<div class="pk${on ? " on" : ""}"><button class="cb" type="button" data-sact="pick" data-pi="${esc(x.ip)}" aria-pressed="${on}" aria-label="Pick">${ic("check")}</button>
+      <span class="rt"><span class="rn">${esc(x.name || x.vendor || x.ip)}</span><span class="meta"><span>${esc(x.ip)}</span>${x.vendor ? `·<span>${esc(x.vendor)}</span>` : ""}${R.router ? `·<span>${x.static ? "static" : "dynamic"}</span>` : ""}${x.here ? `·<span class="here">here now</span>` : x.last_seen ? `·<span>seen ${esc(x.last_seen)} ago</span>` : ""}</span>
+      <span class="pkm"><input class="fin wide" data-pip="${esc(x.ip)}" data-pk="name" value="${esc(v.name)}" aria-label="Name">
+        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group" aria-label="Group">${["network", "servers", "cameras", "home", "iot", "media", "misc"].map(g => `<option${g === v.group ? " selected" : ""}>${g}</option>`).join("")}</select></span>
+        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="criticality" aria-label="Criticality">${["critical", "high", "warning", "low", "info"].map(g => `<option${g === v.criticality ? " selected" : ""}>${g}</option>`).join("")}</select></span>
+        <span class="fsw wide"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="kind" aria-label="Kind"><option value="">kind: none (watched only)</option>${GUESSABLE.map(g => `<option${g === v.kind ? " selected" : ""}>${g}</option>`).join("")}</select></span>
+        ${x.kind ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}</span></span></div>`;
+  };
+  const n = Object.keys(ST.picked).length;
+  let h = back("setup", "The router") + steps(2) + setHead("Pick what to watch", `${rows.length} on ${R.router ? "the router's DHCP list" : "the network (" + esc(R.swept || "") + ")"}. Each gets a ping check; add more checks, a kind and a login later, on its own page.`);
+  h += `<div class="schips" style="margin-bottom:10px">${[["all", "All", rows.length], ["static", "Static", rows.filter(x => x.static).length], ["here", "Here now", rows.filter(x => x.here).length]].filter(c => R.router || c[0] !== "static").map(([k, l, c]) => `<button class="schip" type="button" data-sact="pf" data-v="${k}" aria-pressed="${F === k}">${l} ${c}</button>`).join("")}
+    ${R.router ? `<button class="schip" type="button" data-sact="pickstatic">Pick every static one</button>` : ""}</div>`;
+  h += `<div class="list">`;
+  if (R.router) h += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta">${esc(R.router)} · always watched, critical</span></span></div>`;
+  h += shown.filter(x => x.ip !== R.router).map(one).join("") + `</div>`;
+  h += `<div class="sbar"><span class="cnt"><b>${n} picked</b></span><button class="btn" type="button" data-sact="pnext"${n ? "" : " disabled"}>Next</button></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+function onPick(el) {
+  const ip = el.dataset.pip, P = ST.picked[ip];
+  if (P) P[el.dataset.pk] = el.value;
+}
+function pickedDevices() {
+  return Object.values(ST.picked).map(P => {
+    const x = ((ST.rows || {}).rows || []).find(r => r.ip === P.ip) || {};
+    return {ip: P.ip, name: P.name, group: P.group, criticality: P.criticality, ...(P.kind ? {kind: P.kind} : {}),
+            ...(x.mac && !x.static ? {mac: x.mac} : {}), checks: [{type: "icmp"}]};
+  });
+}
+async function setupWrite() {
+  if (!ST.rows) { setNav("setup"); return; }
+  put("set", `<div class="setw">${back("setup/pick", "Your devices")}${steps(3)}${setHead("Write inventory.yaml")}${SKEL}</div>`);
+  const body = {devices: pickedDevices(), router: ST.rows.router ? {dhcp_source: ST.router.dhcp_source, credentials: ST.router.credentials} : null};
+  const p = await post("/api/setup/write", {...body, preview: true}).catch(() => ({ok: false}));
+  const U = await setupData();
+  let h = back("setup/pick", "Your devices") + steps(3) + setHead("Write inventory.yaml", (U.needed === "example" ? "The example's devices go, its comments stay. " : "") + "Dynamic addresses get their MAC, so lanowl follows them when DHCP moves them.");
+  if (!p.ok) h += `<div class="chkno">${ic("warn")}<span>${esc(p.error || (p.inventory || {}).error || "It cannot be written.")}</span></div>`;
+  if (p.inventory) h += planHtml(p.inventory, "inventory.yaml");
+  if (p.config) h += planHtml(p.config, "config.yaml");
+  const blocked = !p.ok || ((p.inventory || {}).problems || []).length || ((p.config || {}).problems || []).length;
+  h += `<button class="btn" type="button" data-sact="wgo"${blocked ? " disabled" : ""}>Write it</button>`;
+  put("set", `<div class="setw">${h}</div>`);
+  ST.wbody = body; ST.wbases = {inventory: (p.inventory || {}).base, config: (p.config || {}).base};
+}
+function writeSheet() {
+  openSet("Write inventory.yaml", `<p style="margin:0 2px;font-size:15px">${ST.wbody.devices.length} device${ST.wbody.devices.length === 1 ? "" : "s"}${ST.wbases.config ? ", and the router in config.yaml" : ""}. lanowl starts watching them at the restart.</p>`, async pw => {
+    const r = await saveCall("/api/setup/write", {...ST.wbody, bases: ST.wbases}, pw);
+    if (r.ok) { save("setupLater", 0); ST.rows = null; ST.picked = {}; ST.devs = null; await setData(true); setNav("setup/done"); refresh(); }
+    return r;
+  }, {label: "Write it"});
+}
+
+async function setupDone() {
+  const D = await setData(true), waiting = !!(D.pending || {}).inventory;
+  put("set", `<div class="setw">${back("set", "Settings")}${steps(4)}` + (waiting
+    ? setHead("Written", "inventory.yaml has your devices. Restart lanowl and it watches them.") + `<button class="btn" type="button" data-sact="restart">Restart to apply</button>`
+    : setHead("Done", "lanowl is watching your devices. Each one can have more checks, a kind and a login: Settings → Devices.") +
+      `<button class="btn" type="button" data-sgo="home">See them on Now</button><button class="btn ghost" type="button" data-sgo="set/devices">Settings → Devices</button>`) + `</div>`);
+}
+
+// -- events --
+document.addEventListener("click", async e => {
+  const g = e.target.closest("[data-sgo]");
+  if (g) { e.preventDefault(); setNav(g.dataset.sgo); return; }
+  const t = e.target.closest("[data-sact]");
+  if (!t) return;
+  const a = t.dataset.sact;
+  if (a === "gear") { setNav("set"); return; }
+  if (a === "sclose") { closeSet(); return; }
+  if (a === "review") { reviewSection(); return; }
+  if (a === "discard") { ST.edits = {}; renderSet(); return; }
+  if (a === "restart") { await setData(true); restartSheet(); return; }
+  if (a === "password") { await setData(); passwordSheet(); return; }
+  if (a === "undo") { undoSheet(+t.dataset.id); return; }
+  if (a === "migrate") { migrateSheet(); return; }
+  const S2 = ST.dev;
+  if (a === "crit" && S2) { S2.d.criticality = t.dataset.v; setDevice(S2.key); return; }
+  if (a === "eo" && S2) { if (t.dataset.v) S2.d.expect_offline = t.dataset.v; else delete S2.d.expect_offline; setDevice(S2.key); return; }
+  if (a === "man" && S2) { const m = new Set(S2.d.manage || []); m.has(t.dataset.f) ? m.delete(t.dataset.f) : m.add(t.dataset.f); const can = ((ST.devs || {}).kinds || {})[S2.d.kind || ""] || []; S2.d.manage = can.filter(x => m.has(x)); if (!S2.d.manage.length) delete S2.d.manage; setDevice(S2.key); return; }
+  if (a === "ckdel" && S2) { S2.d.checks.splice(+t.dataset.i, 1); setDevice(S2.key); return; }
+  if (a === "ckadd" && S2) {
+    const type = $("ckt").value, port = $("ckp").value.trim();
+    if (type === "tcp" && !/^\d+$/.test(port)) { toast("A tcp check needs a port."); return; }
+    S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
+  }
+  if (a === "devreset") { ST.dev = null; renderSet(); return; }
+  if (a === "devreview") { devReview(false); return; }
+  if (a === "devdel") { devReview(true); return; }
+  if (a === "later") { save("setupLater", Date.now()); setNav("set"); return; }
+  if (a === "rtry") { routerTry(); return; }
+  if (a === "rnext") { setNav("setup/pick"); return; }
+  if (a === "sweep") {
+    toast("Sweeping the network: up to a minute.");
+    const r = await post("/api/setup/sweep", {}).catch(() => ({ok: false}));
+    if (!r.ok) { toast(r.error || "The sweep did not run."); return; }
+    ST.router = ST.router || {dhcp_source: "", credentials: ""}; ST.rows = r; ST.picked = {}; setNav("setup/pick"); if (S.setp === "setup/pick") setupPick(); return;
+  }
+  if (a === "pick") {
+    const ip = t.dataset.pi, x = ((ST.rows || {}).rows || []).find(r => r.ip === ip) || {};
+    if (ST.picked[ip]) delete ST.picked[ip];
+    else ST.picked[ip] = {ip, name: x.name || (x.vendor ? x.vendor + " " + ip.split(".").pop() : ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || ""};
+    setupPick(); return;
+  }
+  if (a === "pickstatic") { ((ST.rows || {}).rows || []).filter(x => x.static && !ST.picked[x.ip]).forEach(x => { ST.picked[x.ip] = {ip: x.ip, name: x.name || x.vendor || x.ip, group: "home", criticality: "low", kind: x.kind || ""}; }); setupPick(); return; }
+  if (a === "pf") { ST.pf = t.dataset.v; setupPick(); return; }
+  if (a === "pnext") { setNav("setup/write"); return; }
+  if (a === "wgo") { await setupData(true); writeSheet(); return; }
+});
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (S.tab !== "set") return;
+  if (el.dataset.k && el.dataset.t !== "bool" && el.dataset.t !== "choice") onField(el);
+  else if (el.dataset.dk && el.tagName === "INPUT") onDevField(el);
+  else if (el.dataset.pip) onPick(el);
+});
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (S.tab !== "set") return;
+  if (el.dataset.k && (el.dataset.t === "bool" || el.dataset.t === "choice")) onField(el);
+  else if (el.dataset.dk && el.tagName === "SELECT") onDevField(el);
+  else if (el.dataset.pip) onPick(el);
+});
+// the first run: a new install opens on the setup, once (Not now puts it off for a day)
+(async () => {
+  if (/^#set/.test(location.hash)) return;
+  const U = await setupData().catch(() => null);
+  if (U && U.needed && Date.now() - (load("setupLater", 0) || 0) > 86400000) setNav("setup");
+})();
 
 window.addEventListener("hashchange", () => setTab(location.hash.slice(1), true));
 let rT = 0;

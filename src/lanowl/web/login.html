@@ -64,6 +64,9 @@ h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spa
 .cmd{display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--fill2);border-radius:9px;padding:7px 7px 7px 10px}
 .cmd code{background:none;padding:0;font-size:12px;flex:1;min-width:0}
 .copy{border:1px solid var(--sep);background:var(--card);border-radius:7px;font-size:12.5px;font-weight:600;padding:4px 9px;flex:none}
+.lab{font-size:12.5px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--ink2);margin:14px 4px 6px}
+.lab:first-child{margin-top:0}
+.lnk{border:0;background:none;padding:0;color:var(--blue);font-weight:600;font-size:inherit}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -81,6 +84,21 @@ h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spa
   </form>
 
   <div id="locked" hidden><div class="state"><b id="lk-h"></b><p id="lk-p"></p></div></div>
+
+  <!-- a new install: the setup code (lanowl --setup-code), then the password (login.py) -->
+  <form id="setup" autocomplete="off" novalidate hidden>
+    <div class="lab">Setup code</div>
+    <input class="field" id="code" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX" aria-label="Setup code">
+    <div class="cmd"><code id="codecmd">docker exec lanowl lanowl --setup-code</code><button class="copy" type="button" data-copy="codecmd">Copy</button></div>
+    <div class="lab">Dashboard password</div>
+    <input type="text" name="username" value="lanowl" autocomplete="username" hidden>
+    <input class="field" id="npw" type="password" autocomplete="new-password" placeholder="8 characters or more" aria-label="Password">
+    <input class="field" id="npw2" type="password" autocomplete="new-password" placeholder="The same again" aria-label="Password again" style="margin-top:8px">
+    <div class="err" id="serr" role="alert"></div>
+    <button class="btn" id="sgo" type="submit">Continue</button>
+    <p class="help" style="margin-top:12px">Only its hash is kept, in config.yaml. The code works once.</p>
+    <p class="help" style="margin-top:6px"><button class="lnk" type="button" id="other">Other ways to set the password</button></p>
+  </form>
 
   <div id="none" class="ways" hidden>
     <div class="way" id="w-tg"><div class="wh">On Telegram</div>
@@ -105,11 +123,14 @@ function render(st) {
   S = Object.assign({}, S, st);
   if (S.state === "in" || S.state === "off") { location.reload(); return; }
   const none = S.state === "none", locked = S.state === "locked";
+  const setup = none && S.code && !S.other;
   $("f").hidden = none || locked;
   $("locked").hidden = !locked;
-  $("none").hidden = !none;
-  $("ttl").textContent = none ? "Set a password first" : "lanowl";
-  $("who").textContent = none ? "The dashboard stays closed until it has one." : (S.where || "");
+  $("setup").hidden = !setup;
+  $("none").hidden = !none || setup;
+  $("ttl").textContent = setup ? "Welcome to lanowl" : none ? "Set a password first" : "lanowl";
+  $("who").textContent = setup ? "Anyone on your network can open this page until it has a password, so first show it's you: type the code lanowl's own machine shows."
+    : none ? "The dashboard stays closed until it has one." : (S.where || "");
   if (locked) {
     $("lk-h").textContent = "Login locked until " + hm(S.until);
     $("lk-p").textContent = "Five wrong passwords in a row." + (S.tg ? " Telegram has been told." : "") +
@@ -151,12 +172,36 @@ $("f").addEventListener("submit", async e => {
   $("pw").focus();
 });
 
-$("copy").addEventListener("click", () => {
-  const b = $("copy"), el = $("hashcmd");
+function copier(b, el) {
   const sel = () => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
   try {
     navigator.clipboard.writeText(el.textContent).then(() => { b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy"; }, 1400); }, sel);
   } catch (_) { sel(); }
+}
+$("copy").addEventListener("click", () => copier($("copy"), $("hashcmd")));
+document.querySelector("[data-copy=codecmd]").addEventListener("click", e => copier(e.currentTarget, $("codecmd")));
+$("other").addEventListener("click", () => render({other: true}));
+
+$("setup").addEventListener("submit", async e => {
+  e.preventDefault();
+  const code = $("code").value.trim(), pw = $("npw").value, pw2 = $("npw2").value;
+  if (!code) { $("serr").textContent = "Type the setup code."; return; }
+  if (pw.length < 8) { $("serr").textContent = "The password needs 8 characters or more."; return; }
+  if (pw !== pw2) { $("serr").textContent = "The two passwords are not the same."; return; }
+  $("sgo").disabled = true; $("serr").textContent = "";
+  let j = {};
+  try {
+    const r = await fetch("/api/setup/claim", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, password: pw})});
+    j = await r.json();
+  } catch (_) { j = {why: "down"}; }
+  $("sgo").disabled = false;
+  if (j.ok) { location.assign("/?welcome=1#setup"); return; }    // a page load, not a hash change
+  if (j.why === "locked") { render({state: "locked", until: j.until}); return; }
+  if (j.why === "none") { location.reload(); return; }
+  $("serr").textContent = j.why === "down" ? "lanowl did not answer. Is it running?"
+    : j.why === "short" ? "The password needs 8 characters or more."
+    : "That is not the setup code. " + (j.left === 1 ? "One more wrong one locks this page for 15 minutes." : (j.left || 0) + " tries left before this page locks for 15 minutes.");
+  if (j.why === "wrong") { $("code").value = ""; $("code").focus(); }
 });
 
 // A password set on Telegram, or a lock running out, shows without a reload.

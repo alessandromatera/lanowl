@@ -4,6 +4,9 @@ Every device lanowl watches is described once, in `config/inventory.yaml`: how i
 watched, how much it matters, and what lanowl may do with it besides watching. An address that
 is not in the inventory is never probed, and the model's tools refuse it too.
 
+The dashboard writes it too: the first-run setup picks devices from your router's DHCP list,
+and Settings → Devices adds and changes them one by one ([Settings](../using/settings.md)).
+
 ```yaml
 groups:
   network: {majority_down_critical: true}

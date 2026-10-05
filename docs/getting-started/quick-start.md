@@ -8,13 +8,16 @@ description of your network: [Set it up with an AI assistant](with-an-ai.md).
 
 ## 1. Get lanowl and copy the three files
 
-Everything lanowl reads lives in one `config` folder, mounted read-only into the container.
+Everything lanowl reads lives in one `config` folder, mounted read-only into the container;
+`config.yaml` and `inventory.yaml` are mounted read-write as well, so
+[Settings](../using/settings.md) on the dashboard can change them. Both must exist before the
+first start.
 
 ```bash
 git clone https://github.com/alessandromatera/lanowl && cd lanowl
 mkdir config
 cp config.example.yaml config/config.yaml
-cp inventory.example.yaml config/inventory.yaml
+cp inventory.example.yaml config/inventory.yaml      # the setup on the dashboard can fill it for you
 cp secrets.example.yaml config/secrets.yaml && chmod 600 config/secrets.yaml
 ssh-keygen -t ed25519 -N '' -C lanowl -f config/id_ed25519
 cp docker/env.example docker/.env
@@ -142,7 +145,6 @@ Model: ollama · qwen3:30b at http://192.168.88.6:11434
 Shell: off
 
 Actions: on · live
-  ✓ dashboard PIN   from config.yaml
 
 Dashboard: on
   ✓ login           password from config.yaml
@@ -174,8 +176,16 @@ its latency and any check that failed.
 docker compose -f docker/compose.yaml up -d
 ```
 
-Open `http://<this machine>/`. It asks for a password first: send `/password` to your bot,
-then the password, and log in with it ([more](../using/dashboard.md#logging-in)). The first
-sweep is done within a minute. Send `/start` to your bot: it answers with what it can do.
+Open `http://<this machine>/`. It asks for a setup code first, which this prints:
+
+```bash
+docker exec lanowl lanowl --setup-code
+```
+
+Type it, choose the dashboard's password, and the dashboard opens on the first-run setup: your
+router's DHCP list, the devices you pick, `inventory.yaml` written for you
+([more](../using/settings.md#the-first-run-setup)). Rather use Telegram? `/password` to your bot
+sets the password too ([more](../using/dashboard.md#logging-in)). The first sweep is done
+within a minute. Send `/start` to your bot: it answers with what it can do.
 
 Next: [Telegram](telegram.md), then [The first hour](first-hour.md).

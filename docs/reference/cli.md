@@ -10,7 +10,7 @@ dashboard and the Telegram bot. The same program takes a few options, run with
 | `lanowl --once` | One sweep and one audit by the owl, printed, then exits. Like a real sweep it may send an alert: add `--no-telegram` to stay quiet. |
 | `lanowl --once --no-llm --no-mqtt --no-telegram` | A dry run: one sweep printed, nothing sent anywhere. |
 | `lanowl --hash-password` | Asks for the dashboard's password twice, without showing it, and prints the `password_hash` line for `config.yaml`. |
-| `lanowl --hash-pin` | The same for the actions PIN: prints the `pin_sha256` line. |
+| `lanowl --setup-code` | Prints the code the dashboard's first page asks for while it has no password (a new install). It works once. Run it in the running container: `docker exec lanowl lanowl --setup-code`. |
 | `lanowl` | Runs for good (the container's command). |
 
 | Option | What it does |

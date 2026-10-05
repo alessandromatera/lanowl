@@ -42,7 +42,7 @@ HTTP or SNMP.
 
 ### Will it change anything on my network?
 
-Only what you approve, with a button on Telegram or your PIN on the dashboard. Actions are
+Only what you approve, with a button on Telegram or a confirm on the dashboard. Actions are
 off until you switch them on, and can run in shadow mode, which only records what would have
 run. The model never writes a command: it picks an action from a fixed list.
 

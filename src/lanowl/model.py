@@ -92,8 +92,14 @@ def load_inventory(path: str) -> Inventory:
     import yaml
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
+    return inventory_from(raw, path)
+
+
+def inventory_from(raw: dict, path: str) -> Inventory:
+    """The inventory from inventory.yaml's parsed data (a save checks a file before it is one)."""
+    raw = raw if isinstance(raw, dict) else {}
     devices = []
-    for d in raw.get("devices", []):
+    for d in raw.get("devices") or []:
         attrs = {k: v for k, v in d.items() if k not in _RESERVED}
         devices.append(Device(
             ip=str(d["ip"]),
@@ -136,6 +142,14 @@ def load_config(path: str) -> dict:
     import yaml
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
+    return config_from(cfg, path)
+
+
+def config_from(cfg: dict, path: str) -> dict:
+    """The config from config.yaml's parsed data, as a start reads it: the defaults that
+    hang on where the file is, and the environment's overrides."""
+    import copy
+    cfg = copy.deepcopy(cfg) if isinstance(cfg, dict) else {}
     # the owner's own device kinds (kinds.py): a `profiles` folder beside config.yaml
     pr = cfg.get("profiles") if isinstance(cfg.get("profiles"), dict) else {}
     here = os.path.dirname(os.path.abspath(path))
