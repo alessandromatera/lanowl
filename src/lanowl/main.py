@@ -56,7 +56,7 @@ from .exposure import Exposure
 from .records import Records
 from .seclog import SecLog
 from .shell import Shell
-from .sites import HOUSE, Sites
+from .sites import HOUSE, ROS_LIVE, Sites, heard_map, ros_secs
 from .sinks import (MqttBridge, TelegramOutbox, TelegramPoller, TelegramRejected,
                     telegram_direct, telegram_edit)
 from .state import StateStore, StatusTracker
@@ -1581,12 +1581,19 @@ class Auditor:
         # devices already on the LAN); afterwards a brand-new MAC is worth telling you about.
         # The same, separately, the first time the fixed addresses are looked at.
         baseline = self.sites.first_look(HOUSE, "dhcp")
+        # when the router last heard from each: a live ARP entry is now, a lease says (last-seen)
+        heard = heard_map(now, [{"mac": x.get("mac-address"), "ago": 0.0} for x in self.executor.arp or []
+                                if x.get("status") in ROS_LIVE],
+                          [{"mac": l.get("mac-address"), "ago": ros_secs(l.get("last-seen"))} for l in leases])
+        hd = lambda mac: {"heard": heard[str(mac).lower()]} if str(mac).lower() in heard else {}   # noqa: E731
         all_bound = [{"ip": l.get("address", ""), "mac": l.get("mac-address", ""),
-                      "host": l.get("host-name", "") or l.get("comment", "")}
+                      "host": l.get("host-name", "") or l.get("comment", ""), **hd(l.get("mac-address", ""))}
                      for l in leases if l.get("status") == "bound"]
+        self.sites.listening(HOUSE, now)
         new_devs = self.sites.remember(HOUSE, all_bound, "dhcp", now)
         if self.executor.arp:                      # not read: no baseline taken from nothing
-            new_devs += self.sites.remember(HOUSE, [x for x in static if x.get("how") == "arp"], "arp", now)
+            new_devs += self.sites.remember(HOUSE, [{**x, **hd(x["mac"])} for x in static if x.get("how") == "arp"],
+                                            "arp", now)
         disc["new"] = new_devs
         disc["baseline"] = baseline
         # When each was FIRST on the main site's DHCP, the guest Wi-Fi included — remembered for
@@ -1597,7 +1604,7 @@ class Auditor:
         info = self.sites.info(HOUSE, [x.get("mac") for x in rows])
         for x in rows:
             i = info.get(str(x.get("mac") or "").lower()) or {}
-            x["first_seen"], x["before"] = i.get("first_seen"), bool(i.get("before"))
+            x["first_seen"], x["before"], x["heard"] = i.get("first_seen"), bool(i.get("before")), i.get("heard")
         disc["recent_new"] = sorted(
             (x for x in disc["unknown"] if (info.get(str(x.get("mac") or "").lower()) or {}).get("new")),
             key=lambda x: -x["first_seen"])

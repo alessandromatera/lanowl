@@ -173,6 +173,10 @@ class StateStore:
             );
             """
         )
+        # `heard`: the last time a router or lanowl actually heard from it (sites.py);
+        # last_seen is only the last read that listed it, a stale ARP entry or an old lease too
+        if "heard" not in {r[1] for r in self.conn.execute("PRAGMA table_info(seen)")}:
+            self.conn.execute("ALTER TABLE seen ADD COLUMN heard REAL")
         self.conn.commit()
 
     # --- things that happen that are not a device going up or down ----------
@@ -211,7 +215,9 @@ class StateStore:
     # --- every device ever seen, per site (new-device detection) -------------
     # Kept for good (a friend back after months must be recognised, not announced as new),
     # so nothing ever deletes from this table. `how`: how it was FIRST seen — dhcp, arp (a
-    # fixed address the router talked to) or scan (the monthly scan found it).
+    # fixed address the router talked to) or scan (the monthly scan found it). `heard`: when
+    # it last answered — the router's own time for it, a live ARP entry; never a stale entry
+    # or a lease outliving the device.
     def seen_count(self, site: str = "home") -> int:
         return self.conn.execute("SELECT COUNT(*) c FROM seen WHERE site=?", (site,)).fetchone()["c"]
 
@@ -229,15 +235,16 @@ class StateStore:
 
     def seen_all(self, site: Optional[str] = None) -> list:
         """Every device ever seen — on one site, or all of them — newest first."""
-        q = "SELECT site, mac, first_seen, last_seen, ip, host, how FROM seen"
+        q = "SELECT site, mac, first_seen, last_seen, ip, host, how, heard FROM seen"
         args: tuple = ()
         if site:
             q, args = q + " WHERE site=?", (site,)
         return [dict(r) for r in self.conn.execute(q + " ORDER BY first_seen DESC", args)]
 
     def mark_seen(self, devices: list, ts: float, site: str = "home") -> list:
-        """Upsert observed devices ({ip, mac, host, how}); return those never seen before on
-        that site. A name, once known, is not wiped by a sighting without one (an ARP entry)."""
+        """Upsert observed devices ({ip, mac, host, how, heard?}); return those never seen before
+        on that site. A name, once known, is not wiped by a sighting without one (an ARP entry);
+        `heard` only moves forward, and only when the row says when it was heard."""
         new = []
         for d in devices:
             mac = (d.get("mac") or "").upper()
@@ -247,13 +254,15 @@ class StateStore:
             if row is None:
                 new.append(d)
                 self.conn.execute(
-                    "INSERT INTO seen(site, mac, first_seen, last_seen, ip, host, how) VALUES (?,?,?,?,?,?,?)",
-                    (site, mac, ts, ts, d.get("ip", ""), d.get("host", ""), d.get("how") or "dhcp"))
+                    "INSERT INTO seen(site, mac, first_seen, last_seen, ip, host, how, heard) VALUES (?,?,?,?,?,?,?,?)",
+                    (site, mac, ts, ts, d.get("ip", ""), d.get("host", ""), d.get("how") or "dhcp", d.get("heard")))
             else:
                 self.conn.execute(
-                    "UPDATE seen SET last_seen=?, ip=?, host=CASE WHEN ?='' THEN host ELSE ? END "
+                    "UPDATE seen SET last_seen=?, ip=?, host=CASE WHEN ?='' THEN host ELSE ? END, "
+                    "heard=CASE WHEN ? IS NULL THEN heard ELSE MAX(COALESCE(heard, 0), ?) END "
                     "WHERE site=? AND mac=?",
-                    (ts, d.get("ip", ""), d.get("host", "") or "", d.get("host", "") or "", site, mac))
+                    (ts, d.get("ip", ""), d.get("host", "") or "", d.get("host", "") or "",
+                     d.get("heard"), d.get("heard"), site, mac))
         self.conn.commit()
         return new
 
@@ -426,6 +435,11 @@ class StateStore:
         if not r or not r["n"]:
             return None
         return round(100.0 * (r["u"] or 0) / r["n"], 1)
+
+    def last_up(self, ip: str) -> Optional[float]:
+        """When this device last answered lanowl (None: not in the history kept)."""
+        row = self.conn.execute("SELECT MAX(ts) t FROM samples WHERE ip=? AND up=1", (ip,)).fetchone()
+        return row["t"] if row and row["t"] is not None else None
 
     def first_sample(self, ip: str, since_ts: float) -> Optional[float]:
         """When this device's record starts within the window (None: nothing in it) — the

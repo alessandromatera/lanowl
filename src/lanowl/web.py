@@ -388,6 +388,7 @@ class Dashboard:
             "buckets": a.state.device_history(ip, now - 86400, 900),
             "uptime_7d": a.state.uptime_pct(ip, now - 7 * 86400),
             "first_7d": a.state.first_sample(ip, now - 7 * 86400),
+            "last_up": a.state.last_up(ip),          # its last answer: the sheet's Last seen
             "info": info,
         }, dumps=_dumps)
 

@@ -556,8 +556,11 @@ class Records:
                       f"{r.get('site_name')}")]
         first = min((r["first_seen"] for r in rows if r.get("first_seen")), default=None)
         return {"count": len(rows), "kept_since": f"{_at(first) or 'now'} — every device, for good",
-                "devices": [{**{k: v for k, v in r.items() if k not in ("first_seen", "last_seen")},
-                             "first_seen": _at(r["first_seen"]), "last_seen": _at(r["last_seen"])}
+                # last_seen: when it was last heard from; last_listed: the last read that still
+                # listed it — a stale ARP entry or a lease can outlive the device by hours
+                "devices": [{**{k: v for k, v in r.items() if k not in ("first_seen", "last_seen", "heard")},
+                             "first_seen": _at(r["first_seen"]), "last_seen": _at(r.get("heard")),
+                             "last_listed": _at(r["last_seen"])}
                             for r in rows[:max(1, min(int(limit or 50), 200))]]}
 
     def _scan(self, **_):

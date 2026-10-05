@@ -56,7 +56,8 @@ here before and is NOT new, however long it was away. `fixed_address`: it took n
 lease — its address was set by hand; the router's ARP table or the monthly scan found it. On \
 the main LAN that is somebody's deliberate setup, worth more attention than a phone. \
 `stale_arp`: no lease, and only a stale entry in the router's ARP table — the router has not \
-heard from it lately, so it is not there at the moment; NOT a fixed address. A \
+heard from it lately; NOT a fixed address. `last_seen`: when the router or lanowl last heard \
+from it. A \
 `first_seen` of "before <date>" means it was already there the first time lanowl looked that \
 way — here for longer, not new. Most new devices are a visitor's phone or \
 laptop (a "private" vendor is a phone hiding its MAC), and on the guest Wi-Fi that is what \
@@ -268,6 +269,7 @@ def build_user_context(snapshot_dict: dict, anomalies: list, recent_transitions:
                 **({"guest": True} if x.get("guest") else {}),
                 **({"stale_arp": True} if x.get("stale") else
                    {"fixed_address": True} if x.get("how") in ("arp", "scan") else {}),
+                **({"last_seen": time.strftime("%Y-%m-%d %H:%M", time.localtime(x["heard"]))} if x.get("heard") else {}),
                 **({"not_routed_here": True} if x.get("not_routed_here") else {}),
                 **({"first_seen": ("before " if x.get("before") else "")
                                   + time.strftime("%Y-%m-%d %H:%M", time.localtime(fs))} if fs else {})}

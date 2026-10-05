@@ -57,11 +57,26 @@ SPEED_BYTES = 10 * 1024 * 1024
 _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _PAIR = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\s+([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b")
 _NOMAC = "00:00:00:00:00:00"
+HERE_S = 600            # heard from in the last this many seconds: "here now"
+ROS_LIVE = ("reachable", "delay", "probe")     # a RouterOS ARP entry the router just heard from
 
 
 def _field(line: str, key: str) -> str:
     m = re.search(rf"(?:^|\s){re.escape(key)}=(\"[^\"]*\"|\S+)", line)
     return m.group(1).strip('"') if m else ""
+
+
+def ros_secs(text) -> Optional[float]:
+    """A RouterOS duration ("2h24m49s", "1w2d", "00:05:10") in seconds; None: none ("never")."""
+    t = str(text or "").strip()
+    m = re.fullmatch(r"(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m(?!s))?(?:(\d+)s)?(?:(\d+)ms)?", t)
+    if t and m and any(m.groups()):
+        w, d, h, mi, s, ms = (int(x or 0) for x in m.groups())
+        return w * 604800 + d * 86400 + h * 3600 + mi * 60 + s + ms / 1000
+    m = re.fullmatch(r"(?:(\d+)d)?\s*(\d+):(\d\d):(\d\d)", t)
+    if m:
+        return int(m.group(1) or 0) * 86400 + int(m.group(2)) * 3600 + int(m.group(3)) * 60 + int(m.group(4))
+    return None
 
 
 def parse_openwrt_leases(text: str) -> list:
@@ -87,15 +102,22 @@ def parse_proc_arp(text: str) -> list:
 
 
 def parse_ip_neigh(text: str) -> list:
-    """`ip neigh show` (OpenWrt): 'IP dev IFACE lladdr MAC [router] STATE'; no MAC = gone.
-    STALE: the table still holds the address, but the router has not heard from it lately —
-    /proc/net/arp shows that the same as a device answering now."""
+    """`ip -s neigh show` (OpenWrt): 'IP dev IFACE lladdr MAC [router] [used A/B/C probes N]
+    STATE'; no MAC = gone. B is how many seconds ago the router last heard from it — its
+    `ago`; without it, REACHABLE/DELAY/PROBE are now. `stale`: not heard from in HERE_S, or
+    STALE with no time (/proc/net/arp shows that the same as a device answering now). A STALE
+    entry heard 30 s ago is not stale: the kernel marks it so after ~30 s of quiet."""
     out = []
     for ln in (text or "").splitlines():
         p = ln.split()
-        if (len(p) >= 6 and p[1] == "dev" and p[3] == "lladdr" and "." in p[0] and _MAC.match(p[4].lower())
+        if not (len(p) >= 6 and p[1] == "dev" and p[3] == "lladdr" and "." in p[0] and _MAC.match(p[4].lower())
                 and p[4].lower() != _NOMAC and p[-1] not in ("FAILED", "INCOMPLETE")):
-            out.append({"ip": p[0], "mac": p[4].lower(), "iface": p[2], **({"stale": True} if p[-1] == "STALE" else {})})
+            continue
+        used = re.search(r"\bused \d+/(\d+)/\d+", ln)
+        ago = float(used.group(1)) if used else 0.0 if p[-1] in ("REACHABLE", "DELAY", "PROBE") else None
+        stale = ago > HERE_S if ago is not None else p[-1] == "STALE"
+        out.append({"ip": p[0], "mac": p[4].lower(), "iface": p[2],
+                    **({"ago": ago} if ago is not None else {}), **({"stale": True} if stale else {})})
     return out
 
 
@@ -105,9 +127,10 @@ def parse_routeros_arp(text: str) -> list:
     out = []
     for ln in (text or "").splitlines():
         mac, ip = _field(ln, "mac-address").lower(), _field(ln, "address")
-        if mac and ip and _MAC.match(mac) and mac != _NOMAC and _field(ln, "status") not in ("failed", "incomplete"):
+        st = _field(ln, "status")
+        if mac and ip and _MAC.match(mac) and mac != _NOMAC and st not in ("failed", "incomplete"):
             out.append({"ip": ip, "mac": mac, "iface": _field(ln, "interface"),
-                        **({"stale": True} if _field(ln, "status") == "stale" else {})})
+                        **({"ago": 0.0} if st in ROS_LIVE else {}), **({"stale": True} if st == "stale" else {})})
     return out
 
 
@@ -120,6 +143,21 @@ def parse_pairs(text: str) -> list:
     return out
 
 
+def heard_map(now: float, *tables) -> dict:
+    """{mac (lower): when the router last heard from it}, from the rows that say (`ago`)."""
+    out: dict = {}
+    for rows in tables:
+        for r in rows or []:
+            if r.get("ago") is not None:
+                m = str(r.get("mac") or "").lower()
+                out[m] = max(out.get(m, 0.0), now - float(r["ago"]))
+    return out
+
+
+def here_now(heard, now: float) -> bool:
+    return bool(heard) and now - heard <= HERE_S
+
+
 def _in(ip: str, nets: list) -> bool:
     try:
         a = ipaddress.ip_address(str(ip))
@@ -129,15 +167,17 @@ def _in(ip: str, nets: list) -> bool:
 
 
 def parse_routeros_leases(text: str) -> list:
-    """`/ip dhcp-server lease print terse`: one lease per line, key=value."""
+    """`/ip dhcp-server lease print terse`: one lease per line, key=value; `last-seen`: how
+    long ago the DHCP server last heard from it (its `ago`)."""
     out = []
     for ln in (text or "").splitlines():
         mac = (_field(ln, "active-mac-address") or _field(ln, "mac-address")).lower()
         ip = _field(ln, "active-address") or _field(ln, "address")
         if not (mac and ip and _MAC.match(mac)):
             continue
+        ago = ros_secs(_field(ln, "last-seen"))
         out.append({"mac": mac, "ip": ip, "name": _field(ln, "host-name") or _field(ln, "comment"),
-                    "status": _field(ln, "status")})
+                    "status": _field(ln, "status"), **({"ago": ago} if ago is not None else {})})
     return out
 
 
@@ -180,7 +220,8 @@ class Sites:
         except Exception:
             log.warning("sites: record unreadable, starting empty", exc_info=True)
             self.rec = {}
-        for k in ("leases", "watch", "known", "scan", "baselines"):
+        # heard_from: since when each site's rows say when they were heard (sites.heard)
+        for k in ("leases", "watch", "known", "scan", "baselines", "heard_from"):
             self.rec.setdefault(k, {})
         self.restore()
 
@@ -251,7 +292,7 @@ class Sites:
             r = rows.get(str(m).upper())
             if r:
                 before = str(r.get("how") or "").endswith("-before")
-                out[str(m).lower()] = {"first_seen": r["first_seen"], "before": before,
+                out[str(m).lower()] = {"first_seen": r["first_seen"], "before": before, "heard": r.get("heard"),
                                        "new": now - r["first_seen"] <= self.new_window_s and not before}
         return out
 
@@ -298,19 +339,29 @@ class Sites:
             prev = self.rec["leases"].get(s["key"]) or {}
             rows = leases if leases is not None else prev.get("rows") or []
             leased = {r["mac"] for r in rows}
-            static = ([{"ip": x["ip"], "mac": x["mac"], "how": "arp", **({"stale": True} if x.get("stale") else {})}
+            now = time.time()
+            heard = heard_map(now, arp, leases)      # when the router last heard from each
+            static = ([{"ip": x["ip"], "mac": x["mac"], "how": "arp", **({"stale": True} if x.get("stale") else {}),
+                        **({"heard": heard[x["mac"]]} if x["mac"] in heard else {})}
                        for x in arp if x["mac"] not in leased and _in(x["ip"], self._lan(s))]
                       if arp is not None else prev.get("static") or [])
-            now = time.time()
             self.rec["leases"][s["key"]] = {"ts": now, "error": err, "rows": rows, "static": static}
+            if leases is not None or arp is not None:
+                self.listening(s["key"], now)
             if leases:
                 self._follow(s, leases)
-                self.remember(s["key"], [{"ip": r["ip"], "mac": r["mac"], "host": r.get("name") or ""}
+                self.remember(s["key"], [{"ip": r["ip"], "mac": r["mac"], "host": r.get("name") or "",
+                                          **({"heard": heard[r["mac"]]} if r["mac"] in heard else {})}
                                          for r in leases if r.get("status") in (None, "", "bound")],
                               "dhcp", now)
             if arp is not None:
                 self.remember(s["key"], static, "arp", now)
         self._save()
+
+    def listening(self, key: str, now: float):
+        """The first read whose rows say when each device was heard: before it, "not heard
+        from" means nothing."""
+        self.rec["heard_from"].setdefault(key, now)
 
     def _lan(self, s: dict) -> list:
         """The site's own networks, where ARP means something: not a tunnel's /32."""
@@ -318,8 +369,9 @@ class Sites:
 
     async def arp(self, s: dict) -> Optional[list]:
         if s["kind"] == "openwrt":
-            # `ip neigh` says which entries are stale; /proc/net/arp where there is no `ip`
-            rc, out, err = await self.a.access.ssh(s["router"], "ip neigh show 2>/dev/null || cat /proc/net/arp",
+            # `ip -s neigh` says when the router last heard from each; /proc/net/arp where
+            # there is no `ip`
+            rc, out, err = await self.a.access.ssh(s["router"], "ip -s neigh show 2>/dev/null || cat /proc/net/arp",
                                                    timeout_s=25)
             return (parse_ip_neigh(out) or parse_proc_arp(out)) if rc == 0 else None
         rc, out, err = await self.a.access.ssh(s["router"], "/ip arp print terse without-paging",
@@ -366,6 +418,8 @@ class Sites:
             self.rec["scan"][s["key"]] = {"ts": now, "why": why, "error": "; ".join(errs),
                                           "rows": found if found is not None else prev.get("rows") or []}
             if found:
+                # not a sighting: the table read after the pings still holds entries that
+                # did not answer them
                 self.remember(s["key"], [{**r, "host": ""} for r in found], "scan", now)
             log.info("sites: scan of %s (%s): %s device(s)%s", s["name"], why,
                      len(found) if found is not None else "no", f" — {'; '.join(errs)}" if errs else "")
@@ -467,7 +521,9 @@ class Sites:
                      "how": x.get("how") or "dhcp", **({"found": x["found"]} if x.get("found") else {}),
                      **({"stale": True} if x.get("stale") else {}),
                      # already there the first time it was looked at: "here since before …"
-                     "before": bool(x.get("before"))}
+                     "before": bool(x.get("before")),
+                     # when the router or lanowl last heard from it (StateStore.mark_seen)
+                     "heard": x.get("heard"), "here": here_now(x.get("heard"), time.time())}
                     for x in (d.get("unknown") or []) + (d.get("ignored") or [])
                     if self.a.inv.get(x.get("ip", "")) is None]      # watched since the last read
             for r in rows:
@@ -490,9 +546,12 @@ class Sites:
                 have.add(r["mac"])
                 static.append({"ip": r["ip"], "mac": r["mac"], "name": "", "how": "scan", "found": sc.get("ts")})
         seen = self.info(key, [r["mac"] for r in lease_rows + static])
+        now = time.time()
         rows = [{**r, "known": r["mac"] in self.rec["known"], "vendor": vendor(r["mac"]),
                  "known_by": "you" if r["mac"] in self.rec["known"] else "",
                  "first_seen": (seen.get(r["mac"]) or {}).get("first_seen"),
+                 "heard": (seen.get(r["mac"]) or {}).get("heard"),
+                 "here": here_now((seen.get(r["mac"]) or {}).get("heard"), now),
                  "before": bool((seen.get(r["mac"]) or {}).get("before")),
                  "new": bool((seen.get(r["mac"]) or {}).get("new"))}
                 for r in lease_rows + static if self.a.inv.get(r["ip"]) is None]
@@ -512,6 +571,10 @@ class Sites:
             L = self.rec["leases"].get(s["key"]) or {}
             here[s["key"]] = {r["mac"].upper(): r["ip"] for r in (L.get("rows") or []) + (L.get("static") or [])}
         watched = {(w["site"], w["mac"].upper()): ip for ip, w in self.rec["watch"].items()}
+        # a watched device answering lanowl now is here, whatever the router's tables say
+        answering = {x.get("ip") for x in (getattr(self.a, "_last_report", None) or {}).get("devices") or []
+                     if x.get("up")}
+        now = time.time()
         cfg_ign = {m.strip().upper() for m in ((self.a.cfg.get("discovery") or {}).get("ignore_macs") or [])}
         guest = guest_nets(self.a.cfg)
         names = {s["key"]: s["name"] for s in self.sites}
@@ -529,7 +592,9 @@ class Sites:
             out.append({"site": site, "site_name": names.get(site, site), "mac": mac.lower(),
                         "first_seen": r.get("first_seen"), "last_seen": r.get("last_seen"),
                         "ip": ip, "host": r.get("host") or "", "vendor": vendor(mac),
-                        "guest": site == HOUSE and in_nets(ip, guest), "here": bool(ip_now),
+                        "guest": site == HOUSE and in_nets(ip, guest), "heard": r.get("heard"),
+                        # here: heard from lately — not merely still in a router's tables
+                        "here": here_now(r.get("heard"), now) or (dev is not None and dev.ip in answering),
                         "fixed": how in ("arp", "scan"),
                         "before": str(r.get("how") or "").endswith("-before"),
                         "status": "watched" if dev is not None else "known" if known else "",
@@ -719,6 +784,7 @@ class Sites:
                     if nm is not None and nm.for_mac(s["key"], r["mac"]) else {})} for r in rows]
         sc = self.rec["scan"].get(s["key"]) or {}
         return {"dhcp": {"read": read, "error": err, "rows": rows,
+                         "heard_from": self.rec["heard_from"].get(s["key"]),
                          "unknown": sum(1 for r in rows if not r["known"] and r["routed"]),
                          # the monthly scan of this site's networks
                          "scan": {"ts": sc.get("ts"), "error": sc.get("error") or "",

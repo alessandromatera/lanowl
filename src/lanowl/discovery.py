@@ -175,6 +175,7 @@ def in_nets(ip: str, nets: list) -> bool:
 
 
 _ARP_GONE = ("failed", "incomplete")
+_ARP_LIVE = ("reachable", "delay", "probe")     # the router just heard from it
 
 
 def static_from_arp(arp, leases, nets) -> list:
@@ -192,7 +193,8 @@ def static_from_arp(arp, leases, nets) -> list:
             continue
         seen.add(mac)
         # stale: the router has not heard from it lately — no sign the address was set by hand
-        out.append({"ip": ip, "mac": mac, "how": "arp", **({"stale": True} if x.get("status") == "stale" else {})})
+        out.append({"ip": ip, "mac": mac, "how": "arp", **({"stale": True} if x.get("status") == "stale" else {}),
+                    **({"ago": 0.0} if x.get("status") in _ARP_LIVE else {})})
     return out
 
 

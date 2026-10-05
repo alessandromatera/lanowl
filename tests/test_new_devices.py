@@ -18,7 +18,10 @@ router, no model: the leases are a fake, the audit's verdict is written here. Pi
      site keeps its own record, its ARP table and its monthly scan too; both routers' tables
      and RouterOS's ip-scan are read right;
   7. an address with no lease that is only a STALE entry in the router's table (a phone gone,
-     its lease over — 10-05, at Lake's) is said as that, never as a fixed address.
+     its lease over — 10-05, at Lake's) is said as that, never as a fixed address;
+  8. "last seen" is when a router or lanowl last HEARD from it — a live ARP entry, the time
+     the router keeps (OpenWrt's neighbour table, a RouterOS lease's last-seen) — never a
+     read that merely still listed it, nor the scan's table; "here now" is the last 10 minutes.
 """
 from __future__ import annotations
 
@@ -101,8 +104,10 @@ def test_remembered_and_told():
         a.state.mark_seen([{"ip": "192.168.10.160", "mac": FRIEND, "host": "Marcos-Laptop"},
                            {"ip": "192.168.10.137", "mac": DISH, "host": ""}], now - 100 * 86400)
         a.state.mark_seen([{"ip": "192.168.10.160", "mac": FRIEND, "host": "Marcos-Laptop"}], now - 90 * 86400)
-        leases = [lease("192.168.10.160", FRIEND, "Marcos-Laptop"), lease("192.168.10.150", PI),
-                  lease("192.168.180.12", PHONE), lease("192.168.10.137", DISH)]
+        # the router's last contact with each lease: the Pi two hours ago, the phone a minute;
+        # the friend's and the dish's leases say nothing
+        leases = [lease("192.168.10.160", FRIEND, "Marcos-Laptop"), {**lease("192.168.10.150", PI), "last-seen": "2h"},
+                  {**lease("192.168.180.12", PHONE), "last-seen": "1m"}, lease("192.168.10.137", DISH)]
 
         async def fetch_leases(cfg):
             return leases
@@ -132,6 +137,7 @@ def test_remembered_and_told():
         out["ctx"] = ctx
         rows = {r["mac"]: r for r in a.sites.rows(HOUSE)[0]}
         out["rows"] = rows
+        out["now"] = now
 
         # the audit's verdict: an issue on the Pi (new) and on the friend (not new); the
         # guest's phone only in the summary
@@ -188,11 +194,20 @@ def test_remembered_and_told():
     check(next(r for r in seen if r["mac"] == ROGUE.lower())["fixed"], "...marked fixed address")
     s = {r["mac"]: r for r in seen}
     check(s[DISH.lower()]["status"] == "known" and s[PI.lower()]["status"] == "", "what each is now: known or nobody's")
-    check(all(r["here"] for r in seen), "here now: every one holds a lease or is in the ARP table")
+    here = {r["mac"]: (r["here"], r["heard"]) for r in seen}
+    t = out["now"] + 60                                # the second read
+    check(here[SWITCH.lower()] == (True, t) and here[ROGUE.lower()] == (True, t) and here[PHONE.lower()] == (True, t - 60),
+          f"here now: a live ARP entry, a lease the router heard from a minute ago ({here})")
+    check(here[PI.lower()] == (False, t - 7200), "the Pi: last seen two hours ago, its lease's last contact — not here now")
+    check(here[FRIEND.lower()] == (False, None) and here[DISH.lower()] == (False, None),
+          "a lease that says nothing and no live ARP entry: not here, and no time made up")
+    check(rows[PI.lower()]["heard"] == t - 7200 and not rows[PI.lower()]["here"]
+          and rows[PHONE.lower()]["here"], "...the same on the site's rows")
     ask = out["ask"]
     devs = (ask or {}).get("devices") or []
-    check(len(devs) == 1 and devs[0]["mac"] == FRIEND.lower() and devs[0].get("first_seen"),
-          "Ask finds the friend, with the first visit")
+    check(len(devs) == 1 and devs[0]["mac"] == FRIEND.lower() and devs[0].get("first_seen")
+          and devs[0]["last_seen"] is None and devs[0].get("last_listed"),
+          "Ask finds the friend, with the first visit; last seen unknown, apart from when a read last listed it")
 
 
 def test_gran():
@@ -239,6 +254,16 @@ def test_gran():
                      "192.168.108.77 dev br-lan  FAILED\n")
         await s.read_all()
         out["stale"] = {r["mac"]: (r["how"], bool(r.get("stale"))) for r in s.rows("lake")[0]}
+        # ...and `ip -s`: how long ago it last heard from each. 00:06 is STALE but heard 20 s
+        # ago (the kernel's ~30 s of quiet); 00:05 last heard 33 hours ago
+        procs.append("192.168.108.101 dev br-lan lladdr aa:bb:cc:00:00:01 used 21/20/2 probes 1 STALE\n"
+                     "192.168.108.2 dev br-lan lladdr aa:bb:cc:00:00:05 used 118839/118838/118807 probes 1 STALE\n"
+                     "192.168.108.3 dev br-lan lladdr aa:bb:cc:00:00:06 used 36/20/13 probes 1 STALE\n")
+        t0 = time.time()
+        await s.read_all()
+        out["heard"] = {r["mac"]: (bool(r.get("stale")), r["here"], r["heard"]) for r in s.rows("lake")[0]}
+        out["t0"] = t0
+        out["heard_from"] = s._dhcp_view(s.get("lake"))["dhcp"]["heard_from"]
         # a year on: the scan just run must come before the day probed (a fixed date would go
         # stale the morning its scan was already done)
         y = time.localtime().tm_year + 1
@@ -264,6 +289,14 @@ def test_gran():
     check(out["stale"].get("aa:bb:cc:00:00:05") == ("arp", True) and out["stale"].get("aa:bb:cc:00:00:06") == ("arp", False)
           and "aa:bb:cc:00:00:01" not in {m_ for m_, v in out["stale"].items() if v[1]},
           f"read with `ip neigh`: the stale entry is marked stale, the live ones are not ({out['stale']})")
+    h, t0 = out["heard"], out["t0"]
+    check(h["aa:bb:cc:00:00:06"][:2] == (False, True) and h["aa:bb:cc:00:00:06"][2] >= t0 - 22,
+          f"STALE but heard 20 s ago: not stale, here now ({h['aa:bb:cc:00:00:06']})")
+    check(h["aa:bb:cc:00:00:05"][:2] == (True, False) and abs(h["aa:bb:cc:00:00:05"][2] - (t0 - 118838)) < 2,
+          f"heard 33 h ago: stale, last seen then ({h['aa:bb:cc:00:00:05']})")
+    check(h["aa:bb:cc:00:00:01"][1] and h["aa:bb:cc:00:00:09"][2] is None,
+          "a lease's device heard 20 s ago is here; the scan's table is no sighting (it keeps the silent ones)")
+    check(out["heard_from"] and out["heard_from"] <= t0, "the site says since when it has been listening")
     check(out["due"] == [False, True, False], f"monthly, on the day, after the hour ({out['due']})")
     check(out["again"].get("ok") is False, "one scan at a time")
 
@@ -272,7 +305,14 @@ def test_parsers():
     print("\n-- the routers' tables --")
     r = SI.parse_routeros_arp('0 D address=192.168.0.5 mac-address=11:22:33:44:55:66 interface=bridge status=reachable\n'
                               '1 D address=192.168.0.9 interface=bridge status=failed\n')
-    check(r == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "bridge"}], "RouterOS ARP, the failed entry left out")
+    check(r == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "bridge", "ago": 0.0}],
+          "RouterOS ARP, the failed entry left out; a reachable one heard just now")
+    ls = SI.parse_routeros_leases('0 D address=192.168.0.7 mac-address=11:22:33:44:55:71 status=bound last-seen=2h24m49s\n'
+                                  '1 D address=192.168.0.8 mac-address=11:22:33:44:55:72 status=waiting last-seen=never\n')
+    check(ls[0]["ago"] == 2 * 3600 + 24 * 60 + 49 and "ago" not in ls[1],
+          "RouterOS leases: last-seen is how long ago the server heard from it; never is no time")
+    check([SI.ros_secs(x) for x in ("1w2d", "3m", "45s", "500ms", "00:05:10", "1d 02:00:00", "never", "")]
+          == [9 * 86400, 180, 45, 0.5, 310, 93600, None, None], "RouterOS durations")
     r = SI.parse_routeros_arp('0 D address=192.168.0.6 mac-address=11:22:33:44:55:67 interface=bridge status=stale\n'
                               '1 D address=192.168.0.7 mac-address=11:22:33:44:55:70 interface=bridge status=failed\n')
     check(len(r) == 1 and r[0].get("stale") is True,
@@ -282,9 +322,9 @@ def test_parsers():
                           "192.168.0.1 dev wlan0 lladdr 11:22:33:44:55:68 router DELAY\n"
                           "192.168.0.9 dev br-lan  FAILED\n"
                           "fe80::1 dev br-lan lladdr 11:22:33:44:55:69 router STALE\n")
-    check(n == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "br-lan"},
+    check(n == [{"ip": "192.168.0.5", "mac": "11:22:33:44:55:66", "iface": "br-lan", "ago": 0.0},
                 {"ip": "192.168.0.6", "mac": "11:22:33:44:55:67", "iface": "br-lan", "stale": True},
-                {"ip": "192.168.0.1", "mac": "11:22:33:44:55:68", "iface": "wlan0"}],
+                {"ip": "192.168.0.1", "mac": "11:22:33:44:55:68", "iface": "wlan0", "ago": 0.0}],
           f"OpenWrt's `ip neigh`: IPv4 with a MAC, the stale one marked, failed and IPv6 left out ({n})")
     check(SI.parse_ip_neigh(PROC_ARP) == [], "...and /proc/net/arp is not mistaken for it (read by its own parser)")
     scan = ("Columns: ADDRESS, MAC-ADDRESS, TIME, DNS\n  ADDRESS      MAC-ADDRESS        TIME  DNS\n"
@@ -303,8 +343,28 @@ def test_parsers():
     check(d["unknown"] and d["unknown"][0].get("stale") is True, "...and stays marked in the unknown devices")
 
 
+def test_heard():
+    print("\n-- heard: only moves forward, only from a sighting; a watched device's last answer --")
+    from lanowl.state import StateStore
+    with tempfile.TemporaryDirectory() as d:
+        st = StateStore(os.path.join(d, "s.sqlite"))
+        mac = "aa:bb:cc:00:00:42"
+        st.mark_seen([{"ip": "192.168.10.54", "mac": mac, "heard": 1000.0}], 1000.0)
+        st.mark_seen([{"ip": "192.168.10.54", "mac": mac}], 2000.0)                  # listed, not heard
+        st.mark_seen([{"ip": "192.168.10.54", "mac": mac, "heard": 500.0}], 3000.0)  # an older time
+        r = st.seen_all()[0]
+        check(r["heard"] == 1000.0 and r["last_seen"] == 3000.0,
+              f"a read that only lists it, or an older time, moves nothing ({r['heard']}, {r['last_seen']})")
+        st.mark_seen([{"ip": "192.168.10.54", "mac": mac, "heard": 4000.0}], 4000.0)
+        check(st.seen_all()[0]["heard"] == 4000.0, "a newer sighting does")
+        st.record_sample("192.168.10.54", True, 1.0, {}, ts=100.0)
+        st.record_sample("192.168.10.54", False, None, {}, ts=200.0)
+        check(st.last_up("192.168.10.54") == 100.0 and st.last_up("192.168.10.56") is None,
+              "a watched device's last seen: its last answer, not its last sweep")
+
+
 if __name__ == "__main__":
-    for t in (test_guest_marked, test_remembered_and_told, test_gran, test_parsers):
+    for t in (test_guest_marked, test_remembered_and_told, test_gran, test_parsers, test_heard):
         t()
     print("\nFAILED:\n  " + "\n  ".join(_fails) if _fails else "\nall ok")
     sys.exit(1 if _fails else 0)

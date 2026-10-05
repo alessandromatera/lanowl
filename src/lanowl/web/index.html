@@ -1254,13 +1254,17 @@ function renderSites(d) {
   // never on the network before, or here since when — remembered for good, so a friend back
   // after months is "here since" the day of the first visit
   const seen = r => r.new ? `<span class="rs wrap"><span class="tagx c-yellow">new</span> first seen ${esc(clock(r.first_seen))}${r.guest ? " · guest Wi-Fi" : ""}</span>`
-    : r.first_seen || r.guest ? `<span class="rs wrap">${[r.first_seen ? "here since " + (r.before ? "before " : "") + esc(dmy(r.first_seen)) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · ")}</span>` : "";
+    : r.first_seen || r.guest ? `<span class="rs wrap">${[r.first_seen ? (r.here ? "here since " : "first seen ") + (r.before ? "before " : "") + esc(dmy(r.first_seen)) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · ")}</span>` : "";
+  // when the router or lanowl last heard from it — not when a table last listed it
+  const lastTxt = r => r.here ? "here now" : r.heard ? `last seen ${esc(clock(r.heard))} (${esc(ago(r.heard))})`
+    : D.heard_from ? `not heard from since ${esc(clock(D.heard_from))}` : "";
+  const last = r => lastTxt(r) ? `<span class="rs wrap">${lastTxt(r)}</span>` : "";
   // no DHCP lease: an address set by hand, seen in the router's ARP table or by the monthly scan —
   // or only a stale ARP entry, which says nothing of how its address was set
-  const fixed = r => r.how === "arp" ? `<span class="rs wrap">${r.stale ? "stale ARP entry — not there at the moment, no DHCP lease" : "fixed address — no DHCP"}</span>`
+  const fixed = r => r.how === "arp" ? `<span class="rs wrap">${r.stale ? "stale ARP entry — no DHCP lease" : "fixed address — no DHCP"}</span>`
     : r.how === "scan" ? `<span class="rs wrap">fixed address — found by the scan${r.found ? " of " + esc(dmy(r.found)) : ""}</span>` : "";
   const row = r => `<div class="row row2"><span class="rt"><span class="rn">${title(r)}</span>
-      <span class="rs wrap mono">${esc(r.ip)} · ${esc(r.mac)}</span>${maker(r) ? `<span class="rs wrap">${maker(r)}</span>` : ""}${fixed(r)}${seen(r)}${r.routed === false ? `<span class="rs wrap">not routed here — the tunnels do not carry that network, so it cannot be watched</span>` : ""}</span>${btns(r) ? `<span class="rbtns">${btns(r)}</span>` : ""}</div>`;
+      <span class="rs wrap mono">${esc(r.ip)} · ${esc(r.mac)}</span>${maker(r) ? `<span class="rs wrap">${maker(r)}</span>` : ""}${fixed(r)}${seen(r)}${last(r)}${r.routed === false ? `<span class="rs wrap">not routed here — the tunnels do not carry that network, so it cannot be watched</span>` : ""}</span>${btns(r) ? `<span class="rbtns">${btns(r)}</span>` : ""}</div>`;
   const id = "kn:" + s.key;
   const SC = D.scan || {};
   put("sitedhcp", `<div class="sh">Not watched, on ${esc(s.name)} <span class="r">${D.read ? "read " + esc(ago(D.read)) : "not read yet"}</span></div>` +
@@ -1271,7 +1275,7 @@ function renderSites(d) {
     `<span class="rs wrap">${SC.ts ? "scanned " + esc(clock(SC.ts)) + " · " + SC.found + " answered" : "never scanned yet"}${SC.error ? " · " + esc(SC.error) : ""} · monthly on day ${esc(SC.day)}</span></span></button>` + `</div>` +
     (kn.length ? `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""} style="margin:0 0 6px"><summary style="margin-left:4px">Known, not watched · ${kn.length}${ic("chev")}</summary>` +
       `<div class="list" style="--inset:16px">${kn.map(row).join("")}</div></details>` : "") +
-    `<div class="fine" style="margin:6px 4px 10px"><b>Watch</b> — pinged from here from now on${s.router ? `, behind ${esc(s.name)}'s router` : ""}, reported like the rest of ${esc(s.name)}; it follows its MAC if DHCP moves it. <b>Known</b> — it belongs there: no longer counted as unknown, not watched.${s.remote ? " “Not routed here”: a network of theirs the tunnels do not carry." : ""} <b>Fixed address</b> — no DHCP lease: the router's ARP table saw it, or the monthly scan (every network asked “who is there” from its own router, no ports). <b>Stale ARP entry</b> — the router still holds its address but has not heard from it lately.</div>`);
+    `<div class="fine" style="margin:6px 4px 10px"><b>Watch</b> — pinged from here from now on${s.router ? `, behind ${esc(s.name)}'s router` : ""}, reported like the rest of ${esc(s.name)}; it follows its MAC if DHCP moves it. <b>Known</b> — it belongs there: no longer counted as unknown, not watched.${s.remote ? " “Not routed here”: a network of theirs the tunnels do not carry." : ""} <b>Fixed address</b> — no DHCP lease: the router's ARP table saw it, or the monthly scan (every network asked “who is there” from its own router, no ports). <b>Stale ARP entry</b> — the router still holds its address but has not heard from it lately. <b>Last seen</b> — when the router last heard from it (its ARP table's time, a lease's last contact); <b>here now</b>: in the last 10 minutes.</div>`);
 }
 
 // ---------------------------------------------------------------- now
@@ -1820,7 +1824,7 @@ function renderSeen(d) {
   const title = r => esc(r.name || r.host || (priv(r) ? "Private address" : r.vendor || "")) || '<span class="muted">no name</span>';
   const maker = r => priv(r) ? "a phone, tablet or laptop hiding its own MAC" : (r.name || r.host) && r.vendor ? esc(r.vendor) : "";
   const what = r => [all && r.site !== "home" ? esc(r.site_name) : "", r.before ? "already there at the first look" : "",
-    r.here ? "here now" : "last seen " + esc(clock(r.last_seen)),
+    r.here ? "here now" : r.heard ? "last seen " + esc(clock(r.heard)) : "last listed by its router " + esc(clock(r.last_seen)),
     r.guest ? "guest Wi-Fi" : "", r.fixed ? "fixed address" : "", r.status === "watched" ? "watched" : r.status === "known" ? "known" : ""].filter(Boolean).join(" · ");
   const rows = mine.slice(0, 400);
   let day = "";
@@ -2872,6 +2876,8 @@ function detailsHtml() {
   let h = `<div class="sh">Details</div><div class="list">`;
   h += kv("Address", esc([I.ip, I.mac || L["mac-address"], L["host-name"] ? "“" + L["host-name"] + "”" : ""].filter(Boolean).join(" · ")));
   h += kv("What it is", esc([I.role, I.note].filter(Boolean).join(" — ")));
+  // a watched device's last answer to lanowl
+  if ((S.d.devices || []).some(v => v.ip === I.ip)) h += kv("Last seen", H.last_up ? esc(`${clock(H.last_up)} (${ago(H.last_up)})`) : "no answer in the history kept");
   if (I.group) h += kv("Importance", esc(`${GROUP_NAME[I.group] || cap(I.group)} · ${I.criticality}: ${CRIT_WORDS[I.criticality] || ""}`));
   if (I.depends_on) h += kv("Reached through", I.depends_on.ip === "wan" ? "the internet" : lnk(I.depends_on) + esc(" — when it is down, this one is not reported on its own"));
   if ((I.behind || []).length) h += kv("Behind it", I.behind.map(lnk).join(", ") + esc(" — they go dark with it"));
