@@ -23,6 +23,12 @@ Wi-Fi or VM network first.
 - Is lanowl running? `docker compose -f docker/compose.yaml ps`, then the log.
 - **"use the address, not a name" (HTTP 421):** you opened it by a host name. Open it by IP
   address, or list the name in `web.allowed_hosts`.
+- **"Set a password first":** the dashboard has no password yet. Send `/password` to the bot,
+  or set `web.password_hash` ([Logging in](../using/dashboard.md#logging-in)).
+- **You forgot the password:** `/password` on Telegram sets a new one. If yours is in
+  `config.yaml`, make a new hash with `lanowl --hash-password` and restart lanowl.
+- **"Login locked":** five wrong passwords in a row. Wait 15 minutes, or set a new password
+  with `/password`, which lifts the lock.
 
 ## Nothing arrives on Telegram
 

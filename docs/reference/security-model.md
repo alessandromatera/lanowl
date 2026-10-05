@@ -41,8 +41,14 @@ The owl is useful, and treated as if anything it reads could steer it.
 
 ## The dashboard
 
-The dashboard has no login yet (it is on the roadmap), so it relies on your LAN, and on these:
+The dashboard is closed until you log in, and it relies on these:
 
+- One password, kept as a scrypt hash: in `config.yaml`, or set with `/password` on Telegram,
+  whose message is deleted. Without one the page shows only how to set one.
+- A login is a random token in an HttpOnly cookie, of which lanowl keeps only a hash. It
+  lasts 30 days after the last visit. A new password, or Log out everywhere, ends every one.
+- Five wrong passwords lock the login for 15 minutes and tell you on Telegram, with the
+  address the last try came from.
 - It accepts only JSON for anything that does something, so another web page cannot submit a
   form to it (a cross-origin JSON request needs a permission it never grants).
 - It answers only requests that reached it by IP address or by a name you listed, which
@@ -62,7 +68,8 @@ acts on a button only when it comes from an allowed person in an allowed chat.
 
 - **Backups are not encrypted.** They hold your network's passwords and keys. Keep the
   store's path as private as `secrets.yaml`.
-- **Anyone on your LAN can read the dashboard.** Until the login exists, keep it on a
-  network you trust.
+- **The dashboard's password over plain HTTP.** It crosses your LAN unencrypted when you log
+  in. Put lanowl behind a reverse proxy with HTTPS if anyone you do not trust can watch your
+  network's traffic.
 - **A host that is already compromised.** If someone is root on lanowl's own machine, they
   have its secrets.

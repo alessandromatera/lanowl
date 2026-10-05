@@ -434,7 +434,7 @@ def test_pin_report():
     check(good[1] == 0 and "✓ dashboard PIN" in good[0] and "from config.yaml" in good[0], "config.yaml's: ✓")
     check(raw[1] == 1 and "not a SHA-256" in raw[0] and "2389" not in raw[0],
           "the digits in pin_sha256: ✗, without repeating them")
-    check(none[1] == 1 and "/pin" in none[0] and "sha256sum" in none[0], "none: ✗, both ways named")
+    check(none[1] == 1 and "/pin" in none[0] and "--hash-pin" in none[0], "none: ✗, both ways named")
     check(nochat[1] == 1 and "/pin" not in nochat[0], "no Telegram chat: only config.yaml")
 
 
@@ -531,7 +531,7 @@ def test_dashboard_pin():
     out = {}
 
     async def go(d):
-        m, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0}})
+        m, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0, "login": False}})
         _fake_checks(a)
         tg = _Tg().install()
         emitted = []

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0c0e" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Home">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/icon.svg">
+<title>lanowl · log in</title>
+<!-- Served by web.py to a browser that is not logged in (login.py), at every address of the
+     dashboard. Self-contained like index.html: no CDN, no web fonts. The owl's eyes stay grey:
+     their colour is the network's health, and that is behind the login too. -->
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --bg:#f5f5f3;--card:#fff;--ink:#141417;--ink2:#5e6068;--ink3:#a0a2a8;
+  --sep:rgba(20,20,10,.09);--fill:rgba(20,20,10,.065);--fill2:rgba(20,20,10,.035);
+  --shadow:0 1px 2px rgba(0,0,0,.03),0 10px 30px -18px rgba(0,0,0,.18);
+  --red:#dc2828;--red-t:#c21d1d;--blue:#2f5bd3;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0c0c0e;--card:#161619;--ink:#ececef;--ink2:#a3a4ac;--ink3:#65666e;
+  --sep:rgba(255,255,255,.085);--fill:rgba(255,255,255,.08);--fill2:rgba(255,255,255,.045);
+  --shadow:none;--red:#f25656;--red-t:#ff7b7b;--blue:#6d94f7;
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.42 var(--font);-webkit-font-smoothing:antialiased;
+  display:flex;justify-content:center;
+  padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+main{width:100%;max-width:360px;margin:auto 0;display:flex;flex-direction:column}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+code{font-family:var(--mono);font-size:.86em;background:var(--fill);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+.owl{width:76px;height:76px;margin:0 auto;display:block;border-radius:19px;box-shadow:0 10px 28px -14px rgba(0,0,0,.45)}
+h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spacing:-.025em;line-height:1.15}
+.who{text-align:center;color:var(--ink2);font-size:15px;margin:0 0 22px;overflow-wrap:anywhere}
+.field{display:block;width:100%;font-size:18px;padding:13px 14px;border-radius:14px;border:1px solid var(--sep);background:var(--card);
+  color:var(--ink);box-shadow:var(--shadow)}
+.field::placeholder{color:var(--ink3)}
+.err{min-height:20px;margin-top:8px;color:var(--red-t);font-size:14px;text-align:center}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;border:0;border-radius:14px;
+  background:var(--blue);color:#fff;font-size:16px;font-weight:650;margin-top:6px}
+.btn:active{filter:brightness(.92)}
+.btn:disabled{background:var(--fill);color:var(--ink2);cursor:default}
+.help{margin:18px 0 0;text-align:center;font-size:13.5px;color:var(--ink2)}
+.help b{color:var(--ink);font-weight:600}
+.state{border-radius:var(--r);padding:14px 16px;font-size:15px;background:color-mix(in srgb,var(--red) 11%,var(--card));color:var(--red-t)}
+.state b{display:block;font-size:16.5px;margin-bottom:3px}
+.state p{margin:0;opacity:.88}
+.ways{display:flex;flex-direction:column;gap:10px}
+.way{background:var(--card);border:1px solid var(--sep);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}
+.way .wh{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--ink2)}
+.way p{margin:5px 0 0;font-size:14.5px}
+.cmd{display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--fill2);border-radius:9px;padding:7px 7px 7px 10px}
+.cmd code{background:none;padding:0;font-size:12px;flex:1;min-width:0}
+.copy{border:1px solid var(--sep);background:var(--card);border-radius:7px;font-size:12.5px;font-weight:600;padding:4px 9px;flex:none}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <svg class="owl" viewBox="0 0 120 120" role="img" aria-label="lanowl"><rect width="120" height="120" rx="28" fill="#0c1322"/><path d="M24 34 L29 15 L46 27 Q60 23 74 27 L91 15 L96 34 L96 58 Q96 88 60 105 Q24 88 24 58 Z" fill="none" stroke="#f4f6fb" stroke-width="6" stroke-linejoin="round"/><circle cx="45" cy="56" r="10" fill="none" stroke="#f4f6fb" stroke-width="5"/><circle cx="75" cy="56" r="10" fill="none" stroke="#f4f6fb" stroke-width="5"/><circle cx="45" cy="56" r="4.5" fill="#9aa0aa"/><circle cx="75" cy="56" r="4.5" fill="#9aa0aa"/><path d="M60 68 L56 75 L60 82 L64 75 Z" fill="#f0aa2a"/></svg>
+  <h1 id="ttl">lanowl</h1>
+  <p class="who" id="who"></p>
+
+  <form id="f" autocomplete="on" novalidate hidden>
+    <input type="text" name="username" value="lanowl" autocomplete="username" hidden>
+    <input class="field" id="pw" name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" autofocus>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" id="go" type="submit">Log in</button>
+  </form>
+
+  <div id="locked" hidden><div class="state"><b id="lk-h"></b><p id="lk-p"></p></div></div>
+
+  <div id="none" class="ways" hidden>
+    <div class="way" id="w-tg"><div class="wh">On Telegram</div>
+      <p>Send <b>/password</b> to your lanowl bot, then the password. The bot deletes your message and keeps only a hash.</p></div>
+    <div class="way"><div class="wh" id="w-cfg-h">Or in config.yaml</div>
+      <p id="w-cfg-p">Make a hash, then put the line it prints under <code>web:</code> and restart lanowl.</p>
+      <div class="cmd"><code id="hashcmd">docker compose -f docker/compose.yaml run --rm lanowl lanowl --hash-password</code><button class="copy" type="button" id="copy">Copy</button></div>
+    </div>
+  </div>
+
+  <p class="help" id="help"></p>
+</main>
+<script id="boot" type="application/json">{{BOOT}}</script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let S = {};
+try { S = JSON.parse($("boot").textContent); } catch (e) { S = {state: "login"}; }
+const hm = ts => { const d = new Date(ts * 1000); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+
+function render(st) {
+  S = Object.assign({}, S, st);
+  if (S.state === "in" || S.state === "off") { location.reload(); return; }
+  const none = S.state === "none", locked = S.state === "locked";
+  $("f").hidden = none || locked;
+  $("locked").hidden = !locked;
+  $("none").hidden = !none;
+  $("ttl").textContent = none ? "Set a password first" : "lanowl";
+  $("who").textContent = none ? "The dashboard stays closed until it has one." : (S.where || "");
+  if (locked) {
+    $("lk-h").textContent = "Login locked until " + hm(S.until);
+    $("lk-p").textContent = "Five wrong passwords in a row." + (S.tg ? " Telegram has been told." : "") +
+      " Try again after " + hm(S.until) + (S.chat && !S.cfg ? ", or set a new password with /password on Telegram, which also lifts the lock." : ".");
+  }
+  if (none) {
+    $("w-tg").hidden = !S.chat;
+    $("w-cfg-h").textContent = S.chat ? "Or in config.yaml" : "In config.yaml";
+    if (S.cfg_bad) $("w-cfg-p").innerHTML = "<code>web.password_hash</code> in config.yaml is not a password hash. Make one, put the line it prints in its place and restart lanowl.";
+  }
+  const help = $("help");
+  help.hidden = none || locked;
+  help.innerHTML = S.cfg ? "Forgot it? Make a new one with <b>lanowl --hash-password</b> and put it in config.yaml."
+    : S.chat ? "Forgot it? Send <b>/password</b> to your lanowl bot on Telegram to set a new one."
+    : "Forgot it? Make a new one with <b>lanowl --hash-password</b> and put it in config.yaml.";
+}
+
+$("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pw = $("pw").value;
+  if (!pw) { $("err").textContent = "Type the password."; return; }
+  $("go").disabled = true; $("err").textContent = "";
+  let r, j = {};
+  try {
+    r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password: pw})});
+    j = await r.json();
+  } catch (_) {
+    $("go").disabled = false; $("err").textContent = "lanowl did not answer. Is it running?"; return;
+  }
+  $("go").disabled = false;
+  if (j.ok) { location.reload(); return; }
+  $("pw").value = "";
+  if (j.why === "locked") { render({state: "locked", until: j.until}); return; }
+  if (j.why === "none") { render({state: "none"}); return; }
+  if (j.why === "empty") { $("err").textContent = "Type the password."; return; }
+  const left = j.left || 0;
+  $("err").textContent = "Wrong password. " + (left === 1 ? "One more wrong one locks the login for 15 minutes."
+    : left + " tries left before the login locks for 15 minutes.");
+  $("pw").focus();
+});
+
+$("copy").addEventListener("click", () => {
+  const b = $("copy"), el = $("hashcmd");
+  const sel = () => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+  try {
+    navigator.clipboard.writeText(el.textContent).then(() => { b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy"; }, 1400); }, sel);
+  } catch (_) { sel(); }
+});
+
+// A password set on Telegram, or a lock running out, shows without a reload.
+setInterval(async () => {
+  if (S.state !== "none" && S.state !== "locked") return;
+  try {
+    const st = await (await fetch("/api/login", {cache: "no-store"})).json();
+    if (st.state !== S.state) render(st);
+  } catch (_) { /* lanowl restarting: ask again in a moment */ }
+}, 5000);
+
+render(S);
+</script>
+</body>
+</html>

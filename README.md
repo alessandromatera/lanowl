@@ -60,7 +60,9 @@ cp docker/env.example docker/.env                # this host's address, the mode
 docker compose -f docker/compose.yaml up -d
 ```
 
-Then open `http://<this host>/`. On Linux, allow unprivileged ping first
+Then open `http://<this host>/`. It asks for a password first: send `/password` to your
+lanowl bot on Telegram, or set `web.password_hash` (`lanowl --hash-password`). On Linux, allow
+unprivileged ping first
 (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
 
 What lanowl will do with each device, and why not:
@@ -235,7 +237,8 @@ puts the owl to sleep.
 - The model never sees a password; logins reach ssh through `SSH_ASKPASS`, never argv.
 - The model's shells are sandboxes beside lanowl, with no key, no config and no state; their
   walls are proven before the tool is offered.
-- The dashboard accepts only JSON POSTs and IP-literal `Host` headers.
+- The dashboard is closed until you log in with its password, kept only as a hash; it accepts
+  only JSON POSTs and IP-literal `Host` headers.
 
 ## License
 

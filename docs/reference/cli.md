@@ -9,6 +9,8 @@ dashboard and the Telegram bot. The same program takes a few options, run with
 | `lanowl --check` | Reads the config, the inventory, the profiles and the secrets the way a start does, and says what lanowl will do with each device and why not, where each secret comes from, which model it will ask, and whether the sandboxed shell is ready. Probes nothing and sends nothing. Exits with 1 when something is wrong. |
 | `lanowl --once` | One sweep and one audit by the owl, printed, then exits. Like a real sweep it may send an alert: add `--no-telegram` to stay quiet. |
 | `lanowl --once --no-llm --no-mqtt --no-telegram` | A dry run: one sweep printed, nothing sent anywhere. |
+| `lanowl --hash-password` | Asks for the dashboard's password twice, without showing it, and prints the `password_hash` line for `config.yaml`. |
+| `lanowl --hash-pin` | The same for the actions PIN: prints the `pin_sha256` line. |
 | `lanowl` | Runs for good (the container's command). |
 
 | Option | What it does |

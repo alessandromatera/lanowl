@@ -3,7 +3,6 @@
 What is agreed and not built yet, roughly in order. lanowl is pre-alpha: the order can change,
 and nothing here is promised by a date.
 
-- **A login for the dashboard**, on by default.
 - **Cloud models**, besides Ollama: OpenAI-compatible APIs and Anthropic's, with a check of what
   would leave the network (never a login; addresses and names only as you allow).
 - **ntfy** as a second alert channel beside Telegram.

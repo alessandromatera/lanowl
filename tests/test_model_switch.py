@@ -335,7 +335,7 @@ def test_dashboard():
     out, sent = {}, []
 
     async def go(d):
-        m, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0}})
+        m, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0, "login": False}})
         real = m.telegram_direct
         _fake_telegram(m, sent)
 

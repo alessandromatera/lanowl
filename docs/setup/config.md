@@ -60,9 +60,16 @@ web:
   host: "0.0.0.0"
   port: 80                        # or LANOWL_WEB_PORT
   allowed_hosts: []
+  password_hash: ""
+  login: true
 ```
 
-The dashboard. It answers on any address of the host. By default it accepts requests only
+The dashboard. It is closed until you log in with its password: `password_hash`, made by
+`lanowl --hash-password`, or, when that is empty, the one set with `/password` on Telegram.
+With neither, it shows only how to set one. `login: false` switches the login off, for a
+dashboard behind a login of your own. More: [Logging in](../using/dashboard.md#logging-in).
+
+It answers on any address of the host. By default it accepts requests only
 when the browser reached it by an IP address: that is what stops a hostile web page from
 borrowing a DNS name that points at your network (DNS rebinding). To open it by name
 (`lanowl.lan`, or behind a reverse proxy), list the names in `allowed_hosts`.

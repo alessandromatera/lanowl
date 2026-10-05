@@ -45,6 +45,10 @@ web:
   host: "0.0.0.0"
   port: 80                          # or LANOWL_WEB_PORT
   allowed_hosts: []                 # host names allowed besides IP addresses (DNS-rebinding guard)
+  password_hash: ""                 # lanowl --hash-password makes it. Empty: set it with
+                                    # /password on Telegram. No password at all: the
+                                    # dashboard stays closed
+  login: true                       # false only behind a login of your own (a proxy, Tailscale)
 
 # --- how often, and how quiet ---------------------------------------------------------------
 cadence:
@@ -203,7 +207,7 @@ actions:
   max_pending: 3
   max_per_day: 20
   repeat_after_h: 24
-  pin_sha256: ""                    # printf 'lanowl-pin:%s' YOUR_PIN | sha256sum
+  pin_sha256: ""                    # lanowl --hash-pin makes it
                                     # empty: set it with /pin on Telegram. No PIN at
                                     # all: actions stay off
   pin_max_failures: 5

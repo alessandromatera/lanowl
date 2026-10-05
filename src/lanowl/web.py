@@ -14,14 +14,19 @@ What cannot live here is the watchdog that notices lanowl itself dying: that one
 on another machine, reading the retained heartbeat.
 
 Safety, for a page on the LAN:
+  - it is closed until you log in (login.py): one password, from config.yaml's
+    `web.password_hash` or /password on Telegram, and each browser remembered for 30 days.
+    Logged out, every address answers with the login page and every /api call with 401,
+    except the login itself and the home-screen icon and manifest. `web.login: false`
+    opens it, for a page that sits behind a login of its own;
   - it can only READ, plus start an audit or a question — the same model, the same
     read-only tools and whitelist as Telegram — and pause or resume a device, which is the
     one thing it changes: every pause and resume made here is also said on Telegram, so
     nobody on the LAN can quietly stop the monitor watching the alarm; and the model's memory,
     which changes what the model knows (and so how it reads a log), never what is watched;
-  - approving a proposed action needs the PIN (`actions.pin_sha256`, or /pin on Telegram;
-    without one actions stay off); the page remembers it
-    once entered, and five wrong ones lock dashboard approvals and say so on Telegram;
+  - approving a proposed action needs the PIN as well (`actions.pin_sha256`, or /pin on
+    Telegram; without one actions stay off); the page remembers it once entered, and five
+    wrong ones lock dashboard approvals and say so on Telegram;
   - POSTs must be JSON, so a web page elsewhere cannot fire them with a plain form
     (a cross-origin JSON POST needs a CORS preflight this server never grants);
   - the Host header must be an IP address (or a name in `web.allowed_hosts`), which is
@@ -31,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json
 import logging
 import os
 import sqlite3
@@ -39,6 +45,7 @@ from typing import Optional
 
 from . import timeline, wanexplain
 from .conversations import Conversations
+from .login import COOKIE, SESSION_S, verify
 from .model import model_name, on_main_lan, wan_links
 from .report import label, match_diagnosis
 
@@ -51,6 +58,7 @@ except Exception:  # pragma: no cover
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(_HERE, "web", "index.html")
+LOGIN = os.path.join(_HERE, "web", "login.html")
 LLM_FRESH_S = 90 * 60      # an assessment older than this is shown, but as stale
 # What the page may load besides itself: the home-screen icon and manifest, so that "Add to
 # Home Screen" on a phone gives an app, not a screenshot. Named one by one — never a
@@ -58,6 +66,8 @@ LLM_FRESH_S = 90 * 60      # an assessment older than this is shown, but as stal
 STATIC = {"/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
           "/icon.svg": ("icon.svg", "image/svg+xml"),
           "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png")}
+# What a browser that is not logged in may reach: the login itself and the home-screen icon.
+OPEN = set(STATIC) | {"/api/login"}
 
 
 def state_payload(a, now: float = 0.0) -> dict:
@@ -146,6 +156,7 @@ def state_payload(a, now: float = 0.0) -> dict:
         "configwatch": a.configwatch.view(),
         "fixes": a.fixes.view(),
         "scorecard": a.scorecard.view(),
+        "login": a.login.view() if getattr(a, "login", None) is not None else {"on": False},
     }
 
 
@@ -255,6 +266,8 @@ class Dashboard:
         self.host = str(w.get("host", "0.0.0.0"))
         self.port = int(w.get("port", 8088))
         self.allowed_hosts = {str(h).lower() for h in (w.get("allowed_hosts") or [])}
+        self.login = getattr(auditor, "login", None)     # login.py; None only in tests
+        self._login_lock = asyncio.Lock()
         self._runner = None
         self.chats = Conversations(auditor)
         self._hist = (0.0, None)     # the Devices table's history: (when, body)
@@ -279,12 +292,24 @@ class Dashboard:
     def _json_ok(request) -> bool:
         return (request.content_type or "").lower() == "application/json"
 
+    def _let_in(self, request) -> bool:
+        lg = self.login
+        if lg is None or not lg.on or request.path in OPEN:
+            return True
+        return lg.check(request.cookies.get(COOKIE, ""))
+
     async def _guard(self, request, handler):
         if not self._host_ok(request):
             return web.Response(status=421, text="use the address, not a name")
         if request.method == "POST" and not self._json_ok(request):
             return web.Response(status=415, text="JSON only")
-        resp = await handler(request)
+        if self._let_in(request):
+            resp = await handler(request)
+        elif request.path.startswith("/api/"):
+            # the page reloads on this, and the reload is the login page
+            resp = web.json_response({"ok": False, "login": self._login_state()["state"]}, status=401)
+        else:
+            resp = self._login_page(request)
         if resp.prepared:            # a stream (/api/stream) sent its own headers
             return resp
         resp.headers["Cache-Control"] = "no-store"
@@ -303,6 +328,76 @@ class Dashboard:
 
     async def api_state(self, request):
         return web.json_response(state_payload(self.a), dumps=_dumps)
+
+    # --- the login (login.py) ---------------------------------------------------------------
+    def _login_state(self, request=None) -> dict:
+        """What the login page shows: "login", "locked" (until), "none" (no password yet:
+        how to set one), "in" (this browser is logged in) or "off" (web.login: false)."""
+        lg = self.login
+        if lg is None or not lg.on:
+            return {"state": "off"}
+        out = {"tg": lg._telegram(), "chat": lg._chat(), "cfg": bool(lg.cfg_raw),
+               "cfg_bad": bool(lg.cfg_raw and not lg.cfg_hash)}
+        if not lg.hash:
+            return {**out, "state": "none"}
+        if request is not None and lg.check(request.cookies.get(COOKIE, "")):
+            return {**out, "state": "in"}
+        until = lg.locked()
+        return {**out, "state": "locked", "until": until} if until else {**out, "state": "login"}
+
+    def _login_page(self, request):
+        try:
+            with open(LOGIN, encoding="utf-8") as f:
+                page = f.read()
+        except OSError:
+            return web.Response(status=500, text="login page missing from the image")
+        boot = {**self._login_state(), "where": (request.host or "").rsplit(":", 1)[0]}
+        page = page.replace("{{BOOT}}", json.dumps(boot).replace("<", "\\u003c"))
+        return web.Response(text=page, content_type="text/html", charset="utf-8")
+
+    async def api_login_state(self, request):
+        """GET /api/login: the login page asks every few seconds, so that a password set on
+        Telegram, or a lock running out, shows without a reload."""
+        return web.json_response(self._login_state(request))
+
+    async def api_login(self, request):
+        """POST /api/login {"password"}: a cookie on the right one. scrypt runs in a thread,
+        and not at all while the login is locked."""
+        lg = self.login
+        if lg is None or not lg.on:
+            return web.json_response({"ok": True})
+        try:
+            pw = str((await request.json()).get("password") or "")
+        except Exception:
+            return web.json_response({"ok": False, "why": "bad"}, status=400)
+        if not lg.hash:
+            return web.json_response({"ok": False, "why": "none"}, status=401)
+        if not pw:                   # an empty field is not a guess
+            return web.json_response({"ok": False, "why": "empty"}, status=400)
+        async with self._login_lock:     # one try at a time: five wrong ones are five
+            until = lg.locked()
+            if until:
+                return web.json_response({"ok": False, "why": "locked", "until": until}, status=401)
+            ok = await asyncio.get_running_loop().run_in_executor(None, verify, pw[:1024], lg.hash)
+            r = lg.attempt(ok, request.remote or "")
+        if not r.get("ok"):
+            return web.json_response(r, status=401)
+        resp = web.json_response({"ok": True})
+        resp.set_cookie(COOKIE, r["token"], max_age=SESSION_S, path="/", httponly=True,
+                        samesite="Lax", secure=_https(request))
+        return resp
+
+    async def api_logout(self, request):
+        """POST /api/logout {"everywhere": bool}: this browser, or every one."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if self.login is not None:
+            self.login.logout(request.cookies.get(COOKIE, ""), everywhere=bool(body.get("everywhere")))
+        resp = web.json_response({"ok": True})
+        resp.del_cookie(COOKIE, path="/")
+        return resp
 
     # --- live updates --------------------------------------------------------------------
     # Polling the whole state every 5 s costs ~150 KB each time, whether anything changed or
@@ -777,6 +872,9 @@ class Dashboard:
         app.router.add_get("/api/stream", self.api_stream)
         app.router.add_get("/api/seen", self.api_seen)
         app.router.add_get("/api/chat", self.api_chat)
+        app.router.add_get("/api/login", self.api_login_state)
+        app.router.add_post("/api/login", self.api_login)
+        app.router.add_post("/api/logout", self.api_logout)
         for path in STATIC:
             app.router.add_get(path, self.static)
         app.router.add_post("/api/check", self.api_check)
@@ -827,6 +925,12 @@ def _fingerprint(body: dict) -> str:
     import hashlib
     import json
     return hashlib.sha1(json.dumps(_strip(body), sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _https(request) -> bool:
+    """Whether the browser reached lanowl over HTTPS, directly or through a reverse proxy:
+    the cookie is then never sent over plain HTTP."""
+    return request.secure or request.headers.get("X-Forwarded-Proto", "").lower() == "https"
 
 
 def _sse(event: str, body) -> bytes:

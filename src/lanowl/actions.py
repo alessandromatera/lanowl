@@ -161,7 +161,7 @@ def report(cfg: dict) -> tuple:
     head = f"Actions: on · {c.get('mode', SHADOW)}"
     raw = str(c.get("pin_sha256") or "").strip().lower()
     chat = bool(((cfg.get("telegram") or {}).get("chat") or {}).get("enabled"))
-    make = "printf 'lanowl-pin:%s' YOUR_PIN | sha256sum"
+    make = "lanowl --hash-pin"
     if _SHA256.match(raw):
         mark, text = "✓", "from config.yaml"
     elif raw:
@@ -296,13 +296,13 @@ class Actions:
         lines = ["🔒 <b>Actions are off until you set a dashboard PIN</b>"]
         if self.pin_cfg_raw:
             lines.append("config.yaml's <code>actions.pin_sha256</code> is not a SHA-256, so it "
-                         "is no PIN: <code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>.")
+                         "is no PIN: make one with <code>lanowl --hash-pin</code>.")
         elif chat:
             lines.append("Send /pin, then the digits (4 to 12): I delete your message and keep "
                          "only its hash. Or set <code>actions.pin_sha256</code> in config.yaml.")
         else:
             lines.append("Set <code>actions.pin_sha256</code> in config.yaml: "
-                         "<code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>.")
+                         "<code>lanowl --hash-pin</code> makes it.")
         return "\n".join(lines)
 
     def set_pin(self, pin: str) -> dict:
@@ -313,7 +313,7 @@ class Actions:
                 "🔒 The dashboard PIN is set in config.yaml (<code>actions.pin_sha256</code>) — "
                 "change it there." if self.pin_cfg else
                 "🔒 config.yaml has <code>actions.pin_sha256</code>, and it is not a SHA-256: "
-                "fix it there (<code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>), or "
+                "fix it there (<code>lanowl --hash-pin</code>), or "
                 "empty it to set the PIN here.")}
         if not self.switched_on:
             return {"ok": False, "text": "Actions are switched off (actions.enabled): there is "

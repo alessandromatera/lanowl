@@ -514,6 +514,9 @@ div.row[data-ip]>.chev{margin-left:6px}
 .pbtns{display:flex;gap:8px;margin-top:12px}
 .pbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;border-radius:12px;font-size:15px;font-weight:650;background:var(--fill);color:var(--ink)}
 .pbtn.ok{background:var(--blue);color:#fff}
+.pbtn.bad{background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red-t)}
+.acct{padding:12px 16px 14px;border-top:.5px solid var(--sep)}
+.acct .fine{margin-bottom:2px}
 .pbtn .ic{width:17px;height:17px}
 .pbtn:disabled{opacity:.5}
 .pres{margin-top:10px;font-size:15px;font-weight:600;color:var(--green-t);overflow-wrap:anywhere}
@@ -980,6 +983,15 @@ html.modal{overflow:hidden}
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+// Logged out from somewhere else (Log out everywhere, a new password, 30 quiet days): every
+// /api call answers 401, and the reload is the login page (login.html).
+const _fetch = window.fetch.bind(window);
+let LOGGED_OUT = false;
+window.fetch = async (...a) => {
+  const r = await _fetch(...a);
+  if (r.status === 401 && !LOGGED_OUT) { LOGGED_OUT = true; location.reload(); }
+  return r;
+};
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // Telegram text is our own HTML, but it can carry names the network chose (a DHCP host name),
 // so it is escaped whole and only <b>/<i>/<code> are let back in.
@@ -2447,7 +2459,29 @@ function renderMore(d) {
   put("about", modelSwHtml(d) + `<div class="list">` + (A.model ? kv("Model", A.model) : "") +
     kv("Audits", (d.model_switch || {}).on === false ? "switched off" : A.llm_mode === "times" ? `at ${(A.llm_times || []).join(", ")}, and on every incident` : `every ${dur(A.llm_every_s || 3600)}, and on every incident`) + kv("Running since", sw.started ? clock(sw.started) + " · " + dur(NOW - sw.started) : "—") +
     kv("Sweeps since then", sw.sweeps ?? "—") + kv("Last sweep", sw.ts ? ago(sw.ts) : "—") +
-    kv("Last model audit", l.at ? ago(l.at) : "—") + kv("Weekly review", d.weekly_last ? clock(d.weekly_last) : "not yet") + `</div>`);
+    kv("Last model audit", l.at ? ago(l.at) : "—") + kv("Weekly review", d.weekly_last ? clock(d.weekly_last) : "not yet") +
+    loginHtml(d, kv) + `</div>`);
+}
+
+// The login (login.py): where the password came from, how long this browser stays in — a
+// visit renews it, so it is always the full span from now — and the two ways out.
+function loginHtml(d, kv) {
+  const L = d.login || {};
+  if (!L.on) return "";
+  const until = new Date((NOW + (L.days || 30) * 86400) * 1000);
+  const btns = S.outAll
+    ? `<div class="fine">Log out every browser, this one too? Each will need the password again.</div>
+       <div class="pbtns"><button class="pbtn" data-act="logoutno">Cancel</button><button class="pbtn bad" data-act="logoutall">Log out everywhere</button></div>`
+    : `<div class="pbtns" style="margin-top:0"><button class="pbtn" data-act="logout">Log out</button><button class="pbtn bad" data-act="logoutask">Log out everywhere</button></div>`;
+  return kv("Dashboard login", L.source === "config.yaml" ? "password from config.yaml" : "password set on Telegram") +
+    kv("This browser", `logged in until ${until.getDate()} ${until.toLocaleString("en", {month: "short"})}`) +
+    `<div class="acct">${btns}</div>`;
+}
+
+async function logout(everywhere) {
+  LOGGED_OUT = true;
+  try { await post("/api/logout", {everywhere}); } catch (e) { /* the reload says where it stands */ }
+  location.reload();
 }
 
 // The Security tab (updates.py): what matters first — the findings that paged, red —
@@ -3362,6 +3396,9 @@ document.addEventListener("click", async e => {
   else if (act === "endsess") endSess(+t.dataset.pid);
   else if (act === "cancelq") cancelProp(+t.dataset.pid);
   else if (act === "pinclose") closePin();
+  else if (act === "logout") logout(false);
+  else if (act === "logoutall") logout(true);
+  else if (act === "logoutask" || act === "logoutno") { S.outAll = act === "logoutask"; renderMore(S.d); }
   else if (act === "memedit") openMem(+t.dataset.mid);
   else if (act === "memadd") openMem(null);
   else if (act === "memclose") closeMem();

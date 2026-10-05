@@ -375,7 +375,7 @@ def test_http():
     out = {}
 
     async def go(d):
-        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0}})
+        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0, "login": False}})
         gate = asyncio.Event()
         _fake(a, gate)
         await a.dashboard.start()

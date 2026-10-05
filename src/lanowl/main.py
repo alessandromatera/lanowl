@@ -64,6 +64,7 @@ from .sweep import (OLLAMA_KEY, CheckResult, _sweep_device, apply_offline_grace,
                     asleep_modes_at, offline_by_design, offline_mode_ips, run_sweep)
 from .tools import ToolExecutor
 from .hostlog import HostLogWatcher
+from .login import Login
 from .wanwatch import WanWatcher
 from .web import Dashboard
 
@@ -258,6 +259,8 @@ class Auditor:
         # the model's tools read what the watchers already hold
         self.executor.wanwatch = self.wanwatch
         self.executor.hostlog = self.hostlog
+        # the dashboard's password and the browsers logged in with it (login.py)
+        self.login = Login(self)
         self.dashboard = Dashboard(self)
         # The owner's questions, over lanowl's own bot and the dashboard's Ask box.
         self.chat = Chat(self)
@@ -1658,6 +1661,11 @@ class Auditor:
             # switched on, and nothing to approve with on the dashboard: off until it is set
             log.warning("actions: %s", self.actions.off_reason())
             self._emit_telegram("digest", self.actions.pin_needed_text(self.poller.enabled))
+        if self.dashboard.enabled and self.login.needed:
+            # on by default: the page shows nothing but how to set a password until there is one
+            log.warning("dashboard: closed until a password is set (/password on Telegram, "
+                        "or web.password_hash in config.yaml)")
+            self._emit_telegram("digest", self.login.needed_text(self.poller.enabled))
         try:
             await self.dashboard.start()
         except Exception:        # a port clash must not take the monitor down with it
@@ -1873,7 +1881,48 @@ def _check(args) -> int:
     from .actions import report as actions_report
     text, nopin = actions_report(cfg)
     print("\n" + text)
-    return 1 if bad or wrong or walls or nopin or k.problems or any(p.problems for p in k.plans) else 0
+    from .login import report as login_report
+    text, nopw = login_report(cfg)
+    print("\n" + text)
+    return 1 if bad or wrong or walls or nopin or nopw or k.problems \
+        or any(p.problems for p in k.plans) else 0
+
+
+def _ask_twice(what: str, check) -> str:
+    """A secret typed twice without echo; from a pipe, one line. Exits on a mismatch or a
+    value `check` refuses (it returns the reason)."""
+    import getpass
+    if sys.stdin.isatty():
+        first = getpass.getpass(f"{what}: ")
+        if getpass.getpass(f"{what} again: ") != first:
+            sys.exit("The two did not match. Nothing was made.")
+    else:
+        first = sys.stdin.readline().rstrip("\r\n")
+    why = check(first)
+    if why:
+        sys.exit(why + " Nothing was made.")
+    return first
+
+
+def _hash_password() -> int:
+    """`lanowl --hash-password`: the line to put under `web:` in config.yaml."""
+    from .login import MAX_LEN, MIN_LEN, hash_password
+    pw = _ask_twice("Dashboard password", lambda v: (
+        f"A password has {MIN_LEN} characters or more." if len(v) < MIN_LEN else
+        f"A password has at most {MAX_LEN} characters." if len(v) > MAX_LEN else ""))
+    print("Put this line under web: in config.yaml, then restart lanowl:\n")
+    print(f'  password_hash: "{hash_password(pw)}"')
+    return 0
+
+
+def _hash_pin() -> int:
+    """`lanowl --hash-pin`: the line to put under `actions:` in config.yaml."""
+    from .actions import PIN_DIGITS, pin_hash
+    pin = _ask_twice("Dashboard PIN", lambda v: "" if PIN_DIGITS.match(v) else
+                     "A PIN is 4 to 12 digits.")
+    print("Put this line under actions: in config.yaml, then restart lanowl:\n")
+    print(f'  pin_sha256: "{pin_hash(pin)}"')
+    return 0
 
 
 def main():
@@ -1888,7 +1937,15 @@ def main():
     ap.add_argument("--log-level", default=None)
     ap.add_argument("--check", action="store_true",
                     help="say what lanowl will do with each device, and why not; then exit")
+    ap.add_argument("--hash-password", action="store_true",
+                    help="make web.password_hash for config.yaml from a password you type; then exit")
+    ap.add_argument("--hash-pin", action="store_true",
+                    help="make actions.pin_sha256 for config.yaml from a PIN you type; then exit")
     args = ap.parse_args()
+    if args.hash_password:
+        sys.exit(_hash_password())
+    if args.hash_pin:
+        sys.exit(_hash_pin())
     if args.check:
         sys.exit(_check(args))
     try:

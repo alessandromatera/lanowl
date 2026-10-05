@@ -42,7 +42,7 @@ async def _stream():
     real = W.state_payload
     W.state_payload = lambda a, now=0.0: dict(states[-1])
     d = W.Dashboard.__new__(W.Dashboard)
-    d.a, d._streams, d._push_task, d.allowed_hosts = object(), set(), None, set()
+    d.a, d._streams, d._push_task, d.allowed_hosts, d.login = object(), set(), None, set(), None
 
     @web.middleware
     async def guard(request, handler):

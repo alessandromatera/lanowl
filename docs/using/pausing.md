@@ -21,9 +21,8 @@ so none is forgotten. `/paused` lists them now, with whether each one answers.
 
 ## Every pause is told
 
-Every pause and resume, from Telegram or the dashboard, is said on Telegram. The dashboard
-has no login yet, and a pause nobody heard about would be the quietest way to stop lanowl
-watching the alarm or the cameras.
+Every pause and resume, from Telegram or the dashboard, is said on Telegram. A pause nobody
+heard about would be the quietest way to stop lanowl watching the alarm or the cameras.
 
 ## Pausing the owl
 

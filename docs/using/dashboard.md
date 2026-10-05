@@ -9,6 +9,8 @@ audit, how long it has been running).
 **Search** (⌘K, or the magnifier on a phone) finds devices by name or address, jumps to a tab,
 or sends what you typed to the owl as a question.
 
+It is closed until you log in: see [Logging in](#logging-in).
+
 ![The Now tab](../img/home-wide.png)
 
 ## Now
@@ -105,6 +107,43 @@ Beside it, the model's side:
 
 More: [Asking the owl](asking.md).
 
+## Logging in
+
+The dashboard has one password, and no user name. Until it has one, it shows only how to
+set one. There are two ways, like the PIN's:
+
+- **Telegram:** send `/password` to the bot, then the password (8 characters or more). The
+  bot deletes your message as soon as it has read it and keeps only a hash. `/password`
+  again changes it.
+- **config.yaml:** make a hash, and put the line it prints under `web:`, then restart lanowl.
+
+```bash
+docker compose -f docker/compose.yaml run --rm lanowl lanowl --hash-password
+```
+
+```yaml
+web:
+  password_hash: "scrypt$32768$8$1$…"
+```
+
+A password in `config.yaml` wins: `/password` then only points to it. `lanowl --check` says
+where the password comes from, or that there is none.
+
+A browser stays logged in for 30 days after its last visit, across restarts and upgrades of
+lanowl. **Log out** and **Log out everywhere** are in the Ask tab, under lanowl. A new
+password, from either place, logs every browser out.
+
+Five wrong passwords in a row lock the login for 15 minutes, for every browser, and Telegram
+is told once, with the address the last try came from. `/password` sets a new one and lifts
+the lock. A good login sends nothing.
+
+The login is a cookie, so the password crosses your network only when you log in. Over plain
+HTTP anyone who can watch your LAN's traffic could read it then; put lanowl behind a reverse
+proxy with HTTPS if that matters to you (and list its name in `web.allowed_hosts`).
+
+`web.login: false` switches the login off, for a dashboard that already sits behind a login of
+your own (Authelia, Authentik, Tailscale). `--check` says so while it is off.
+
 ## The PIN
 
 Anything on the dashboard that changes something (approving a proposal, a reboot, an update)
@@ -115,11 +154,10 @@ The simplest way is Telegram: send `/pin` to the bot, then the digits (4 to 12).
 deletes your message as soon as it has read it and keeps only a hash of the PIN. `/pin`
 again changes it.
 
-Or put it in `config.yaml`, as a SHA-256 hash of `lanowl-pin:` followed by the PIN, so the
-digits themselves never sit in the file:
+Or put it in `config.yaml`, as a hash, so the digits themselves never sit in the file:
 
 ```bash
-printf 'lanowl-pin:%s' 1234 | sha256sum      # on a Mac: shasum -a 256
+docker compose -f docker/compose.yaml run --rm lanowl lanowl --hash-pin
 ```
 
 ```yaml
@@ -134,7 +172,6 @@ Telegram is told.
 
 ## Who can reach it
 
-The dashboard has no login yet (it is on the [roadmap](../reference/roadmap.md)), so keep it
-on your LAN. It accepts only JSON requests and IP-address host names, which stops another web
-page from driving it through your browser. Reading is open to anyone on the LAN; pausing a
-device is told on Telegram; approving anything needs the PIN.
+Only a browser logged in with the password. Keep it on your LAN all the same. It accepts only
+JSON requests and IP-address host names, which stops another web page from driving it through
+your browser. Pausing a device is told on Telegram; approving anything needs the PIN as well.

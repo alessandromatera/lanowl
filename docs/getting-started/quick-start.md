@@ -143,6 +143,9 @@ Shell: off
 
 Actions: on · live
   ✓ dashboard PIN   from config.yaml
+
+Dashboard: on
+  ✓ login           password from config.yaml
 ```
 
 A **✗** says what is wrong and how to fix it, for example:
@@ -171,7 +174,8 @@ its latency and any check that failed.
 docker compose -f docker/compose.yaml up -d
 ```
 
-Open `http://<this machine>/`. The first sweep is done within a minute. Send `/start` to your
-bot: it answers with what it can do.
+Open `http://<this machine>/`. It asks for a password first: send `/password` to your bot,
+then the password, and log in with it ([more](../using/dashboard.md#logging-in)). The first
+sweep is done within a minute. Send `/start` to your bot: it answers with what it can do.
 
 Next: [Telegram](telegram.md), then [The first hour](first-hour.md).

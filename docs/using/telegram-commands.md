@@ -24,6 +24,7 @@ the table says.
 | `/model` | Whether the owl is on. `/model off` puts it to sleep (no diagnoses, answers or reviews; alerts and digests go on); `/model on` wakes it. |
 | `/new` | Start a new conversation. The bot otherwise keeps the last few questions for 6 hours. |
 | `/pin` | Set the [dashboard's PIN](dashboard.md#the-pin), when `config.yaml` has none. The bot asks for the digits and deletes your message at once. |
+| `/password` | Set the [dashboard's password](dashboard.md#logging-in), when `config.yaml` has none. The bot asks for it and deletes your message at once. A new one logs every browser out and lifts a lock. |
 
 ## Naming a device
 

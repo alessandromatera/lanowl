@@ -17,6 +17,7 @@ the owner asks it things, on lanowl's own bot:
     /memory   the model's notes (memory.py); /remember and /forget change them directly
     /model    the owner's switch for the local model: /model off, /model on (Auditor.set_model)
     /pin      the dashboard's PIN, when config.yaml has none: the digits are deleted at once
+    /password the dashboard's password (login.py), the same way
     /new      start a new conversation
     anything else is a question, answered by the model with the same read-only tools
 
@@ -40,6 +41,7 @@ import re
 import time
 from typing import Optional
 
+from .login import MAX_LEN, MIN_LEN, WAIT_S as PW_WAIT_S, hash_password
 from .memory import strip_footer
 from .pause import find_devices
 from .prompts import (QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
@@ -74,6 +76,7 @@ HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.
         "/model on | off — the local model (off: no diagnoses, answers or reviews; alerts "
         "and digests go on)\n"
         "/pin — set the dashboard's PIN (when config.yaml has none)\n"
+        "/password — set the dashboard's password (when config.yaml has none)\n"
         "/new — a new conversation (I keep the last few questions for 6 hours)\n\n"
         "<i>Ask and I dig in myself: mtr, DNS, TLS, scans, ARP, a packet capture, the tunnels, "
         "another LAN host, the VPN hub, the remote sites' routers (a ping, their DHCP, a speed "
@@ -117,6 +120,12 @@ class Chat:
         if asked and not cmd and re.fullmatch(r"[0-9]+", text) and time.time() - asked < PIN_WAIT_S:
             log.info("telegram chat: the PIN /pin asked for (not logged)")
             await self._pin_set(text, chat_id, message_id)
+            return
+        lg = getattr(self.a, "login", None)
+        asked = lg.waiting.pop(str(chat_id), None) if lg is not None else None
+        if asked and not cmd and time.time() - asked < PW_WAIT_S:
+            log.info("telegram chat: the password /password asked for (not logged)")
+            await self._password_set(text, chat_id, message_id)
             return
         log.info("telegram chat: %s", cmd or f"question ({len(text)} chars)")
         if cmd in ("/start", "/help"):
@@ -163,6 +172,12 @@ class Chat:
                 await self._pin_set(arg, chat_id, message_id)
             else:
                 await self._pin_ask(chat_id)
+        elif cmd == "/password":
+            arg = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
+            if arg:                      # /password in one go: deleted all the same
+                await self._password_set(arg, chat_id, message_id)
+            else:
+                await self._password_ask(chat_id)
         elif cmd in ("/memory", "/remember", "/forget"):
             arg = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
             await self._reply(chat_id, self.memory_command(cmd, arg))
@@ -226,6 +241,39 @@ class Chat:
         await self._reply(chat_id, "🔒 Send the dashboard's " + ("new " if ac.pin_tg else "")
                           + "PIN: 4 to 12 digits. I delete your message as soon as I have "
                             "read it, and keep only its hash.")
+
+    # --- the dashboard's password (login.py) -------------------------------------------------
+    async def _password_ask(self, chat_id: str):
+        """/password: config.yaml's password wins, so only ask when there is none there."""
+        lg = self.a.login
+        refused = lg.ask_text()
+        if refused:
+            await self._reply(chat_id, refused)
+            return
+        lg.waiting[str(chat_id)] = time.time()
+        await self._reply(chat_id, "🔑 Send the dashboard's " + ("new " if lg.tg_hash else "")
+                          + f"password: {MIN_LEN} characters or more. I delete your message as "
+                            "soon as I have read it, and keep only its hash.")
+
+    async def _password_set(self, pw: str, chat_id: str, message_id):
+        # the password leaves the chat first, whatever the answer
+        gone = False
+        if message_id is not None:
+            r = await telegram_call(self.cfg, "deleteMessage",
+                                    {"chat_id": chat_id, "message_id": int(message_id)})
+            gone = bool(r and r.get("ok"))
+        lg = self.a.login
+        try:
+            # scrypt is slow on purpose: in a thread, not on the loop that reads Telegram
+            h = (await asyncio.get_running_loop().run_in_executor(None, hash_password, pw)
+                 if lg.ask_text() is None and MIN_LEN <= len(pw) <= MAX_LEN else None)
+            text = lg.set_password(pw, hashed=h)["text"]
+        except Exception as e:           # never let the poller log the message it came in
+            log.error("dashboard password not set: %s", type(e).__name__)
+            text = "🔑 The password could not be set: see lanowl's log. Nothing changed."
+        if not gone:
+            text += "\n⚠️ I could not delete your message with the password: delete it yourself."
+        await self._reply(chat_id, text)
 
     async def _pin_set(self, pin: str, chat_id: str, message_id):
         # the digits leave the chat first, whatever the answer

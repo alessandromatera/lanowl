@@ -319,7 +319,7 @@ def test_dashboard():
     out = {}
 
     async def go(d):
-        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0}})
+        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0, "login": False}})
         a._last_report = {"ts": time.time(), "devices": []}
         await a.dashboard.start()
         port = a.dashboard._runner.addresses[0][1]

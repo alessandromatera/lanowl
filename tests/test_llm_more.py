@@ -627,7 +627,7 @@ def test_web_dashboard():
     out = {}
 
     async def go(d):
-        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0}})
+        _, a = _auditor(d, {"web": {"enabled": True, "host": "127.0.0.1", "port": 0, "login": False}})
         a._last_report = {"ts": time.time(), "overall_health": "degraded",
                           "counts": {"up": 1, "total": 2, "down": 1},
                           "issues": [{"kind": "down", "device": "Boiler", "ip": "192.168.10.117",
