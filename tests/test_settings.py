@@ -150,6 +150,7 @@ def test_guards():
         check(all("scrypt$" not in ln for ln in p["diff"]) and any("(hidden)" in ln for ln in p["diff"])
               and p["changes"] == ["web.password_hash changed"], "the password's hash never shows")
         if os.geteuid() != 0:
+            s.files["config"].writable_at_start = False          # mounted read-only from the start
             os.chmod(s.files["config"].path, 0o444)
             r = s.save("config", [{"op": "set", "path": ["model", "think"], "value": False}], _base(a, "config"))
             os.chmod(s.files["config"].path, 0o644)
@@ -164,8 +165,20 @@ def test_guards():
             st = s.files["config"].status()
         finally:
             ST.os.stat = real
-        check(st["why"] == "replaced" and "restart" in ST.WHY["replaced"],
-              "a file replaced on the host (no name left): restart first")
+        check(st["why"] == "replaced" and "restart the container" in ST.WHY["replaced"],
+              "a file replaced on the host (no name left): restart the container first")
+        if os.geteuid() != 0:
+            f = s.files["config"]
+            f.writable_at_start = True
+            os.chmod(f.path, 0o444)
+            st2 = f.status()
+            os.chmod(f.path, 0o644)
+            check(st2["why"] == "replaced", "writable at start and read-only now: replaced (its mount dropped)")
+            f.writable_at_start = False
+            os.chmod(f.path, 0o444)
+            st3 = f.status()
+            os.chmod(f.path, 0o644)
+            check(st3["why"] == "readonly", "read-only from the start: the compose file's mount")
 
 
 def test_login():

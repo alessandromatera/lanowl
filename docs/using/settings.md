@@ -59,7 +59,7 @@ Then:
 A save is refused when the file changed after the page read it (look at it again and save),
 when the environment sets the value, when the file is read-only for lanowl (see
 [the compose file](#the-files-and-the-container)), or when the file was replaced on the host
-(restart lanowl first).
+(restart the container first).
 
 ## Restart to apply
 
@@ -142,7 +142,8 @@ folder in their place. lanowl writes them in place, never by renaming a new file
 which a single-file mount does not allow.
 
 You can still edit them by hand. One catch: an editor that saves by writing a new file and
-renaming it over the old one (vim does by default; so does `rsync`) leaves the container
-holding the old file. lanowl notices (the file it has open has no name left on the host):
-Settings says so, and saves wait until lanowl has restarted and read the new one. Editors that
-write in place (nano, most others) have no such catch.
+renaming it over the old one (vim does by default; so does `rsync`) drops the container's
+read-write mount of that file. lanowl then reads your new file, but cannot write it: Settings
+says so, and saves wait until the container is restarted (`docker compose restart lanowl`;
+Restart to apply is not enough, it does not mount anything again). Editors that write in place
+(nano, most others) have no such catch.

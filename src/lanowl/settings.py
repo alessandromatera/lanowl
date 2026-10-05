@@ -18,9 +18,9 @@ Undo puts a file back as it was before a save, the same way: diff, confirm, Tele
 
 What the page may not do: change a value the environment sets (it wins, model.py), show or
 take a secret (secrets.yaml stays the owner's file), or save over a file that changed after
-the page read it, or one that was replaced on the host (an editor that saves by renaming
-leaves the container holding the old file: lanowl sees it has no name left, and asks for a
-restart first).
+the page read it, or one that was replaced on the host (an editor that saves by renaming drops
+the container's read-write mount of it: lanowl sees the file was writable and is not now, and
+asks for the container to be restarted first).
 """
 from __future__ import annotations
 
@@ -54,6 +54,8 @@ def digest(text: str) -> str:
 class ConfigFile:
     def __init__(self, path: str):
         self.path = path
+        self.writable_at_start = None        # set by Settings: a file that was, and is not now,
+                                             # was replaced on the host
 
     def read(self) -> str:
         try:
@@ -72,7 +74,11 @@ class ConfigFile:
         if st.st_nlink == 0:
             return {"exists": True, "writable": False, "why": "replaced"}
         if not os.access(self.path, os.W_OK):
-            return {"exists": True, "writable": False, "why": "readonly"}
+            # a file renamed over on the host drops the container's read-write mount of it (the
+            # kernel detaches a mount whose file is replaced): the new file shows through the
+            # read-only folder. Writable at start and not now means just that.
+            return {"exists": True, "writable": False,
+                    "why": "replaced" if self.writable_at_start else "readonly"}
         return {"exists": True, "writable": True, "why": ""}
 
     def write(self, text: str):
@@ -92,7 +98,8 @@ class ConfigFile:
 WHY = {"missing": "{name} is not there", "readonly": "{name} is read-only for lanowl: its "
        "compose file mounts the config folder read-only — mount {name} read-write too "
        "(docs/running/upgrading.md)", "replaced": "{name} was replaced on the host (an editor "
-       "that saves by renaming): restart lanowl so it reads the new one, then save"}
+       "that saves by renaming, or rsync), which drops its read-write mount: restart the "
+       "container (docker compose restart lanowl), then save"}
 
 
 def _fmt(v) -> str:
@@ -165,6 +172,8 @@ class Settings:
         self.a = auditor
         self.files = {"config": ConfigFile(cfg_path), "inventory": ConfigFile(inv_path)}
         self.at_start = {k: digest(f.read()) for k, f in self.files.items()}
+        for f in self.files.values():
+            f.writable_at_start = f.status()["writable"]
         self.started = time.time()
         db = ((auditor.cfg.get("state") or {}).get("db_path")) or "lanowl_state.sqlite"
         self.dir = os.path.join(os.path.dirname(os.path.abspath(db)), "settings-versions")
