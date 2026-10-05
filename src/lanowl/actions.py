@@ -455,9 +455,13 @@ class Actions:
                 log.debug("on_proposed failed", exc_info=True)
         if p.get("owner"):
             # on Telegram the buttons ARE the answer to /reboot; the dashboard asks for the
-            # PIN at once, and what then runs is announced on Telegram (_announce)
+            # PIN at once, and what then runs is announced on Telegram (_announce). With no
+            # PIN set up the page cannot approve anything: the buttons go to Telegram.
             if p["via"] == "telegram":
                 self._spawn(self._send_own([p["id"]], "🔁 <b>You asked for it</b>", notify=False))
+            elif not self.pin:
+                self._spawn(self._send_own([p["id"]], "🔁 <b>You asked for it on the dashboard</b>",
+                                           notify=True))
             return {"proposal": p["id"]}
         if p["via"] == "audit":
             self._audit_batch.append(p["id"])     # after the diagnosis, on the incident's alert

@@ -368,6 +368,37 @@ def test_owner_presses_are_not_capped():
           "three of the model's proposals waiting do not block the owner's press")
 
 
+def test_owner_press_without_pin_goes_to_telegram():
+    """The dashboard's Install / Reboot is approved with the PIN on the page. With no PIN set
+    up the page cannot approve it, and it says "approve on Telegram": so it must be there."""
+    print("\n-- the owner's press on the dashboard, no PIN: its buttons on Telegram --")
+    out = {}
+
+    async def go(d, pin):
+        m, a = _auditor(d)
+        a.actions.pin = pin
+        _fake_checks(a)
+        tg = _Tg().install()
+        try:
+            r = await a.actions.ask("nmap_scan", "192.168.10.61", "dashboard")
+            await _settle()
+            out[bool(pin)] = (r, list(tg.sent), a.actions._get(r.get("proposal")))
+        finally:
+            tg.restore()
+    for pin in ("", A.pin_hash("2389")):
+        with tempfile.TemporaryDirectory() as d:
+            asyncio.run(go(d, pin))
+    r, sent, p = out[False]
+    check(r.get("proposal") and len(sent) == 1 and "on the dashboard" in sent[0]["text"]
+          and sent[0]["extra"].get("disable_notification") is False,
+          "no PIN: one Telegram message, with a sound")
+    rows = sent[0]["extra"]["reply_markup"]["inline_keyboard"] if sent else []
+    check(rows and rows[0][0]["callback_data"] == f"ax:a:{p['id']}:{p['nonce']}" and p.get("tg"),
+          "...carrying its Approve button")
+    r, sent, _ = out[True]
+    check(r.get("proposal") and not sent, "a PIN set up: the page approves it, nothing on Telegram")
+
+
 # --- 6. the audit ---------------------------------------------------------------------
 def test_audit_rides_on_the_incident_alert():
     print("\n-- the audit's proposals ride on the incident's own alert --")
@@ -1003,7 +1034,7 @@ def test_live_steps():
 if __name__ == "__main__":
     for fn in [test_rules, test_tool_offered_only_in_a_turn,
                test_question_proposal_and_telegram_button, test_limits_and_expiry,
-               test_owner_presses_are_not_capped,
+               test_owner_presses_are_not_capped, test_owner_press_without_pin_goes_to_telegram,
                test_audit_rides_on_the_incident_alert, test_dashboard_pin, test_shelly_safety,
                test_record_and_foreign_button, test_host_log_quotes_the_models_words,
                test_prompts, test_live_nmap, test_live_restart_service, test_live_shelly_reboot,

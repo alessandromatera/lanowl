@@ -2176,6 +2176,8 @@ async function endSess(id) {
 const CHANGES = ["reboot", "shelly_reboot", "apt_upgrade", "routeros_upgrade", "restart_service", "vps_restart"];
 async function approveProp(id, prop) {
   const pin = load("pin", ""), p = prop || propById(id);
+  // no PIN set up: the page cannot approve — every proposal is on Telegram with its buttons
+  if (((S.d || {}).actions || {}).pin === false) { toast("No dashboard PIN is set up — it is on Telegram: approve it there."); return; }
   // a change, or anything with a warning (the whole network offline, a snapshot replaced …), is
   // shown first even with a remembered PIN: the tap on the button is the owner's explicit yes
   if (!pin || !p || CHANGES.includes(p.action) || (p.risk || []).length) { openPin(id, "", p); return; }
