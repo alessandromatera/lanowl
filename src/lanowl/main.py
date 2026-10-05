@@ -1646,6 +1646,10 @@ class Auditor:
         watcher = asyncio.ensure_future(self.wanwatch.run())
         hostlogs = asyncio.ensure_future(self.hostlog.run())
         chat = asyncio.ensure_future(self.poller.run()) if not self.no_telegram else None
+        if self.actions.needs_pin:
+            # switched on, and nothing to approve with on the dashboard: off until it is set
+            log.warning("actions: %s", self.actions.off_reason())
+            self._emit_telegram("digest", self.actions.pin_needed_text(self.poller.enabled))
         try:
             await self.dashboard.start()
         except Exception:        # a port clash must not take the monitor down with it
@@ -1858,7 +1862,10 @@ def _check(args) -> int:
     from .shell import report as shell_report
     text, walls = shell_report(cfg)
     print("\n" + text)
-    return 1 if bad or wrong or walls or k.problems or any(p.problems for p in k.plans) else 0
+    from .actions import report as actions_report
+    text, nopin = actions_report(cfg)
+    print("\n" + text)
+    return 1 if bad or wrong or walls or nopin or k.problems or any(p.problems for p in k.plans) else 0
 
 
 def main():

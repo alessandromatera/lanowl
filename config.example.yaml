@@ -204,7 +204,8 @@ actions:
   max_per_day: 20
   repeat_after_h: 24
   pin_sha256: ""                    # printf 'lanowl-pin:%s' YOUR_PIN | sha256sum
-                                    # empty: no approvals from the dashboard
+                                    # empty: set it with /pin on Telegram. No PIN at
+                                    # all: actions stay off
   pin_max_failures: 5
   pin_lockout_min: 30
   catalog:                          # which devices: the inventory's `manage`

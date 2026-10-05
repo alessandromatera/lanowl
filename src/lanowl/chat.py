@@ -16,6 +16,7 @@ the owner asks it things, on lanowl's own bot:
     /resume   watch it again;  /paused  what is paused
     /memory   the model's notes (memory.py); /remember and /forget change them directly
     /model    the owner's switch for the local model: /model off, /model on (Auditor.set_model)
+    /pin      the dashboard's PIN, when config.yaml has none: the digits are deleted at once
     /new      start a new conversation
     anything else is a question, answered by the model with the same read-only tools
 
@@ -35,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from typing import Optional
 
@@ -51,6 +53,7 @@ TG_RECORD = "telegram_conv"
 TG_TURNS = 6              # earlier exchanges a Telegram question carries
 TG_IDLE_S = 6 * 3600      # ...unless the last one is older than this: then it starts over
 TG_CHARS = 2500           # each earlier answer cut to this
+PIN_WAIT_S = 300          # after /pin, the next message of digits is the PIN
 
 HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.\n"
         "e.g. <i>why did the internet drop last night?</i> · <i>how has the boiler been this "
@@ -70,6 +73,7 @@ HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.
         "/memory — what I remember · /remember <i>text</i> · /forget <i>number</i>\n"
         "/model on | off — the local model (off: no diagnoses, answers or reviews; alerts "
         "and digests go on)\n"
+        "/pin — set the dashboard's PIN (when config.yaml has none)\n"
         "/new — a new conversation (I keep the last few questions for 6 hours)\n\n"
         "<i>Ask and I dig in myself: mtr, DNS, TLS, scans, ARP, a packet capture, the tunnels, "
         "another LAN host, the VPN hub, the remote sites' routers (a ping, their DHCP, a speed "
@@ -98,6 +102,7 @@ class Chat:
         self.session_iters = int(sess.get("max_iters", 24))
         self._tasks: set = set()
         self._tg: dict = {}       # chat_id -> {"turns": [{"q", "a", "ts"}]}
+        self._pin_wait: dict = {}     # chat_id -> when /pin asked for the digits
         try:
             rec = auditor.state.load_record(TG_RECORD) or {}
             self._tg = {str(k): v for k, v in (rec.get("chats") or {}).items()
@@ -106,8 +111,13 @@ class Chat:
             log.warning("telegram conversations unreadable, starting fresh", exc_info=True)
 
     # --- inbound ------------------------------------------------------------
-    async def on_telegram(self, text: str, chat_id: str):
+    async def on_telegram(self, text: str, chat_id: str, message_id=None):
         cmd = text.split()[0].split("@")[0].lower() if text.startswith("/") else ""
+        asked = self._pin_wait.pop(str(chat_id), None)
+        if asked and not cmd and re.fullmatch(r"[0-9]+", text) and time.time() - asked < PIN_WAIT_S:
+            log.info("telegram chat: the PIN /pin asked for (not logged)")
+            await self._pin_set(text, chat_id, message_id)
+            return
         log.info("telegram chat: %s", cmd or f"question ({len(text)} chars)")
         if cmd in ("/start", "/help"):
             await self._reply(chat_id, HELP)
@@ -147,6 +157,12 @@ class Chat:
         elif cmd == "/model":
             arg = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
             await self._reply(chat_id, self.model_command(arg))
+        elif cmd == "/pin":
+            arg = text.split(None, 1)[1].strip() if len(text.split(None, 1)) > 1 else ""
+            if arg:                      # /pin 1234 in one go: deleted all the same
+                await self._pin_set(arg, chat_id, message_id)
+            else:
+                await self._pin_ask(chat_id)
         elif cmd in ("/memory", "/remember", "/forget"):
             arg = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
             await self._reply(chat_id, self.memory_command(cmd, arg))
@@ -198,6 +214,31 @@ class Chat:
                            f"(more of the name, or the address):\n{names}{more}")
         return "\n\n".join(out)
 
+    # --- the dashboard's PIN (Actions.set_pin) -----------------------------------------
+    async def _pin_ask(self, chat_id: str):
+        """/pin: config.yaml's PIN wins, so only ask for digits when there is none there."""
+        ac = self.a.actions
+        r = ac.set_pin("") if (ac.pin_cfg_raw or not ac.switched_on) else None
+        if r is not None:
+            await self._reply(chat_id, r["text"])
+            return
+        self._pin_wait[str(chat_id)] = time.time()
+        await self._reply(chat_id, "🔒 Send the dashboard's " + ("new " if ac.pin_tg else "")
+                          + "PIN: 4 to 12 digits. I delete your message as soon as I have "
+                            "read it, and keep only its hash.")
+
+    async def _pin_set(self, pin: str, chat_id: str, message_id):
+        # the digits leave the chat first, whatever the answer
+        gone = False
+        if message_id is not None:
+            r = await telegram_call(self.cfg, "deleteMessage",
+                                    {"chat_id": chat_id, "message_id": int(message_id)})
+            gone = bool(r and r.get("ok"))
+        text = self.a.actions.set_pin(pin)["text"]
+        if not gone:
+            text += "\n⚠️ I could not delete your message with the PIN: delete it yourself."
+        await self._reply(chat_id, text)
+
     # --- the local model's switch (Auditor.set_model) ---------------------------------
     def model_command(self, arg: str) -> str:
         """/model · /model on · /model off. The owner's own switch: no model involved."""
@@ -225,7 +266,8 @@ class Chat:
         ips = set(a.actions.rebootable())
         devs = [d for d in a.inv.devices if d.ip in ips]
         if not devs:
-            return "Rebooting is switched off (actions.enabled)."
+            return ("Rebooting is off: " + a.actions.off_reason() + "."
+                    if a.actions.needs_pin else "Rebooting is switched off (actions.enabled).")
         if not arg.strip():
             return ("Say which: <i>/reboot ap porch</i>, or an address. I can reboot:\n"
                     + "\n".join(f"• {_html(label(d.name, d.ip))}" for d in devs))

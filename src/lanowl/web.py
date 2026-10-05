@@ -19,7 +19,8 @@ Safety, for a page on the LAN:
     one thing it changes: every pause and resume made here is also said on Telegram, so
     nobody on the LAN can quietly stop the monitor watching the alarm; and the model's memory,
     which changes what the model knows (and so how it reads a log), never what is watched;
-  - approving a proposed action needs the PIN (`actions.pin_sha256`); the page remembers it
+  - approving a proposed action needs the PIN (`actions.pin_sha256`, or /pin on Telegram;
+    without one actions stay off); the page remembers it
     once entered, and five wrong ones lock dashboard approvals and say so on Telegram;
   - POSTs must be JSON, so a web page elsewhere cannot fire them with a plain form
     (a cross-origin JSON POST needs a CORS preflight this server never grants);
@@ -503,7 +504,8 @@ class Dashboard:
         if body["approve"]:
             ok, why = self.a.actions.check_pin(body.get("pin"))
             if not ok:
-                msg = {"none": "No PIN is set up for the dashboard — approve on Telegram.",
+                msg = {"none": "No dashboard PIN is set up: actions are off until one is — /pin "
+                               "on Telegram, or actions.pin_sha256 in config.yaml.",
                        "locked": "Too many wrong PINs — dashboard approvals are locked for now.",
                        "wrong": "Wrong PIN."}[why]
                 return web.json_response({"ok": False, "pin": why, "error": msg}, status=403)

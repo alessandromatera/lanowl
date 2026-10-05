@@ -457,9 +457,9 @@ class TelegramPoller:
 
     Only the configured chat is listened to. The bot is findable by name, and anything it
     answers comes from the network's own data, so every other sender is ignored (logged once
-    per chat, never answered). `on_message(text, chat_id)` is awaited for each message in
-    order; `persist(offset)` keeps the position across restarts, so a question asked while
-    the container was being rebuilt is answered when it comes back, not dropped."""
+    per chat, never answered). `on_message(text, chat_id, message_id)` is awaited for each
+    message in order; `persist(offset)` keeps the position across restarts, so a question
+    asked while the container was being rebuilt is answered when it comes back, not dropped."""
 
     def __init__(self, cfg: dict, on_message, persist=None, offset: int = 0,
                  on_callback=None):
@@ -527,7 +527,7 @@ class TelegramPoller:
                                     "(@%s)", chat, (m.get("from") or {}).get("username", "?"))
                     continue
                 try:
-                    await self.on_message(text, chat)
+                    await self.on_message(text, chat, m.get("message_id"))
                 except Exception:
                     log.exception("telegram chat: handling %r failed", text[:60])
 

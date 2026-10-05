@@ -30,6 +30,10 @@ actions:
 Start in **shadow** mode: proposals arrive and you answer them, but an approval only records
 what would have run. When you trust what it proposes, switch to `live`.
 
+Actions need a [dashboard PIN](dashboard.md#the-pin): until one is set they stay off, and
+lanowl says so on Telegram when it starts. Send `/pin` to the bot, or set
+`actions.pin_sha256` in `config.yaml`.
+
 ## The rules every proposal passes
 
 Before you are asked:

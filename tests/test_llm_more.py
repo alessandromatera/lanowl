@@ -507,7 +507,7 @@ def test_poller_answers_only_its_owner():
     print("\n-- the bot listens to its owner and nobody else --")
     got = []
 
-    async def on_msg(text, chat):
+    async def on_msg(text, chat, message_id=None):
         got.append((text, chat))
     cfg = {"telegram": {"chat_id": "100000001", "chat": {"enabled": True}}}
     p = sinks.TelegramPoller(cfg, on_msg, persist=lambda o: saved.append(o))

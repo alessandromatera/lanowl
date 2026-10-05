@@ -140,6 +140,9 @@ Secrets: /config/secrets.yaml · 9 login(s), 2 token(s), mode 600
 Model: ollama · qwen3:30b at http://192.168.88.6:11434
 
 Shell: off
+
+Actions: on · live
+  ✓ dashboard PIN   from config.yaml
 ```
 
 A **✗** says what is wrong and how to fix it, for example:

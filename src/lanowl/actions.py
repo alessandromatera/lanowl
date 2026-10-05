@@ -14,7 +14,10 @@ shape:
     contactor or a pump can be set up exactly like that;
   - the owner is asked with buttons: on Telegram (one message per proposal, edited through
     its life; from the audit, riding on the incident's own alert — one message per
-    incident is the rule) and on the dashboard, where approving needs the PIN;
+    incident is the rule) and on the dashboard, where approving needs the PIN. The PIN is
+    config.yaml's `pin_sha256`, or — when that is empty — the one set with /pin on Telegram
+    (only its hash, kept in the record). Without either, actions stay off: a page that
+    cannot approve must not offer anything to approve;
   - an approval expires after `expire_min`: the network it was proposed for moves on;
   - approving runs the check again, then — live — the action itself (`_execute`), one at a
     time, and reports what happened; in shadow mode it records what WOULD have run.
@@ -78,6 +81,8 @@ RECORD = "actions"
 KEEP = 200                 # proposals kept in the record, refused ones included
 SHADOW, LIVE = "shadow", "live"
 PIN_SALT = "lanowl-pin:"
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+PIN_DIGITS = re.compile(r"^[0-9]{4,12}$")      # the dashboard's field: digits, up to 12
 _VIA = {"telegram": "Telegram", "dashboard": "the dashboard", "audit": "the audit"}
 _IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 _UNIT = re.compile(r"^[A-Za-z0-9@._-]{1,64}$")
@@ -129,6 +134,48 @@ def pin_hash(pin: str) -> str:
     return hashlib.sha256((PIN_SALT + str(pin)).encode()).hexdigest()
 
 
+def _pin_in_state(cfg: dict) -> bool:
+    """Whether /pin set one: read from the state's record, for --check (a process of its own)."""
+    import os
+    import sqlite3
+    path = (cfg.get("state") or {}).get("db_path", "lanowl_state.sqlite")
+    if not os.path.exists(path):
+        return False
+    try:
+        con = sqlite3.connect(path, timeout=5)
+        try:
+            row = con.execute("SELECT value FROM records WHERE name=?", (RECORD,)).fetchone()
+        finally:
+            con.close()
+        return bool(row) and bool(_SHA256.match(str(json.loads(row[0]).get("pin") or "")))
+    except Exception:
+        return False
+
+
+def report(cfg: dict) -> tuple:
+    """(text, problems) for `lanowl --check`: actions switched on need a dashboard PIN —
+    config.yaml's, or the one set with /pin on Telegram. Never a value."""
+    c = cfg.get("actions") or {}
+    if not c.get("enabled"):
+        return "Actions: off (actions.enabled)", 0
+    head = f"Actions: on · {c.get('mode', SHADOW)}"
+    raw = str(c.get("pin_sha256") or "").strip().lower()
+    chat = bool(((cfg.get("telegram") or {}).get("chat") or {}).get("enabled"))
+    make = "printf 'lanowl-pin:%s' YOUR_PIN | sha256sum"
+    if _SHA256.match(raw):
+        mark, text = "✓", "from config.yaml"
+    elif raw:
+        mark, text = "✗", (f"actions.pin_sha256 is not a SHA-256 (64 hex characters), so "
+                           f"actions stay off: {make}")
+    elif _pin_in_state(cfg):
+        mark, text = "✓", "set on Telegram (/pin)"
+    else:
+        mark, text = "✗", ("none, so actions stay off: "
+                           + ("send /pin to the bot on Telegram, or set " if chat else "set ")
+                           + f"actions.pin_sha256 in config.yaml ({make})")
+    return f"{head}\n  {mark} {'dashboard PIN':<15} {text}", int(mark == "✗")
+
+
 def _hm(ts: float) -> str:
     return time.strftime("%H:%M", time.localtime(ts))
 
@@ -178,7 +225,7 @@ class Actions:
     def __init__(self, auditor):
         self.a = auditor
         c = auditor.cfg.get("actions") or {}
-        self.enabled = bool(c.get("enabled", False))
+        self.switched_on = bool(c.get("enabled", False))     # config.yaml; `enabled` adds the PIN
         mode = str(c.get("mode", SHADOW))
         if mode not in (SHADOW, LIVE):
             log.warning("actions.mode %r is not a mode — running in shadow mode: nothing is "
@@ -189,7 +236,11 @@ class Actions:
         self.max_pending = int(c.get("max_pending", 3))
         self.max_per_day = int(c.get("max_per_day", 20))
         self.quiet_s = float(c.get("repeat_after_h", 24)) * 3600
-        self.pin = str(c.get("pin_sha256") or "").strip().lower()
+        # config.yaml's PIN wins; a value that is not a SHA-256 (the digits themselves,
+        # typically) is no PIN at all — it could never match — and --check says so
+        self.pin_cfg_raw = str(c.get("pin_sha256") or "").strip().lower()
+        self.pin_cfg = self.pin_cfg_raw if _SHA256.match(self.pin_cfg_raw) else ""
+        self.pin_tg = ""                      # set with /pin on Telegram: in the record
         self.pin_max = int(c.get("pin_max_failures", 5))
         self.pin_lock_s = float(c.get("pin_lockout_min", 15)) * 60
         self.cat = c.get("catalog") or {}
@@ -219,6 +270,67 @@ class Actions:
     def live(self) -> bool:
         return self.mode == LIVE
 
+    @property
+    def pin(self) -> str:
+        """The dashboard PIN's hash: config.yaml's when it has one, otherwise /pin's."""
+        return self.pin_cfg if self.pin_cfg_raw else self.pin_tg
+
+    @property
+    def enabled(self) -> bool:
+        """Switched on in config.yaml AND a PIN to approve with on the dashboard."""
+        return self.switched_on and bool(self.pin)
+
+    @property
+    def needs_pin(self) -> bool:
+        return self.switched_on and not self.pin
+
+    def off_reason(self) -> str:
+        if self.needs_pin:
+            return ("actions are off until a dashboard PIN is set: /pin on Telegram, or "
+                    "actions.pin_sha256 in config.yaml")
+        return "actions are switched off (actions.enabled)"
+
+    def pin_needed_text(self, chat: bool) -> str:
+        """The Telegram message at a start with actions on and no PIN. `chat`: /pin can be
+        received (telegram.chat.enabled)."""
+        lines = ["🔒 <b>Actions are off until you set a dashboard PIN</b>"]
+        if self.pin_cfg_raw:
+            lines.append("config.yaml's <code>actions.pin_sha256</code> is not a SHA-256, so it "
+                         "is no PIN: <code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>.")
+        elif chat:
+            lines.append("Send /pin, then the digits (4 to 12): I delete your message and keep "
+                         "only its hash. Or set <code>actions.pin_sha256</code> in config.yaml.")
+        else:
+            lines.append("Set <code>actions.pin_sha256</code> in config.yaml: "
+                         "<code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>.")
+        return "\n".join(lines)
+
+    def set_pin(self, pin: str) -> dict:
+        """/pin on Telegram: the dashboard PIN when config.yaml has none. Only its hash is
+        kept, in the record. {"ok", "text"}."""
+        if self.pin_cfg_raw:
+            return {"ok": False, "text": (
+                "🔒 The dashboard PIN is set in config.yaml (<code>actions.pin_sha256</code>) — "
+                "change it there." if self.pin_cfg else
+                "🔒 config.yaml has <code>actions.pin_sha256</code>, and it is not a SHA-256: "
+                "fix it there (<code>printf 'lanowl-pin:%s' YOUR_PIN | sha256sum</code>), or "
+                "empty it to set the PIN here.")}
+        if not self.switched_on:
+            return {"ok": False, "text": "Actions are switched off (actions.enabled): there is "
+                                         "nothing for a PIN to approve."}
+        pin = str(pin or "").strip()
+        if not PIN_DIGITS.match(pin):
+            return {"ok": False, "text": "A PIN is 4 to 12 digits. Nothing changed — /pin to "
+                                         "try again."}
+        was = bool(self.pin_tg)
+        self.pin_tg = pin_hash(pin)
+        self._fails, self._locked_until = [], 0.0
+        self._save()
+        log.warning("actions: dashboard PIN %s on Telegram", "changed" if was else "set")
+        return {"ok": True, "text": "🔒 Dashboard PIN changed." if was else
+                "🔒 Dashboard PIN set — actions are on. The dashboard asks for it once per "
+                "browser."}
+
     # --- persistence ---------------------------------------------------------
     def _restore(self):
         try:
@@ -228,6 +340,8 @@ class Actions:
             return
         self.items = [p for p in (rec.get("items") or []) if isinstance(p, dict)][-KEEP:]
         self.msgs = {str(k): v for k, v in (rec.get("msgs") or {}).items() if isinstance(v, dict)}
+        pin = str(rec.get("pin") or "")
+        self.pin_tg = pin if _SHA256.match(pin) else ""
         self._next = max([int(rec.get("next") or 1)] + [int(p.get("id") or 0) + 1 for p in self.items])
         for p in self.items:
             if p.get("action") == "investigate" and p.get("status") == "open":
@@ -258,7 +372,7 @@ class Actions:
                 st.pop("output", None)
         try:
             self.a.state.save_record(RECORD, {"next": self._next, "items": self.items[-KEEP:],
-                                              "msgs": msgs})
+                                              "msgs": msgs, "pin": self.pin_tg})
             self.msgs = msgs
         except Exception as e:
             log.warning("actions: record not saved: %s", e)
@@ -394,7 +508,7 @@ class Actions:
         proposal of the model's — and still a button to press (Telegram) or the PIN
         (dashboard): a typo must not reboot the wrong thing. {"proposal"} or {"refused"}."""
         if not self.enabled:
-            return {"refused": "actions are switched off (actions.enabled)"}
+            return {"refused": self.off_reason()}
         return await self._propose({"action": action, "ip": ip, "reason": ""},
                                    {"via": via, "owner": True})
 
@@ -455,13 +569,9 @@ class Actions:
                 log.debug("on_proposed failed", exc_info=True)
         if p.get("owner"):
             # on Telegram the buttons ARE the answer to /reboot; the dashboard asks for the
-            # PIN at once, and what then runs is announced on Telegram (_announce). With no
-            # PIN set up the page cannot approve anything: the buttons go to Telegram.
+            # PIN at once, and what then runs is announced on Telegram (_announce)
             if p["via"] == "telegram":
                 self._spawn(self._send_own([p["id"]], "🔁 <b>You asked for it</b>", notify=False))
-            elif not self.pin:
-                self._spawn(self._send_own([p["id"]], "🔁 <b>You asked for it on the dashboard</b>",
-                                           notify=True))
             return {"proposal": p["id"]}
         if p["via"] == "audit":
             self._audit_batch.append(p["id"])     # after the diagnosis, on the incident's alert
@@ -1719,7 +1829,7 @@ class Actions:
         return {"enabled": self.enabled, "mode": self.mode, "pending": pend, "recent": rest,
                 # what the device sheet offers a Reboot button for
                 "rebootable": self.rebootable(),
-                "pin": bool(self.pin),
+                "pin": bool(self.pin), "needs_pin": self.needs_pin,
                 "locked_until": self._locked_until if now < self._locked_until else None}
 
     def by_hand(self, now: Optional[float] = None, days: float = 30, min_n: int = 3) -> list:

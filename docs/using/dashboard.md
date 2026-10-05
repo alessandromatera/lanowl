@@ -108,8 +108,15 @@ More: [Asking the owl](asking.md).
 ## The PIN
 
 Anything on the dashboard that changes something (approving a proposal, a reboot, an update)
-asks for your PIN once per device and browser. Set it in `config.yaml` as a SHA-256 hash of
-`lanowl-pin:` followed by the PIN, so the digits themselves never sit in the file:
+asks for your PIN once per device and browser. With actions on, the PIN is required: without
+one, actions stay off and lanowl tells you so on Telegram when it starts.
+
+The simplest way is Telegram: send `/pin` to the bot, then the digits (4 to 12). The bot
+deletes your message as soon as it has read it and keeps only a hash of the PIN. `/pin`
+again changes it.
+
+Or put it in `config.yaml`, as a SHA-256 hash of `lanowl-pin:` followed by the PIN, so the
+digits themselves never sit in the file:
 
 ```bash
 printf 'lanowl-pin:%s' 1234 | sha256sum      # on a Mac: shasum -a 256
@@ -120,9 +127,10 @@ actions:
   pin_sha256: "…"
 ```
 
-Without a PIN, the dashboard cannot approve anything; Telegram's buttons still can. Five
-wrong tries in a row (`actions.pin_max_failures`) lock dashboard approvals for
-`actions.pin_lockout_min` minutes (30 in the example), and Telegram is told.
+A PIN in `config.yaml` wins: `/pin` then only points to it. `lanowl --check` says where the
+PIN comes from, or that there is none. Five wrong tries in a row (`actions.pin_max_failures`)
+lock dashboard approvals for `actions.pin_lockout_min` minutes (30 in the example), and
+Telegram is told.
 
 ## Who can reach it
 

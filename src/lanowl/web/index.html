@@ -2139,7 +2139,7 @@ function renderActs(d) {
   // line for them — Ask can still list each
   const r = all.filter(p => !(p.status === "refused" && !p.owner)), hid = all.length - r.length;
   put("act-n", !A.enabled ? "off" : (A.mode === "live" ? "live" : "dry run") + (A.locked_until ? ` · PIN locked until ${hm(A.locked_until)}` : ""));
-  put("acts", !A.enabled ? `<div class="list"><div class="empty">Actions are off (actions.enabled).</div></div>` :
+  put("acts", !A.enabled ? `<div class="list"><div class="empty">${A.needs_pin ? "Actions are off until a dashboard PIN is set: send /pin to the bot on Telegram, or set actions.pin_sha256 in config.yaml." : "Actions are off (actions.enabled)."}</div></div>` :
     (r.length ? `<div class="card props">` + r.slice(0, 15).map(propHtml).join("") + `</div>` :
     `<div class="list"><div class="empty">The model has not proposed anything yet.</div></div>`) +
     (hid ? `<div class="fine" style="margin:6px 4px 0">${hid} of the model's own request${hid > 1 ? "s" : ""} refused by the rules, not shown — ask about them in Ask if you want to know.</div>` : ""));
@@ -2176,8 +2176,6 @@ async function endSess(id) {
 const CHANGES = ["reboot", "shelly_reboot", "apt_upgrade", "routeros_upgrade", "restart_service", "vps_restart"];
 async function approveProp(id, prop) {
   const pin = load("pin", ""), p = prop || propById(id);
-  // no PIN set up: the page cannot approve — every proposal is on Telegram with its buttons
-  if (((S.d || {}).actions || {}).pin === false) { toast("No dashboard PIN is set up — it is on Telegram: approve it there."); return; }
   // a change, or anything with a warning (the whole network offline, a snapshot replaced …), is
   // shown first even with a remembered PIN: the tap on the button is the owner's explicit yes
   if (!pin || !p || CHANGES.includes(p.action) || (p.risk || []).length) { openPin(id, "", p); return; }
