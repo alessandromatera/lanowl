@@ -57,6 +57,8 @@ jobs:
         run: docker build -f docker/Dockerfile -t lanowl:ci .
       - name: the model's sandbox
         run: docker build -f docker/sandbox/Dockerfile -t lanowl-sandbox:ci .
+      # the example files as a new user has them after the quick start: an ssh key made, and
+      # a dashboard password (lanowl --hash-password) — without one --check says ✗ login
       - name: It starts far enough to check a config
         run: |
           docker run --rm -v "$PWD:/src:ro" -w /src lanowl:ci sh -c '
@@ -64,4 +66,7 @@ jobs:
             cp inventory.example.yaml /tmp/c/inventory.yaml && cp secrets.example.yaml /tmp/c/secrets.yaml &&
             chmod 600 /tmp/c/secrets.yaml && sed -i "s#/config/id_ed25519#/tmp/c/id#" /tmp/c/secrets.yaml &&
             ssh-keygen -q -t ed25519 -N "" -f /tmp/c/id &&
+            H=$(python -c "from lanowl.login import hash_password; print(hash_password(\"ci-check-only\"))") &&
+            sed -i "s#password_hash: \"\"#password_hash: \"$H\"#" /tmp/c/config.yaml &&
+            grep -q "password_hash: \"scrypt" /tmp/c/config.yaml &&
             python -m lanowl.main --config /tmp/c/config.yaml --inventory /tmp/c/inventory.yaml --check'
