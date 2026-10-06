@@ -124,6 +124,27 @@ def human_size(n: Optional[int]) -> str:
     return f"{n:.1f} GB"
 
 
+def report(cfg: dict, inv, acc) -> tuple:
+    """(text, problems) for `lanowl --check`, and so for a Settings save: backups switched on
+    with a store lanowl cannot write to fail at their first run — said here instead. Nothing
+    at all while backups are off, or when the store is reachable."""
+    c = (cfg or {}).get("backups") or {}
+    if not isinstance(c, dict) or not c.get("enabled"):
+        return "", 0
+    host = str((c.get("store") or {}).get("host") or "") if isinstance(c.get("store"), dict) else ""
+    if not host:
+        why = "backups are on, and no machine keeps them: backups.store.host is empty"
+    elif inv.get(host) is None:
+        why = (f"backups.store.host {host} is not one of your devices: add it, with a login by "
+               "lanowl's ssh key — the backups are written over that login")
+    elif not acc.by_key(host):
+        why = (f"lanowl has no login with its ssh key to the store {host}: give that device a login "
+               "with lanowl's key — the backups are written over it")
+    else:
+        return "", 0
+    return f"Backups:\n  ✗ {why}", 1
+
+
 class Backups:
     def __init__(self, auditor):
         self.a = auditor

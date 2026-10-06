@@ -50,9 +50,9 @@ web:
   host: "0.0.0.0"
   port: 80                          # or LANOWL_WEB_PORT. Not set: 8088
   allowed_hosts: []                 # host names allowed besides IP addresses (DNS-rebinding guard)
-  password_hash: ""                 # lanowl --hash-password makes it. Empty: set it with
-                                    # /password on Telegram. No password at all: the
-                                    # dashboard stays closed
+  password_hash: ""                 # the dashboard's password, as a hash: set on its first page
+                                    # (or lanowl --hash-password, or /password on Telegram).
+                                    # No password at all: the dashboard stays closed
   login: true                       # false only behind a login of your own (a proxy, Tailscale)
 
 # --- how often, and how quiet ---------------------------------------------------------------
@@ -201,8 +201,8 @@ access:
   # secrets_file: "/config/secrets.yaml"   # the default: beside this file
   known_hosts: "known_hosts_devices"
   hostkey_any: []                   # devices that make a new ssh host key at every boot
-  ha_url: ""                        # Home Assistant, for its updates and restarts; its token:
-                                    # secrets.yaml `tokens.homeassistant`
+  ha_url: ""                        # Home Assistant's address, for its updates and restarts
+                                    # (its token: secrets.yaml `tokens.homeassistant`)
 
 # Actions the model may PROPOSE and you approve with a button (on the dashboard, after a confirm).
 actions:

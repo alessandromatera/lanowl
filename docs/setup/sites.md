@@ -61,7 +61,11 @@ minute to come back from paging you.
   is watched.
 - **Fixed addresses**: devices that hold no lease are found in the router's ARP table, read
   with the DHCP, and once a month by asking the router who is on each network (RouterOS's
-  `ip-scan`, or a ping sweep on OpenWrt). Never a port scan. On `scan.day` (the same day as
+  `ip-scan`, or a ping sweep on OpenWrt). For home with no `nets` of its own (a new install),
+  that network is the `/24` its router's address is on.
+- **Made from a router** (Make it a site): the site's networks are read from the router itself,
+  over its login: the networks it serves and its own address as a `/32`, never the VPN network
+  it is reached through. Never a port scan. On `scan.day` (the same day as
   the monthly vulnerability scan) at `scan.at`, or with **Scan now**.
 - **Checks from the router**, when the owl needs them: a ping from inside the site, its DHCP,
   and a speed test of its internet line. The speed test runs only when you ask: it is their

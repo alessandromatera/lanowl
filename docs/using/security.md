@@ -147,6 +147,8 @@ Backups start switched off, like every optional feature: until then a device's p
    kind `linux`, its login "its own login: lanowl's ssh key", and the user. Run the line the
    page gives on that machine, as that user.
 2. **Settings → Backups**: switch it on, `store.host` that machine's address, `store.path` a
-   folder on it that only you can read.
+   folder on it that only you can read. The save checks the store first: a machine that is not
+   one of your devices, or one lanowl reaches only by password, is said there, with what to
+   do, and nothing is saved (the backups are written over lanowl's key).
 3. **Restart** (the banner offers it). Each machine with `backup` ticked on its page is then
    backed up monthly, and **Back up everything now** is on the Security tab.

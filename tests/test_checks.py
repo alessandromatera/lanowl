@@ -73,7 +73,7 @@ def _auditor(d, mode="live", extra=None):
     cfg = {"telegram": {"via": "direct", "chat_id": "100000001",
                         "outbox_file": os.path.join(d, "o.json")},
            "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0},
-           "observer": {"host_ip": "192.168.10.103"}, **CFG, **(extra or {})}
+           "observer": {"host_ip": "192.168.10.103"}, "model": {"provider": "ollama"}, **CFG, **(extra or {})}
     cfg["actions"] = {**cfg["actions"], "mode": mode}
     devs = [Device(x.ip, x.name, x.group, x.criticality, attrs=dict(x.attrs)) for x in DEVICES]
     devs.append(Device(VPS, "VPS", "vpn", "critical", attrs={"depends_on": "wan"}))

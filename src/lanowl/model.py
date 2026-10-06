@@ -179,6 +179,16 @@ def model_name(cfg: dict) -> str:
     return str(model_cfg(cfg).get("name") or DEFAULT_MODEL)
 
 
+def model_set(cfg: dict) -> bool:
+    """Is there a model to ask? Only when config.yaml has a `model:` section (or
+    LANOWL_MODEL_URL gives one): a new install has none, and the owl is off — nothing is
+    probed, nothing is reported missing — until the owner says where Ollama runs."""
+    return bool(model_cfg(cfg)) or bool(os.environ.get("LANOWL_MODEL_URL"))
+
+
+NO_MODEL = "no model set: the owl is off. Settings → The model says where Ollama runs"
+
+
 def model_report(cfg: dict) -> tuple:
     """(text, problems) for `lanowl --check`: which model lanowl will ask, and what in
     config.yaml it would not read — a section it ignores means the defaults, silently."""
@@ -193,6 +203,9 @@ def model_report(cfg: dict) -> tuple:
     provider = str(m.get("provider") or "ollama")
     url = str(m.get("url") or "http://127.0.0.1:11434")
     where = " (from LANOWL_MODEL_URL)" if os.environ.get("LANOWL_MODEL_URL") else ""
+    if not model_set(cfg) and "ollama" not in (cfg or {}) and (cfg or {}).get("model") is None:
+        lines.append(f"Model: {NO_MODEL} (or `model:` in config.yaml)")
+        return "\n".join(lines), bad
     lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where}")
     if "ollama" in (cfg or {}):
         row("✗", "config.yaml", "`ollama:` is not read any more: rename it `model:`, and its "
@@ -287,6 +300,28 @@ def on_main_lan(cfg: dict, ip: str) -> bool:
     except ValueError:
         return False
     return any(a in n for n in main_lans(cfg)) and site_of(cfg, ip) == MAIN_SITE
+
+
+_LAN_RANGES = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+
+
+def is_lan(ip: str) -> bool:
+    """A home network's address (RFC 1918): not loopback, not public, not a documentation range."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return False
+    return a.version == 4 and any(a in ipaddress.ip_network(n) for n in _LAN_RANGES)
+
+
+def router_lan(cfg: dict) -> list:
+    """The main router's own /24: where its ARP table and its monthly scan look for the main
+    site's fixed addresses when `sites.list` names no network for it. [] without a router
+    known by its address."""
+    import ipaddress
+    host = router_host(cfg)
+    return [ipaddress.ip_network(host + "/24", strict=False)] if is_lan(host) else []
 
 
 def router_host(cfg: dict) -> str:

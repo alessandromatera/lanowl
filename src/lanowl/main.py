@@ -44,7 +44,8 @@ from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .chat import Chat
 from .memory import Memory
 from .names import Names, clean as clean_name, mac_key
-from .model import load_config, load_inventory, model_name, model_report, router_host
+from .model import (NO_MODEL, load_config, load_inventory, model_name, model_report, model_set,
+                    router_host)
 from .oui import vendor
 from .pause import Pauses, event_detail, intervals, overlaps
 from .prompts import (WEEKLY_SYSTEM, build_user_context, build_weekly_context, system_prompt,
@@ -111,6 +112,11 @@ class Auditor:
         self.agent = agent
         # `--no-llm`: no model for this run, whatever the switch below says
         self._no_llm_cli = no_llm
+        # no `model:` in config.yaml (a new install): no model to ask, nothing to probe —
+        # the owl is off until Settings → The model says where Ollama runs
+        self._no_model = not model_set(cfg)
+        if self._no_model and not no_llm:
+            log.info("%s", NO_MODEL)
         # The owner's switch for the local model (set_model): {"since", "by"} while
         # it is off, None while on. Read in every mode; written, like a pause, only once
         # resume_alerts() has turned persistence on.
@@ -331,8 +337,9 @@ class Auditor:
 
     @property
     def no_llm(self) -> bool:
-        """No model: `--no-llm` for this run, or switched off by the owner (set_model)."""
-        return self._no_llm_cli or self._model_off is not None
+        """No model: `--no-llm` for this run, none set in config.yaml, or switched off by
+        the owner (set_model)."""
+        return self._no_llm_cli or self._no_model or self._model_off is not None
 
     @contextlib.asynccontextmanager
     async def model_turn(self):
@@ -629,6 +636,8 @@ class Auditor:
         if self._no_llm_cli or self.agent is None:
             return {"ok": False, "changed": False,
                     "text": "lanowl was started with --no-llm: there is no model to switch on."}
+        if self._no_model:
+            return {"ok": False, "changed": False, "text": f"🦉 The owl is off: {NO_MODEL}."}
         if on == (self._model_off is None):
             return {"ok": True, "changed": False,
                     "text": f"The local model is already {'on' if on else 'off'}."}
@@ -661,8 +670,8 @@ class Auditor:
 
     def model_view(self) -> dict:
         m = self._model_off or {}
-        return {"on": not self.no_llm, "cli": self._no_llm_cli, "since": m.get("since"),
-                "by": m.get("by"), "name": model_name(self.cfg)}
+        return {"on": not self.no_llm, "cli": self._no_llm_cli, "unset": self._no_model,
+                "since": m.get("since"), "by": m.get("by"), "name": model_name(self.cfg)}
 
     async def _unload_model(self):
         if await self.agent.unload():
@@ -1406,7 +1415,7 @@ class Auditor:
             if self.cad.get("digest_when_ok", False):
                 self._send_digest(report, now, "all-clear (digest_when_ok)")
                 return "sent: all clear (digest_when_ok)"
-            log.info("all healthy — scheduled digest suppressed (no Telegram)")
+            log.info("all healthy — scheduled digest held back: nothing to tell")
             return "held back: all healthy, nothing to tell"
 
         repeat_s = float(self.cfg.get("alerts", {}).get("digest_repeat_s", 86400))
@@ -1436,7 +1445,7 @@ class Auditor:
         # epoch printed a confusing "since the 01:00 digest" after every restart
         since = (time.strftime("the %H:%M digest", time.localtime(self._last_digest_sent))
                  if self._last_digest_sent else "startup")
-        log.info("nothing new since %s — digest suppressed (no Telegram)", since)
+        log.info("nothing new since %s — digest held back: the open issues were already told", since)
         return f"held back: nothing new since {since} — the open issues were already told"
 
     def _trends(self, report: dict) -> list:
@@ -1609,9 +1618,15 @@ class Auditor:
                      for l in leases if l.get("status") == "bound"]
         self.sites.listening(HOUSE, now)
         new_devs = self.sites.remember(HOUSE, all_bound, "dhcp", now)
-        if self.executor.arp:                      # not read: no baseline taken from nothing
+        if self.executor.arp and lan:              # not read, or no network to keep: no baseline from nothing
+            # the networks looked at are part of it: give the main site its networks later,
+            # and what was on them all along is not "new" (a silent first look again)
             new_devs += self.sites.remember(HOUSE, [{**x, **hd(x["mac"])} for x in static if x.get("how") == "arp"],
-                                            "arp", now)
+                                            "arp", now, scope=",".join(sorted(str(n) for n in lan)))
+        # a device the owner already watches (inventory.yaml) did not "join": they put it there
+        inv_macs = {str(d.attrs.get("mac") or "").upper() for d in self.inv.devices} - {""}
+        new_devs = [d for d in new_devs if self.inv.get(str(d.get("ip") or "")) is None
+                    and str(d.get("mac") or "").upper() not in inv_macs]
         disc["new"] = new_devs
         disc["baseline"] = baseline
         # When each was FIRST on the main site's DHCP, the guest Wi-Fi included — remembered for
@@ -1929,6 +1944,18 @@ async def _amain(args):
     return "restart" if auditor.restart_asked else ""
 
 
+def checks_report(inv) -> tuple:
+    """(text, problems): a device's check that can only ever fail — a link check that names
+    no router port reads down for good. Nothing at all when every check is whole."""
+    lines = []
+    for d in inv.devices:
+        for c in d.checks or []:
+            if isinstance(c, dict) and c.get("type") == "link" and not (c.get("iface") or c.get("interface")):
+                lines.append(f"  ✗ {label(d.name, d.ip)}: a link check needs the router port it hangs off "
+                             "(`iface: ether3`); without one it reads down for good")
+    return ("Checks:\n" + "\n".join(lines) if lines else ""), len(lines)
+
+
 def check_report(cfg: dict, inv) -> tuple:
     """(text, problems) of `lanowl --check` for a config and an inventory: what a start
     would do with each device, the secrets, the model, the shell, actions and the login.
@@ -1939,10 +1966,13 @@ def check_report(cfg: dict, inv) -> tuple:
     from .actions import report as actions_report
     from .login import report as login_report
     from .shell import report as shell_report
-    for rep in (lambda: secrets_report(cfg, inv), lambda: model_report(cfg),
+    from .backups import report as backups_report
+    for rep in (lambda: checks_report(inv), lambda: secrets_report(cfg, inv), lambda: model_report(cfg),
+                lambda: backups_report(cfg, inv, Access(cfg, inv)),
                 lambda: shell_report(cfg), lambda: actions_report(cfg), lambda: login_report(cfg)):
         text, n = rep()
-        parts.append(text)
+        if text:
+            parts.append(text)
         bad += n
     return "\n\n".join(parts), bad
 

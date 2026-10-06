@@ -428,6 +428,7 @@ def test_check():
         with open(ip, "w") as f:
             yaml.safe_dump({"devices": [INVENTORY["devices"][0]]}, f)
         cfg.pop("updates")
+        cfg["backups"]["enabled"] = False       # its store is not in the one-device inventory: a ✗ of its own
         cfg["actions"]["catalog"] = {}
         os.remove(os.path.join(d, "profiles", "broken.yaml"))
         key = os.path.join(d, "id_lanowl")                  # every key file there, mode 600

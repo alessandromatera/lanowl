@@ -43,6 +43,24 @@ ENV = {("model", "url"): "LANOWL_MODEL_URL", ("observer", "host_ip"): "LANOWL_HO
        ("web", "port"): "LANOWL_WEB_PORT", ("timezone",): "TZ"}
 # never shown: set or not, with a button of its own
 HASHES = {("web", "password_hash")}
+# What lanowl itself does when config.yaml leaves an on/off key out — read from the code, not
+# the example (six differ from it: the example switches on what a new install wants). Settings
+# draws a switch that is not in the file from here. tests/test_settings checks the list whole.
+DEFAULTS = {
+    ("model", "think"): True, ("telegram", "chat", "enabled"): False, ("web", "enabled"): False,
+    ("web", "login"): True, ("cadence", "llm_on_incident"): True, ("cadence", "digest_when_ok"): False,
+    ("alerts", "notify_recovery"): True, ("wan", "critical"): True, ("wan", "watch", "enabled"): True,
+    ("wan", "watch", "state_messages"): True, ("wan", "watch", "log_triage", "enabled"): True,
+    ("wan", "path", "backup_standby"): False, ("mikrotik", "verify_tls"): False, ("mikrotik", "api", "enabled"): False,
+    ("discovery", "notify_new_devices"): False, ("discovery", "notify_address_changes"): True,
+    ("sites", "scan", "enabled"): True, ("observer", "enabled"): True, ("mqtt", "tls"): False,
+    ("weekly", "enabled"): False, ("actions", "enabled"): False, ("hostlog", "enabled"): False,
+    ("hostlog", "burst", "enabled"): True, ("hostlog", "connections", "enabled"): True,
+    ("hostlog", "triage", "enabled"): True, ("updates", "enabled"): False, ("updates", "scan", "enabled"): True,
+    ("cves", "after_review"): True, ("exposure", "enabled"): False, ("drift", "enabled"): False,
+    ("configwatch", "enabled"): False, ("fixes", "enabled"): True, ("scorecard", "enabled"): True,
+    ("backups", "enabled"): False, ("shell", "enabled"): False, ("shell", "audit", "enabled"): False,
+}
 # paths inside the container and other plumbing: under "Advanced" in their section
 ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file"),
             ("access", "known_hosts"), ("hostlog", "ssh"), ("shell", "socket"),

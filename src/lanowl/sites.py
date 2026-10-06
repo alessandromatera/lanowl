@@ -45,7 +45,7 @@ import shlex
 import time
 from typing import Optional
 
-from .model import Device, best_site, on_main_side
+from .model import Device, best_site, on_main_side, router_lan
 from .oui import vendor
 
 log = logging.getLogger("lanowl.sites")
@@ -274,13 +274,14 @@ class Sites:
         return [n for s in self.sites for n in s["nets"]]
 
     # --- every device ever seen, per site ---------------------------------------------------
-    def remember(self, site: str, rows: list, how: str, now: float) -> list:
+    def remember(self, site: str, rows: list, how: str, now: float, scope: str = "") -> list:
         """Into the site's record of every device ever seen; the ones never seen there before.
         The first time a site is looked at a way (its DHCP, its ARP table, the scan) finds what
         was already there: kept as "<how>-before", and not new — the first fixed-address read
-        of the main site must not call its switches new."""
-        key = f"{site}:{how}"
-        before = self.first_look(site, how)
+        of the main site must not call its switches new. `scope`: what was looked at (the
+        networks an ARP read keeps): looking at other networks is a first look again."""
+        key = f"{site}:{how}" + (f"@{scope}" if scope else "")
+        before = self.first_look(site, how, scope)
         new = self.a.state.mark_seen([{**r, "how": how + ("-before" if before else "")} for r in rows],
                                      now, site)
         if before:
@@ -289,10 +290,10 @@ class Sites:
             return []
         return new
 
-    def first_look(self, site: str, how: str) -> bool:
+    def first_look(self, site: str, how: str, scope: str = "") -> bool:
         """Has this site never been looked at this way? (Its DHCP counts as looked at when the
         record already holds devices from it.)"""
-        if f"{site}:{how}" in self.rec["baselines"]:
+        if f"{site}:{how}" + (f"@{scope}" if scope else "") in self.rec["baselines"]:
             return False
         return not (how == "dhcp" and self.a.state.seen_count(site) > 0)
 
@@ -377,8 +378,13 @@ class Sites:
         self.rec["heard_from"].setdefault(key, now)
 
     def _lan(self, s: dict) -> list:
-        """The site's own networks, where ARP means something: not a tunnel's /32."""
-        return [n for n in s["nets"] if n.prefixlen < 32]
+        """The site's own networks, where ARP means something: not a tunnel's /32. The main
+        site with none of its own (a new install): its router's /24, so the fixed addresses
+        there are found from the first read, not only once Settings → Sites names it."""
+        own = [n for n in s["nets"] if n.prefixlen < 32]
+        if own or s["key"] != HOUSE:
+            return own
+        return router_lan(self.a.cfg)
 
     async def arp(self, s: dict) -> Optional[list]:
         if s["kind"] == "openwrt":

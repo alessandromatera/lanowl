@@ -541,7 +541,7 @@ def _auditor(d, cfg_extra=None):
     from lanowl.state import StatusTracker
     cfg = {"telegram": {"via": "direct", "chat_id": "100000001",
                         "outbox_file": os.path.join(d, "o.json")},
-           "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0}, **(cfg_extra or {})}
+           "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0}, "model": {"provider": "ollama"}, **(cfg_extra or {})}
     inv = Inventory(devices=[Device("192.168.10.117", "Boiler", group="home",
                                     criticality="critical")])
     st = StateStore(os.path.join(d, "s.sqlite"))

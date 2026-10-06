@@ -441,6 +441,11 @@ def test_setup_and_secret_routes():
             return _Rest(False, detail="mikrotik http 401")
         if path == "system/resource":
             return _Rest(True, {"json": {"version": "7.16", "board-name": "hAP"}})
+        if path == "ip/arp":                 # a switch with a fixed address; a leased one; elsewhere; gone
+            return _Rest(True, {"json": [{"address": "192.168.88.20", "mac-address": "aa:bb:cc:00:11:22", "status": "reachable"},
+                                         {"address": "192.168.88.31", "mac-address": "00:0C:42:AA:BB:31", "status": "reachable"},
+                                         {"address": "10.9.9.9", "mac-address": "00:0C:42:AA:BB:39", "status": "reachable"},
+                                         {"address": "192.168.88.32", "mac-address": "00:0C:42:AA:BB:32", "status": "failed"}]})
         return _Rest(True, {"json": [{"address": "192.168.88.20", "mac-address": "aa:bb:cc:00:11:22", "host-name": "nvr",
                                       "dynamic": "false", "status": "bound"}]})
 
@@ -515,10 +520,11 @@ def test_setup_and_secret_routes():
                     out["w_plan"] = (r.status, await r.text())
                 pj = json.loads(out["w_plan"][1])
                 bases = {k: (pj.get(k) or {}).get("base") for k in ("secrets", "inventory", "config")}
+                told = len(a.told)
                 async with s.post(base + "/api/setup/write", json={**body, "bases": bases}) as r:
                     out["w"] = (r.status, await r.text())
                 out["files"] = {k: open(a.settings.files[k].path).read() for k in ("secrets", "inventory", "config")}
-                out["told"] = list(a.told)
+                out["told"] = a.told[told:]
                 # a device added with its own login, typed on its page
                 dv = {"ip": "192.168.88.61", "name": "Office NAS", "group": "servers", "criticality": "high",
                       "kind": "linux", "checks": [{"type": "icmp"}]}
@@ -566,6 +572,11 @@ def test_setup_and_secret_routes():
     check(out["r_ok"][0] == 200 and '"ok": true' in out["r_ok"][1] and SECRET not in out["r_ok"][1]
           and any(m[0] == "ip/dhcp-server/lease" and m[2] for m in out["mk"]), "the typed login works: tried, not written")
     check(out["leases"]["ok"] and out["leases"]["rows"][0]["ip"] == "192.168.88.20", "its DHCP list, with the typed login")
+    lr = {x["ip"]: x for x in out["leases"]["rows"]}
+    check(sorted(lr) == ["192.168.88.20", "192.168.88.31"] and lr["192.168.88.31"].get("fixed") and lr["192.168.88.31"]["here"]
+          and out["leases"]["fixed"] == 1 and not lr["192.168.88.20"].get("fixed"),
+          "...and the fixed addresses in its ARP table on the main network: not a leased one, not another network's, not a gone one")
+    check(lr["192.168.88.20"]["watched"] and not lr["192.168.88.31"]["watched"], "a device inventory.yaml has is marked watched")
     check(out["tg_shape"][0] == 400 and "tg_shape" and not any(c[0] == "getMe" and False for c in tg_calls),
           "a token of the wrong shape never reaches Telegram")
     check(out["tg_bad"]["ok"] is False and out["tg_bad"]["error"] == "Telegram answered: Unauthorized",
@@ -593,8 +604,11 @@ def test_setup_and_secret_routes():
           and cfgw["mikrotik"]["credentials"] == "router-read", "config.yaml: the chat and the time zone")
     check(any(dv["ip"] == "192.168.88.20" and dv.get("credentials") == "cams" for dv in load(f["inventory"])["devices"]),
           "inventory.yaml: the device with its login")
-    check(all(SECRET not in t and "AAAAAAAAAA" not in t for t in out["told"]) and any(t.startswith("🔑") for t in out["told"]),
-          "Telegram: told, never a value")
+    sent = [c[1] for c in tg_calls if c[0] == "sendMessage" and "set up" in str(c[1].get("text"))]
+    check(out["told"] == [] and len(sent) == 1 and sent[0]["chat_id"] == "100000001"
+          and "1 device (1 with a login)" in sent[0]["text"] and "this chat" in sent[0]["text"]
+          and SECRET not in str(sent[0]) and "AAAAAAAAAA" not in sent[0]["text"],
+          "Telegram: ONE line for the whole write, through the bot and the chat it just set; never a value")
 
 
 def test_follow():
@@ -771,9 +785,261 @@ def test_sites():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_small_bugs():
+    print("\n-- the 10-06 onboarding test's small bugs --")
+    from lanowl import schema
+    from lanowl.backups import report as backups_report
+    from lanowl.access import Access
+    from lanowl import settingsweb as SW
+    from lanowl.model import inventory_from
+    with tempfile.TemporaryDirectory() as d:
+        _files(d, password=False)
+        a = _A(d)
+        s = a.settings
+        r = s.save("config", [{"op": "set", "path": ["web", "password_hash"], "value": L.hash_password(PW)}],
+                   _base(a, "config"))
+        check(r["ok"] and s.pending() == {}, "the first password is saved, and is not a change waiting for a restart (5)")
+        r = s.save("config", [{"op": "set", "path": ["model", "name"], "value": "qwen3:32b"}], _base(a, "config"))
+        check(r["ok"] and "config" in s.pending(), "...a real change still is")
+        text = open(s.files["config"].path).read()
+        line = next(ln for ln in text.splitlines() if "password_hash:" in ln)
+        check(line.rstrip().endswith("set on its first page"), f"the hash's comment is whole, not cut (8): {line.strip()[-40:]}")
+    # every comment the example continues on a second line: its first line ends a thought
+    ex = open(os.path.join(ROOT, "config.example.yaml"), encoding="utf-8").read()
+    lines = ex.split("\n")
+    cut = []
+    for i, ln in enumerate(lines[:-1]):
+        c = schema._comment(ln)
+        nxt = lines[i + 1]
+        if c and not ln.lstrip().startswith("#") and nxt.lstrip().startswith("#") and \
+                len(nxt) - len(nxt.lstrip()) > len(ln) - len(ln.lstrip()):
+            w = c.rstrip().split()[-1].lower() if c.split() else ""
+            if c.rstrip().endswith((":", ",", ";")) or w in ("with", "the", "a", "an", "of", "to", "and", "or", "its", "for", "in", "on", "by"):
+                cut.append(c)
+    check(not cut, f"no comment in the example is cut when a new key takes its first line: {cut}")
+    # a checks change, in words (40)
+    ch = ST.describe("inventory", {"devices": [{"ip": "192.168.88.2", "name": "AP", "checks": [{"type": "icmp"}]}]},
+                     {"devices": [{"ip": "192.168.88.2", "name": "AP", "checks": [{"type": "icmp"}, {"type": "tcp", "port": 22},
+                                                                                  {"type": "link", "iface": "ether3"}]}]})
+    check(ch == ["AP: checks icmp → icmp, tcp 22, link ether3"], f"a checks change in words, not {{…}} (40): {ch}")
+    # a link check names its router port (27)
+    dev, err = SW.clean_device({"ip": "192.168.88.2", "name": "AP", "checks": [{"type": "link"}]}, {})
+    check(dev is None and "router port" in err, "a link check without its interface is refused (27)")
+    dev, err = SW.clean_device({"ip": "192.168.88.2", "name": "AP", "checks": [{"type": "link", "iface": "ether3"}]}, {})
+    check(dev is not None and dev["checks"] == [{"type": "link", "iface": "ether3"}], "...with it, kept")
+    from lanowl.main import checks_report
+    inv = inventory_from({"devices": [{"ip": "192.168.88.2", "name": "AP", "checks": [{"type": "link"}]}]}, "/x/inventory.yaml")
+    text, n = checks_report(inv)
+    check(n == 1 and "AP (192.168.88.2)" in text and "iface" in text, "--check: ✗ for one already in the file")
+    # backups: a store lanowl cannot write to, said at save time (41)
+    with tempfile.TemporaryDirectory() as d:
+        sec = os.path.join(d, "secrets.yaml")
+        open(sec, "w").write("logins:\n  pw: {user: admin, password: x}\n  k: {user: root, key: true}\n")
+        os.chmod(sec, 0o600)
+        cfg = {"access": {"secrets_file": sec}, "backups": {"enabled": True, "store": {"host": "192.168.88.12"}}}
+        def inv_of(cred):
+            return inventory_from({"devices": [{"ip": "192.168.88.12", "name": "NAS", "credentials": cred}]} if cred else
+                                  {"devices": []}, os.path.join(d, "inventory.yaml"))
+        t0, n0 = backups_report(cfg, inv_of(None), Access(cfg, inv_of(None)))
+        t1, n1 = backups_report(cfg, inv_of("pw"), Access(cfg, inv_of("pw")))
+        t2, n2 = backups_report(cfg, inv_of("k"), Access(cfg, inv_of("k")))
+        t3, n3 = backups_report({**cfg, "backups": {"enabled": False}}, inv_of(None), Access(cfg, inv_of(None)))
+    check(n0 == 1 and "not one of your devices" in t0, "a store that is no device: ✗")
+    check(n1 == 1 and "no login with its ssh key" in t1, "a store reached by password only: ✗ (the backups go over the key)")
+    check(n2 == 0 and t2 == "" and n3 == 0 and t3 == "", "a store with lanowl's key, or backups off: nothing said")
+    # the router's address as people type it (4)
+    check(SW.router_url("192.168.88.1") == "http://192.168.88.1" and SW.router_url("https://192.168.88.1/") == "https://192.168.88.1"
+          and SW.router_url("router.lan:8080") == "http://router.lan:8080" and SW.router_url("") == ""
+          and SW.router_url("a b") is None, "the router's address: http:// added when not typed")
+    # the sweep's network on a fresh install (2, 33), and the gateway
+    check(SW.sweep_net({}, "", "192.168.88.47") == ("192.168.88.0/24", "lanowl's own network"),
+          "no site, no router: lanowl's own /24 — not 192.168.0.0/16")
+    check(SW.sweep_net({}, "http://192.168.70.1", "192.168.88.47")[0] == "192.168.70.0/24", "...the typed router's /24 first")
+    check(SW.sweep_net({"sites": {"list": [{"key": "home", "nets": ["10.20.30.0/23"]}]}}, "", "192.168.88.47")[0] == "10.20.30.0/23",
+          "...the main site's network when it names one")
+    check(SW.sweep_net({"sites": {"list": [{"key": "home", "nets": ["192.168.0.0/16"]}]}}, "", "")[0] == "",
+          "a network too big, nothing else known: no sweep, and why")
+    check(SW.sweep_net({}, "http://8.8.8.8", "")[0] == "", "never a public network")
+    real = SW.default_gateway
+    try:
+        SW.default_gateway = lambda: "192.168.88.1"
+        g1 = SW.gateway("192.168.88.47")
+        SW.default_gateway = lambda: "172.17.0.1"          # Docker's bridge: not the house's router
+        g2 = SW.gateway("192.168.88.47")
+    finally:
+        SW.default_gateway = real
+    check(g1 == {"ip": "192.168.88.1", "how": "found"} and g2 == {"ip": "192.168.88.1", "how": "guess"} and SW.gateway("") == {},
+          "the gateway: found on lanowl's network, else a guess at its .1")
+
+    class _Req:
+        def __init__(self, host):
+            self.host = host
+    check(SW.lan_ip(_Req("192.168.88.47:8098"), {"observer": {"host_ip": "172.17.0.2"}}) == "192.168.88.47"
+          and SW.lan_ip(_Req("lanowl.example:8088"), {"observer": {"host_ip": "192.168.88.5"}}) == "192.168.88.5"
+          and SW.lan_ip(_Req("lanowl.example"), {"observer": {"host_ip": "203.0.113.5"}}) == "",
+          "lanowl's address on the network: the page's, else the one it found; never a public one")
+    line = SW.setup_line([{"ip": "1", "credentials": "x"}, {"ip": "2"}], True, False, "192.168.88.140")
+    check(line.startswith("🦉 <b>lanowl is set up</b> from the dashboard (192.168.88.140): 2 devices (1 with a login), "
+                          "the router's DHCP list."), f"the setup's line: {line}")
+
+
+def test_turnkey_routes():
+    print("\n-- Find my devices, Try, Home Assistant's token, what lanowl does, Watch at once --")
+    import json
+    out = {}
+
+    class _Rest:
+        def __init__(self, ok, data=None, detail=""):
+            self.ok, self.data, self.detail = ok, data or {}, detail
+
+    async def fake_mk(src, path, user, password, verify, timeout):
+        if password != SECRET:
+            return _Rest(False, detail="mikrotik http 401")
+        if path == "system/resource":
+            return _Rest(True, {"json": {"version": "7.16", "board-name": "hAP"}})
+        if path.startswith("user?name="):
+            return _Rest(True, {"json": [{"name": user, "group": "full"}]})
+        if path.startswith("user/group?name="):
+            return _Rest(True, {"json": [{"name": "full", "policy": "local,ssh,reboot,read,write,policy,api,rest-api,!dude"}]})
+        if path == "ip/arp":
+            return _Rest(True, {"json": [{"address": "192.168.88.31", "mac-address": "00:0C:42:AA:BB:31", "status": "stale"}]})
+        return _Rest(True, {"json": [{"address": "192.168.88.40", "mac-address": "EC:64:C9:00:00:40", "host-name": "",
+                                      "dynamic": "true", "status": "bound"}]})
+
+    async def fake_fping(self, net):
+        return ["192.168.88.31", "192.168.88.12", "192.168.88.40"], {}, ""
+
+    async def fake_port(ip, port, sem):           # what answers, per device
+        return {"192.168.88.12": {8123: ""}, "192.168.88.31": {22: "SSH-2.0-ROSSSH", 8291: ""},
+                "192.168.88.40": {80: ""}}.get(ip, {}).get(port)
+
+    async def fake_get(url, limit=65536):
+        if url.endswith("/shelly") and "192.168.88.40" in url:
+            return 200, "", json.dumps({"name": "Pump", "app": "Pro1", "gen": 2, "auth_en": False})
+        return 404, "", ""
+
+    tried = []
+
+    async def fake_try(acc, kind, ip, user="", password="", token="", key=None):
+        tried.append((kind, ip, user, bool(password), bool(token)))
+        if kind == "homeassistant":
+            return {"ok": token == "ha-tok-1", "what": "API running.", "said": "HTTP 401: 401: Unauthorized"}
+        return {"ok": password == SECRET, "what": "Linux 6.1", "said": "Permission denied (publickey,password)."}
+
+    async def go(d):
+        from aiohttp import ClientSession, CookieJar, web
+        import lanowl.web as W
+        from lanowl import identify, probes, trylogin
+        from lanowl.settingsweb import SettingsRoutes
+        probes.mikrotik_rest = fake_mk
+        SettingsRoutes._fping = fake_fping
+        identify._port, identify._get, identify._cache = fake_port, fake_get, {}
+        trylogin.try_login = fake_try
+        a = _A(d)
+        a.login = L.Login(a)
+        dash = W.Dashboard.__new__(W.Dashboard)
+        dash.a, dash.login, dash.allowed_hosts, dash._login_lock = a, a.login, set(), asyncio.Lock()
+
+        @web.middleware
+        async def guard(request, handler):
+            return await dash._guard(request, handler)
+        app = web.Application(middlewares=[guard])
+        app.router.add_post("/api/login", dash.api_login)
+        SettingsRoutes(dash).routes(app)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        base = f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}"
+        try:
+            async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as s:
+                await s.post(base + "/api/login", json={"password": PW})
+                rb = {"dhcp_source": "192.168.88.1", "credentials": "router-read", "user": "admin", "password": SECRET}
+                async with s.post(base + "/api/setup/router", json=rb) as r:
+                    out["router"] = await r.json()
+                async with s.post(base + "/api/setup/find", json={**rb, "with_router": True}) as r:
+                    out["find"] = await r.json()
+                async with s.post(base + "/api/setup/find", json={"ips": ["8.8.8.8"]}) as r:
+                    out["find_public"] = (r.status, await r.json())
+                async with s.post(base + "/api/setup/try", json={"ip": "192.168.88.9", "kind": "linux", "user": "root", "password": "nope"}) as r:
+                    out["try_bad"] = await r.json()
+                async with s.post(base + "/api/setup/try", json={"ip": "192.168.88.9", "kind": "linux", "user": "root", "password": SECRET}) as r:
+                    out["try_soon"] = (r.status, await r.json())
+                await asyncio.sleep(3.1)
+                async with s.post(base + "/api/setup/try", json={"ip": "192.168.88.9", "kind": "linux", "user": "root", "password": SECRET}) as r:
+                    out["try_ok"] = await r.json()
+                body = {"devices": [{"ip": "192.168.88.12", "name": "Home Assistant", "group": "servers", "criticality": "high",
+                                     "kind": "homeassistant", "checks": [{"type": "icmp"}]},
+                                    {"ip": "192.168.88.40", "name": "Pump", "group": "iot", "criticality": "low",
+                                     "kind": "shelly", "checks": [{"type": "icmp"}]},
+                                    {"ip": "192.168.88.61", "name": "NAS", "group": "servers", "criticality": "high",
+                                     "kind": "linux", "credentials": "nas", "checks": [{"type": "icmp"}]}],
+                        "logins": {"nas": {"user": "root", "how": "password", "password": SECRET}},
+                        "ha": {"ip": "192.168.88.12", "token": "ha-tok-1"},
+                        "features": {"updates": True, "security": False, "config": False, "approve": True}}
+                async with s.post(base + "/api/setup/write", json={**body, "preview": True}) as r:
+                    pj = await r.json()
+                bases = {k: (pj.get(k) or {}).get("base") for k in ("secrets", "inventory", "config")}
+                async with s.post(base + "/api/setup/write", json={**body, "bases": bases}) as r:
+                    out["write"] = (r.status, await r.text())
+                out["files"] = {k: open(a.settings.files[k].path).read() for k in ("secrets", "inventory", "config")}
+                # Watch: pinged at once, so nothing waits for a restart because of it
+                a.settings.at_start = {k: ST.digest(f.read()) for k, f in a.settings.files.items()}
+                a.settings.running = {k: ST.running_digest(k, a.settings.files[k].read()) for k in ST.RESTART}
+                async with s.get(base + "/api/settings/devices") as r:
+                    v = await r.json()
+                dev = {"ip": "192.168.88.70", "name": "Printer", "group": "misc", "criticality": "low", "checks": [{"type": "icmp"}]}
+                async with s.post(base + "/api/settings/device", json={"ip": None, "device": dev, "base": v["base"], "how": "watch"}) as r:
+                    out["watch"] = await r.json()
+                out["pending_after_watch"] = a.settings.pending()
+        finally:
+            await runner.cleanup()
+
+    with tempfile.TemporaryDirectory() as d:
+        _files(d)
+        asyncio.run(go(d))
+    check(out["router"]["ok"] and out["router"]["can_write"] is True, "Try the router: a user that may write is said to")
+    f = out["find"]
+    rows = {x["ip"]: x for x in f.get("rows") or []}
+    check(f["ok"] and set(rows) == {"192.168.88.12", "192.168.88.31", "192.168.88.40"},
+          f"Find my devices: the DHCP list, the ARP table's fixed address, the sweep's ({sorted(rows)})")
+    check(rows["192.168.88.31"]["kind"] == "mikrotik" and rows["192.168.88.31"]["here"] and "ARP" in rows["192.168.88.31"]["how"]
+          and "ping" in rows["192.168.88.31"]["how"], "a stale ARP entry that answers ping is here now, and what it is")
+    check(rows["192.168.88.12"]["kind"] == "homeassistant" and rows["192.168.88.12"]["how"] == ["ping"],
+          "one only the sweep found, identified by what answers")
+    check(rows["192.168.88.40"]["kind"] == "shelly" and rows["192.168.88.40"]["name"] == "Pump", "a Shelly, by its own name")
+    check([ln["t"] for ln in f["lines"]][:3] == ["the router's DHCP list", "its ARP table: the fixed addresses",
+                                                 "one ping to every address of 192.168.88.0/24"],
+          "what lanowl looked at, said")
+    check(out["find_public"][0] == 400, "Add by address: only a home network's")
+    check(not out["try_bad"]["ok"] and out["try_bad"]["said"] == "Permission denied (publickey,password)."
+          and out["try_soon"][0] == 429 and out["try_ok"]["ok"], "Try: the device's answer, word for word; one try per device every 3 s")
+    check(out["write"][0] == 200 and SECRET not in out["write"][1] and "ha-tok-1" not in out["write"][1], "written, no value in the answer")
+    fs = out["files"]
+    inv = {x["ip"]: x for x in load(fs["inventory"])["devices"]}
+    cfg = load(fs["config"])
+    check(load(fs["secrets"])["tokens"]["homeassistant"] == "ha-tok-1" and cfg["access"]["ha_url"] == "http://192.168.88.12:8123",
+          "Home Assistant: its token, and its address from the device")
+    check(inv["192.168.88.12"].get("manage") == ["updates", "reboot"] and inv["192.168.88.40"].get("manage") == ["reboot"]
+          and inv["192.168.88.61"].get("manage") == ["updates", "reboot", "upgrade"] and "credentials" not in inv["192.168.88.40"],
+          f"what lanowl does: each device what its kind can of what was chosen ({[inv[k].get('manage') for k in sorted(inv)]})")
+    check(cfg["updates"]["enabled"] is True and cfg["actions"]["enabled"] is True and cfg["actions"]["mode"] == "live"
+          and cfg["exposure"]["enabled"] is False, "...and the features switched on that were chosen, and only those")
+    check(out["watch"]["ok"] and "inventory" not in out["pending_after_watch"], "Watch: no 'Restart to apply' for it")
+
+
+def test_defaults_whole():
+    print("\n-- every on/off setting has lanowl's own default --")
+    from lanowl import schema
+    bools = {tuple(f["path"]) for sec in schema.sections(open(os.path.join(ROOT, "config.example.yaml")).read())
+             for f in sec["fields"] if f["type"] == "bool"}
+    check(bools <= set(schema.DEFAULTS), f"missing: {sorted(bools - set(schema.DEFAULTS))}")
+    check(set(schema.DEFAULTS) <= bools, f"not in the example: {sorted(set(schema.DEFAULTS) - bools)}")
+
+
 if __name__ == "__main__":
     for fn in [test_save_and_undo, test_guards, test_login, test_routes, test_secrets, test_setup_and_secret_routes,
-               test_follow, test_sites]:
+               test_follow, test_sites, test_small_bugs, test_turnkey_routes, test_defaults_whole]:
         fn()
     print()
     if _fails:

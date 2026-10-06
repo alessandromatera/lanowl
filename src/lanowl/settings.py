@@ -58,6 +58,20 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def running_digest(name: str, text: str) -> str:
+    """What a restart would change: the file's values, without the ones lanowl takes up as
+    soon as they are saved — the dashboard's password (login.py) — and without its comments.
+    A file YAML cannot read counts by its text."""
+    import json
+    try:
+        raw = load(text)
+    except Exception:
+        return digest(text)
+    if name == "config" and isinstance(raw, dict) and isinstance(raw.get("web"), dict):
+        raw = {**raw, "web": {k: v for k, v in raw["web"].items() if k != "password_hash"}}
+    return digest(json.dumps(raw, sort_keys=True, default=str))
+
+
 class ConfigFile:
     def __init__(self, path: str):
         self.path = path
@@ -109,15 +123,26 @@ WHY = {"missing": "{name} is not there", "readonly": "{name} is read-only for la
        "container (docker compose restart lanowl), then save"}
 
 
-def _fmt(v) -> str:
+def _check_word(c) -> str:
+    """A device's check as the page lists it: "icmp", "tcp 22", "http 80 /health", "link ether3"."""
+    if not isinstance(c, dict):
+        return str(c)
+    bits = [str(c.get("type") or "?")] + [str(c[k]) for k in ("port", "path", "iface", "interface", "oid")
+                                          if c.get(k) not in (None, "")]
+    return " ".join(bits) + (f" ({c['name']})" if c.get("name") else "")
+
+
+def _fmt(v, key: str = "") -> str:
     if v is None:
         return "(not set)"
     if isinstance(v, bool):
         return "on" if v else "off"
-    if isinstance(v, list):
+    if key == "checks" and isinstance(v, list):
+        s = ", ".join(_check_word(c) for c in v) or "none"
+    elif isinstance(v, list):
         s = ", ".join(_fmt(x) for x in v) or "[]"
     elif isinstance(v, dict):
-        s = "{…}"
+        s = ", ".join(f"{k} {_fmt(x)}" for k, x in v.items()) or "{}"
     else:
         s = str(v) if str(v) != "" else '""'
     return s if len(s) <= 40 else s[:39] + "…"
@@ -176,7 +201,7 @@ def describe(name: str, old, new) -> list:
                 continue
             for k in list(dict.fromkeys(list(was) + list(d))):
                 if was.get(k) != d.get(k):
-                    out.append(f"{label}: {k} {_fmt(was.get(k))} → {_fmt(d.get(k))}")
+                    out.append(f"{label}: {k} {_fmt(was.get(k), k)} → {_fmt(d.get(k), k)}")
         for ip, d in od.items():
             if ip not in nd and ip not in moved.values():
                 out.append(f"{d.get('name') or ip} ({ip}) removed")
@@ -365,6 +390,7 @@ class Settings:
         self.files = {"config": ConfigFile(cfg_path), "inventory": ConfigFile(inv_path),
                       "secrets": ConfigFile(access.secrets_path(auditor.cfg))}
         self.at_start = {k: digest(f.read()) for k, f in self.files.items()}
+        self.running = {k: running_digest(k, self.files[k].read()) for k in RESTART}
         for f in self.files.values():
             f.writable_at_start = f.status()["writable"]
         self.started = time.time()
@@ -412,7 +438,8 @@ class Settings:
                     out.append(f"{'.'.join(p)} is set by {var} in the environment, which wins: change it there")
         return out
 
-    def plan(self, name: str, ops: list, text: Optional[str] = None, secrets_text: Optional[str] = None) -> dict:
+    def plan(self, name: str, ops: list, text: Optional[str] = None, secrets_text: Optional[str] = None,
+             config_text: Optional[str] = None) -> dict:
         """What a save would do, without doing it: {"ok", "base", "text", "diff", "changes",
         "problems"}; {"ok": False, "error"} when it cannot be done. `secrets_text`: the
         secrets.yaml the same save writes first (the setup), for --check's rules."""
@@ -426,9 +453,10 @@ class Settings:
             new = apply(old, ops, **self._style(name))
         except EditError as e:
             return {"ok": False, "error": f"{NAMES[name]}: {e}", "base": base}
-        return self._planned(name, old, new, base, secrets_text)
+        return self._planned(name, old, new, base, secrets_text, config_text)
 
-    def _planned(self, name: str, old: str, new: str, base: str, secrets_text: Optional[str] = None) -> dict:
+    def _planned(self, name: str, old: str, new: str, base: str, secrets_text: Optional[str] = None,
+                 config_text: Optional[str] = None) -> dict:
         import difflib
         if name == "secrets":            # never a value: dots, "(new)" where one changes
             a, b = mask(old), mask(new, old)
@@ -441,10 +469,12 @@ class Settings:
         diff = [ln if "password_hash" not in ln or not ln.startswith(("+", "-"))
                 else ln.split("password_hash")[0] + "password_hash: (hidden)" for ln in diff]
         return {"ok": True, "base": base, "text": new, "diff": diff, "changes": changes,
-                "problems": self.problems(name, new, secrets_text)}
+                "problems": self.problems(name, new, secrets_text, config_text)}
 
-    def problems(self, name: str, new: str, secrets_text: Optional[str] = None) -> list:
-        """The ✗ lines `lanowl --check` gives with the new file that it does not give now."""
+    def problems(self, name: str, new: str, secrets_text: Optional[str] = None,
+                 config_text: Optional[str] = None) -> list:
+        """The ✗ lines `lanowl --check` gives with the new file that it does not give now.
+        `config_text`: the config.yaml the same save writes too (the setup), as it will be."""
         from .main import check_report
         from .model import config_from, inventory_from
         try:
@@ -454,6 +484,8 @@ class Settings:
                 secrets_text = new
             else:
                 texts[name] = new
+            if config_text is not None and name != "config":
+                texts["config"] = config_text
             after = self._check(texts, config_from, inventory_from, check_report, secrets_text)
         except Exception as e:           # a check that crashes must not hide the reason
             log.warning("settings: check failed", exc_info=True)
@@ -472,10 +504,12 @@ class Settings:
 
     # --- saving -----------------------------------------------------------------------
     def save(self, name: str, ops: list, base: str, ip: str = "", how: str = "save",
-             text: Optional[str] = None, note: str = "", secrets_text: Optional[str] = None) -> dict:
+             text: Optional[str] = None, note: str = "", secrets_text: Optional[str] = None,
+             tell: bool = True, config_text: Optional[str] = None) -> dict:
         """Write the change. `base`: the digest of the file the page planned on — another
         change since, from the page or by hand, and nothing is written. `text`: the whole
-        new file (undo) instead of `ops`."""
+        new file (undo) instead of `ops`. `tell`: False when the caller sends one line for
+        several saves (the setup)."""
         f = self.files[name]
         st = f.status()
         if not st["writable"]:
@@ -484,8 +518,8 @@ class Settings:
         if digest(old) != base:
             return {"ok": False, "why": "changed", "error": f"{NAMES[name]} changed since this page "
                                                              "read it: look at it again, then save"}
-        p = self._planned(name, old, text, base, secrets_text) if text is not None else \
-            self.plan(name, ops, old, secrets_text)
+        p = self._planned(name, old, text, base, secrets_text, config_text) if text is not None else \
+            self.plan(name, ops, old, secrets_text, config_text)
         if not p["ok"]:
             return p
         if p["problems"]:
@@ -509,7 +543,8 @@ class Settings:
         self.rec["saves"].append(entry)
         self._trim()
         self._save()
-        self._tell(entry)
+        if tell:
+            self._tell(entry)
         log.warning("settings: %s %s from %s: %s", NAMES[name], how, ip or "?", "; ".join(p["changes"])[:300])
         return {"ok": True, "id": entry["id"], "changes": p["changes"], "base": entry["after"]}
 
@@ -589,12 +624,23 @@ class Settings:
         out = {}
         for name in RESTART:
             f = self.files[name]
-            now = digest(f.read())
-            if now != self.at_start[name]:
+            text = f.read()
+            now = digest(text)
+            if now != self.at_start[name] and running_digest(name, text) != self.running[name]:
                 saves = [s for s in self.rec["saves"] if s["file"] == name and s["ts"] >= self.started]
                 out[name] = {"saves": [{"id": s["id"], "ts": s["ts"]} for s in saves],
                              "hand": not saves or saves[-1].get("after") != now}
         return out
+
+    def applied(self, name: str, was_pending: bool):
+        """A save lanowl already runs with (Watch pings at once, the welcome's time zone is set
+        at once): when nothing else in the file waited for a restart, the file as it is now is
+        the one running — no "Restart to apply" for it."""
+        if was_pending or name not in self.running:
+            return
+        text = self.files[name].read()
+        self.at_start[name] = digest(text)
+        self.running[name] = running_digest(name, text)
 
     def history(self) -> list:
         return [{k: s.get(k) for k in ("id", "ts", "file", "how", "from", "changes", "note", "hand")}
@@ -635,6 +681,8 @@ class Settings:
                         fd["source"], fd["value"] = "file", v
                     else:
                         fd["source"], fd["value"] = "default", None
+                    if fd["source"] == "default" and tuple(fd["path"]) in schema.DEFAULTS:
+                        fd["default"] = schema.DEFAULTS[tuple(fd["path"])]
                     if fd["path"] == ["observer", "host_ip"] and fd["source"] != "env" and not fd["value"]:
                         fd["found"] = str(self.a.cfg.get("_host_ip_found") or "")
                     if fd["hash"]:

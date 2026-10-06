@@ -214,7 +214,7 @@ $("setup").addEventListener("submit", async e => {
   busy($("sgo"), "Checking the code…"); $("serr").textContent = "";
   let j = {};
   try {
-    const r = await fetch("/api/setup/claim", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, password: pw})});
+    const r = await fetch("/api/setup/claim", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, password: pw, timezone: $("tz").value})});
     j = await r.json();
   } catch (_) { j = {why: "down"}; }
   if (!j.ok) idle($("sgo"));

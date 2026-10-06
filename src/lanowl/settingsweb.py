@@ -21,11 +21,19 @@ login is the guard, and nothing asks the password again.
   POST /api/settings/site         {key | null, site: {name, nets, router, criticality} | null,
                                   preview | base}: a site of `sites.list`, added, changed or
                                   removed (config.yaml)
+  POST /api/settings/site/nets    {router}: the networks a router is on, read over its login —
+                                  what "Make it a site" proposes
   GET  /api/setup                 does the first-run setup apply (no devices, or the example's)
   POST /api/setup/router          {dhcp_source, credentials, user?, password?} -> logged in?
                                   how many leases? (a typed login is tried, not written)
-  POST /api/setup/leases          the same router: its DHCP list, for picking
-  POST /api/setup/sweep           no MikroTik: who answers a ping on the main network
+  POST /api/setup/leases          the same router: its DHCP list and the fixed addresses in its
+                                  ARP table, for picking
+  POST /api/setup/find            {with_router, the router as above}: Find my devices — the
+                                  router's lists, one ping sweep, a few ports on each (identify.py)
+  POST /api/setup/try             {ip, kind, user, password | token, how}: a device's login,
+                                  tried the way lanowl will use it (trylogin.py); never written
+  POST /api/setup/sweep           {dhcp_source?} no MikroTik: who answers a ping on the main
+                                  network (the main site's, else the router's /24, else lanowl's)
   POST /api/setup/telegram        {token} -> the bot's name (getMe)
   POST /api/setup/telegram/chats  {token, offset} -> the chats that wrote to it (getUpdates)
   POST /api/setup/telegram/hello  {token, chat_id} -> one line to that chat
@@ -40,6 +48,7 @@ and nothing here logs one.
 from __future__ import annotations
 
 import asyncio
+import html
 import ipaddress
 import logging
 import os
@@ -68,7 +77,7 @@ SECRET_MAX = 1024
 # a kind guessed from a maker's name (oui.py), for the first-run list: a guess, marked as one
 GUESS = (("mikrotik", "mikrotik"), ("routerboard", "mikrotik"), ("shelly", "shelly"),
          ("allterco", "shelly"), ("reolink", "reolink"), ("ubiquiti", "unifi"),
-         ("raspberry", "linux"), ("synology", "linux"), ("qnap", "linux"), ("vmware", "esxi"),
+         ("raspberry", "linux"), ("synology", "linux"), ("qnap", "linux"),
          ("nabu casa", "homeassistant"), ("gl.inet", "openwrt"), ("gl technologies", "openwrt"))
 
 
@@ -137,6 +146,8 @@ def clean_device(d: dict, kinds: dict) -> tuple:
                 return None, "a check's port is a number"
             if not 0 < c["port"] < 65536:
                 return None, f"a {c['type']} check needs a port"
+        if c["type"] == "link" and not (c.get("iface") or c.get("interface")):
+            return None, "a link check needs the router port the device hangs off, e.g. ether3"
         checks.append(c)
     out["checks"] = checks or [{"type": "icmp"}]
     return _ordered(out, {}), ""
@@ -147,6 +158,7 @@ class SettingsRoutes:
         self.d = dashboard
         self.a = dashboard.a
         self._router_try = 0.0
+        self._tried: dict = {}                     # ip -> when its login was last tried
         self._tg_busy = False
 
     @property
@@ -166,10 +178,13 @@ class SettingsRoutes:
         r.add_post("/api/settings/migrate", self.migrate)
         r.add_post("/api/settings/secret", self.secret)
         r.add_post("/api/settings/site", self.site)
+        r.add_post("/api/settings/site/nets", self.site_nets)
         r.add_get("/api/setup", self.setup)
         r.add_post("/api/setup/router", self.router)
         r.add_post("/api/setup/leases", self.leases)
         r.add_post("/api/setup/sweep", self.sweep)
+        r.add_post("/api/setup/find", self.find)
+        r.add_post("/api/setup/try", self.try_login)
         r.add_post("/api/setup/telegram", self.tg_check)
         r.add_post("/api/setup/telegram/chats", self.tg_chats)
         r.add_post("/api/setup/telegram/hello", self.tg_hello)
@@ -289,6 +304,35 @@ class SettingsRoutes:
         r.pop("text", None)
         return self._j(r, 200 if r["ok"] else 409)
 
+    async def site_nets(self, request):
+        """What a site made from this router should hold: the networks of the router's own
+        addresses, read over its login (RouterOS `/ip address`, OpenWrt `ip addr`), except the
+        one lanowl reaches it through — a tunnel's network holds other routers too — and the
+        router's own address as a /32. {"nets", "how"} ("read", or "guess" when it could not be
+        read: its /24 on lanowl's own side, else only the /32)."""
+        from .model import on_main_side
+        body = await self.d._body(request) or {}
+        ip = str(body.get("router") or "").strip()
+        dev = self.a.inv.get(ip) if _IP.match(ip) else None
+        if dev is None:
+            return self._j({"ok": False, "error": "not one of your devices"}, 400)
+        kind = str(dev.attrs.get("kind") or "")
+        nets, how, said = site_nets_guess(self.a.cfg, ip), "guess", ""
+        acc = getattr(self.a, "access", None)
+        if acc is not None and kind in SITE_ROUTERS and acc.login(ip) is not None:
+            if kind == "mikrotik":
+                rc, out, err = await acc.ssh(ip, "/ip address print terse without-paging", user_suffix="+ct", timeout_s=20)
+            else:
+                rc, out, err = await acc.ssh(ip, "ip -4 -o addr show", timeout_s=20)
+            if rc == 0:
+                got = router_nets(ip, out)
+                if got:
+                    nets, how = got, "read"
+            else:
+                said = (err or out or "").strip().splitlines()[-1][:160] if (err or out) else "no answer"
+        return self._j({"ok": True, "nets": nets, "how": how, "said": said,
+                        "main_side": on_main_side(self.a.cfg, ip)})
+
     # --- devices --------------------------------------------------------------------------
     def _kinds(self) -> dict:
         """kind -> the features it can do (kinds.py), the owner's profiles included."""
@@ -298,6 +342,12 @@ class SettingsRoutes:
             ops = getattr(prof, "ops", {}) or {}
             out[kind] = [f for f, op in FEATURE_OP.items() if op in ops]
         return out
+
+    def _key_kinds(self) -> list:
+        """The kinds a login by lanowl's ssh key can serve: linux, and the owner's profiles
+        (ssh commands). Every other built-in kind logs in with a password (kinds.py)."""
+        from .kinds import KINDS
+        return [k for k in self._kinds() if k == "linux" or k not in KINDS]
 
     async def devices(self, request):
         from .kinds import FEATURES, SWITCH
@@ -309,6 +359,8 @@ class SettingsRoutes:
             if isinstance(dev, dict) and dev.get("credentials"):
                 used.setdefault(str(dev["credentials"]), []).append(str(dev.get("name") or dev.get("ip")))
         sites = getattr(self.a, "sites", None)
+        fcfg = load(self.s.files["config"].read()) or {}
+        fcfg = fcfg if isinstance(fcfg, dict) else {}
         watched = []
         if sites is not None:
             for ip, w in (sites.rec.get("watch") or {}).items():
@@ -316,16 +368,19 @@ class SettingsRoutes:
                 watched.append({"ip": ip, "name": dev.name if dev else w.get("name"), "mac": w.get("mac"),
                                 "site": w.get("site")})
         return self._j({"ok": True, "base": digest(text), "devices": raw.get("devices") or [],
-                        "groups": inv_groups(raw), "kinds": self._kinds(),
+                        "groups": inv_groups(raw), "kinds": self._kinds(), "key_kinds": self._key_kinds(),
                         "features": FEATURES,
-                        "switches": {f: bool((self.a.cfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
+                        # as the file says now (a save shows at once), and as lanowl runs
+                        "switches": {f: bool((fcfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
+                        "running": {f: bool((self.a.cfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
                         "logins": [{"name": n, "type": ("key + password" if lg.key and lg.password else
                                                         "key" if lg.key else "password"),
                                     "how": "key" if lg.key else "password", "user": lg.user,
                                     "used": used.get(n, [])}
                                    for n, lg in sorted(logins.items())],
                         "secrets": {"writable": self.s.files["secrets"].status()["writable"],
-                                    "public_key": public_key(self.a.cfg)},
+                                    "public_key": public_key(self.a.cfg),
+                                    "ha_token": bool(access.token(self.a.cfg, "homeassistant"))},
                         "watched": watched, "status": self.s.files["inventory"].status()})
 
     def _device_ops(self, body: dict, raw: dict) -> tuple:
@@ -377,6 +432,13 @@ class SettingsRoutes:
         sops, err = self._device_login(body)
         if err:
             return self._j({"ok": False, "error": err}, 400)
+        # Home Assistant: its token with it, and its address from the device (access.ha_url)
+        ha_tok = str(body.get("ha_token") or "").strip()
+        dev = body.get("device") if isinstance(body.get("device"), dict) else {}
+        if ha_tok:
+            if dev.get("kind") != "homeassistant" or not _IP.match(str(dev.get("ip") or "")) or len(ha_tok) > SECRET_MAX:
+                return self._j({"ok": False, "error": "a token goes with a homeassistant device"}, 400)
+            sops = list(sops or []) + [{"op": "set", "path": ["tokens", "homeassistant"], "value": ha_tok}]
         text = self.s.files["inventory"].read()
         ops, err = self._device_ops(body, load(text) or {})
         if err:
@@ -393,14 +455,23 @@ class SettingsRoutes:
                     p["error"] = sp.get("error")
             return self._j(p, 200 if p["ok"] else 409)
         how = "watch" if body.get("how") == "watch" else "save"
+        was = "inventory" in self.s.pending()
         if sops:
             rs = self.s.save("secrets", sops, str(body.get("sbase") or ""), request.remote or "")
             rs.pop("text", None)
             if not rs["ok"]:
                 return self._j(rs, 409)
         r = self.s.save("inventory", ops, str(body.get("base") or ""), request.remote or "", how=how)
+        url = f"http://{dev.get('ip')}:8123"
+        if r["ok"] and ha_tok and str((self.a.cfg.get("access") or {}).get("ha_url") or "") != url:
+            c = self.s.files["config"]
+            rc = self.s.save("config", [{"op": "set", "path": ["access", "ha_url"], "value": url}], digest(c.read()),
+                             request.remote or "")
+            if not rc["ok"]:
+                r["warning"] = f"Home Assistant's address was not written: {rc.get('error')}"
         if r["ok"] and how == "watch" and body.get("device"):
             await self._watch_now(body["device"])
+            self.s.applied("inventory", was)          # watched from now on: nothing waits for a restart
         return self._j(r, 200 if r["ok"] else 409)
 
     async def _watch_now(self, dev: dict):
@@ -538,15 +609,17 @@ class SettingsRoutes:
                                      "chat_id": str((self.a.cfg.get("telegram") or {}).get("chat_id") or "")},
                         "timezone": str(self.a.cfg.get("timezone") or ""), "tz_env": env_tz(),
                         "public_key": public_key(self.a.cfg),
+                        "lan_ip": lan_ip(request, self.a.cfg), "gateway": gateway(lan_ip(request, self.a.cfg)),
+                        "key_kinds": self._key_kinds(),
                         "files": {k: f.status() for k, f in self.s.files.items()},
                         "bases": {k: digest(f.read()) for k, f in self.s.files.items()}})
 
     def _router_cfg(self, body: dict) -> tuple:
         """A copy of the config with the router the setup page typed: (cfg, error)."""
         import copy
-        src = str(body.get("dhcp_source") or "").strip().rstrip("/")
-        if src and not re.match(r"^https?://[A-Za-z0-9.\-\[\]:]+$", src):
-            return None, "the router's address is http:// or https:// and its address, e.g. http://192.168.88.1"
+        src = router_url(str(body.get("dhcp_source") or ""))
+        if src is None:
+            return None, "the router's address is its IP address or name, e.g. 192.168.88.1 (or https://192.168.88.1)"
         name = str(body.get("credentials") or "").strip() or "router-read"
         cfg = copy.deepcopy({k: v for k, v in self.a.cfg.items()})
         cfg.setdefault("mikrotik", {})
@@ -603,19 +676,50 @@ class SettingsRoutes:
         leases = await self._rest(cfg, "ip/dhcp-server/lease", lg)
         n = len(leases.data.get("json") or []) if leases.ok else 0
         return self._j({"ok": True, "login": True, "user": lg.user, "version": (res or {}).get("version", ""),
-                        "board": (res or {}).get("board-name", ""), "leases": n})
+                        "board": (res or {}).get("board-name", ""), "leases": n,
+                        "can_write": await self._can_write(cfg, lg)})
+
+    async def _can_write(self, cfg: dict, lg):
+        """May this router user change the router? Its group's policy, as RouterOS gives it
+        (write, policy, reboot, password not denied with "!"). None when it cannot be read."""
+        from urllib.parse import quote
+        u = await self._rest(cfg, f"user?name={quote(lg.user)}", lg)
+        rows = u.data.get("json") if u.ok else None
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            return None
+        grp = str(rows[0].get("group") or "")
+        g = await self._rest(cfg, f"user/group?name={quote(grp)}", lg)
+        gr = g.data.get("json") if g.ok else None
+        if not isinstance(gr, list) or not gr or not isinstance(gr[0], dict):
+            return None
+        pol = {p.strip() for p in str(gr[0].get("policy") or "").split(",")}
+        return bool(pol & {"write", "policy", "reboot", "password"})
 
     async def leases(self, request):
+        """The router's lists, for picking: its DHCP leases, and the devices with a fixed
+        address its ARP table holds on the main network (no lease, so no DHCP list shows
+        them: switches, access points, cameras, servers). Each marked when inventory.yaml
+        already has it."""
+        from .discovery import static_from_arp
         from .oui import vendor
         body = await self.d._body(request) or {}
         cfg, err = self._router_cfg(body)
         if err:
             return self._j({"ok": False, "error": err}, 400)
-        r = await self._rest(cfg, "ip/dhcp-server/lease", self._typed(body))
+        out = await self._router_rows(cfg, self._typed(body))
+        return self._j(out, 200 if out["ok"] else 409)
+
+    async def _router_rows(self, cfg: dict, typed) -> dict:
+        """The router's DHCP list and the fixed addresses in its ARP table, as rows."""
+        from .discovery import static_from_arp
+        from .oui import vendor
+        r = await self._rest(cfg, "ip/dhcp-server/lease", typed)
         if not r.ok:
-            return self._j({"ok": False, "error": f"the router's DHCP list could not be read: {r.detail}"}, 409)
+            return {"ok": False, "error": f"the router's DHCP list could not be read: {r.detail}"}
+        leases = [x for x in r.data.get("json") or [] if isinstance(x, dict)]
+        watched = {d.ip for d in self.a.inv.devices}
         rows = []
-        for x in r.data.get("json") or []:
+        for x in leases:
             ip, mac = str(x.get("address") or ""), str(x.get("mac-address") or "").upper()
             if not _IP.match(ip) or x.get("disabled") == "true":
                 continue
@@ -624,26 +728,157 @@ class SettingsRoutes:
                          "comment": str(x.get("comment") or ""), "vendor": v, "kind": guess_kind(v),
                          "static": x.get("dynamic") == "false", "status": str(x.get("status") or ""),
                          "last_seen": str(x.get("last-seen") or ""),
-                         "here": x.get("status") == "bound"})
+                         "here": x.get("status") == "bound", "how": ["DHCP"]})
+        nets = arp_nets(cfg)
+        arp_error, fixed = "", 0
+        if nets:
+            a = await self._rest(cfg, "ip/arp", typed)
+            if a.ok:
+                have = {x["ip"] for x in rows}
+                for x in static_from_arp(a.data.get("json") or [], leases, nets):
+                    if x["ip"] in have:
+                        continue
+                    v = vendor(x["mac"])
+                    rows.append({"ip": x["ip"], "mac": x["mac"], "name": "", "comment": "", "vendor": v,
+                                 "kind": guess_kind(v), "static": True, "fixed": True, "status": "",
+                                 "last_seen": "", "here": "ago" in x, "how": ["ARP"]})
+                    fixed += 1
+            else:
+                arp_error = f"its ARP table could not be read: {a.detail}"
+        for x in rows:
+            x["watched"] = x["ip"] in watched
         rows.sort(key=lambda r: tuple(int(o) for o in r["ip"].split(".")))
         host = re.sub(r"^https?://", "", cfg["mikrotik"]["dhcp_source"]).split(":")[0].split("/")[0]
-        return self._j({"ok": True, "router": host, "rows": rows})
+        return {"ok": True, "router": host, "rows": rows, "fixed": fixed, "arp_error": arp_error,
+                "nets": [str(n) for n in nets], "dhcp": len(rows) - fixed}
+
+    async def find(self, request):
+        """Find my devices: the router's lists (when its login worked), one ping to every
+        address of the main network, then a few ports asked on each (identify.py) — what each
+        one is, where it was seen, and why lanowl thinks so. Only on the page's button."""
+        from . import identify
+        from .oui import vendor
+        body = await self.d._body(request) or {}
+        cfg, err = self._router_cfg(body)
+        if err:
+            return self._j({"ok": False, "error": err}, 400)
+        rows, lines, out = {}, [], {"router": "", "fixed": 0, "arp_error": ""}
+        ips = body.get("ips")
+        if ips is not None:                       # Add a device by address: that one, asked alone
+            if not isinstance(ips, list) or not 0 < len(ips) <= 16 or not all(isinstance(x, str) and _private(x) for x in ips):
+                return self._j({"ok": False, "error": "an address of your home network, like 192.168.88.70"}, 400)
+            found = [{"ip": ip, "mac": "", "name": "", "comment": "", "vendor": "", "kind": "", "guess": "",
+                      "static": True, "status": "", "last_seen": "", "here": False, "how": ["added"]} for ip in ips]
+            await identify.find(found)
+            watched = {d.ip for d in self.a.inv.devices}
+            for x in found:
+                x["watched"] = x["ip"] in watched
+                if x["group"] == "unknown":            # asked for by hand: watched, not "don't know yet"
+                    x["group"] = "misc"
+            return self._j({"ok": True, "rows": found})
+        if body.get("with_router") and cfg["mikrotik"]["dhcp_source"]:
+            rr = await self._router_rows(cfg, self._typed(body))
+            if rr["ok"]:
+                out.update({k: rr[k] for k in ("router", "fixed", "arp_error")})
+                rows = {x["ip"]: x for x in rr["rows"]}
+                lines.append({"t": "the router's DHCP list", "n": rr["dhcp"]})
+                lines.append({"t": "its ARP table: the fixed addresses", "n": rr["fixed"],
+                              **({"error": rr["arp_error"]} if rr["arp_error"] else {})})
+            else:
+                lines.append({"t": "the router's lists", "n": 0, "error": rr["error"]})
+        net, why = sweep_net(cfg, cfg["mikrotik"]["dhcp_source"] if body.get("with_router") else "",
+                             lan_ip(request, self.a.cfg))
+        out["swept"], out["swept_why"] = net, why if net else ""
+        if net:
+            alive, macs, serr = await self._fping(net)
+            lines.append({"t": f"one ping to every address of {net}", "n": len(alive), **({"error": serr} if serr else {})})
+            for ip in alive:
+                if ip in rows:
+                    rows[ip]["here"] = True
+                    rows[ip]["how"].append("ping")
+                else:
+                    v = vendor(macs.get(ip, "")) if macs.get(ip) else ""
+                    rows[ip] = {"ip": ip, "mac": macs.get(ip, ""), "name": "", "comment": "", "vendor": v,
+                                "kind": guess_kind(v), "static": False, "status": "", "last_seen": "",
+                                "here": True, "how": ["ping"]}
+        else:
+            lines.append({"t": "the ping sweep", "n": 0, "error": why})
+        if not rows:
+            return self._j({"ok": False, "error": "; ".join(x.get("error", "") for x in lines if x.get("error"))
+                            or "nothing answered", "lines": lines}, 409)
+        found = list(rows.values())
+        for x in found:
+            x["guess"] = x.get("kind") or ""           # the maker's guess, if the ports say nothing
+        await identify.find(found)
+        for x in found:
+            x["kind"] = x["kind"] or x.get("guess") or ""
+        lines.append({"t": "asked each one on a few ports: what it is", "n": len(found)})
+        watched = {d.ip for d in self.a.inv.devices}
+        for x in found:
+            x["watched"] = x["ip"] in watched
+        found.sort(key=lambda r: tuple(int(o) for o in r["ip"].split(".")))
+        return self._j({"ok": True, "rows": found, "lines": lines, **out})
+
+    async def try_login(self, request):
+        """Try: one login the way lanowl will log in to that kind, the device's own answer quoted
+        (trylogin.py). Nothing is written. One try per device every 3 seconds: each refused one
+        is a line in the device's log, and some lock the account after a few."""
+        from . import trylogin
+        body = await self.d._body(request) or {}
+        ip, kind = str(body.get("ip") or "").strip(), str(body.get("kind") or "")
+        if not _IP.match(ip) or kind not in self._kinds():
+            return self._j({"ok": False, "said": "bad request"}, 400)
+        now = time.time()
+        if now - self._tried.get(ip, 0) < 3:
+            return self._j({"ok": False, "said": "a moment: the last try was just now"}, 429)
+        self._tried[ip] = now
+        how = str(body.get("how") or "password")
+        if body.get("login"):                      # a login secrets.yaml has: tried as it is there
+            lg = access.shared(self.a.cfg).data()["logins"].get(str(body["login"]))
+            if lg is None:
+                return self._j({"ok": False, "said": f"there is no login {body['login']!r}"})
+            body = {**body, "user": lg.user, "password": lg.password}
+            how = "key" if lg.key and not lg.password else "password"
+        key = (access.shared(self.a.cfg).data().get("ssh_key") or "") if how == "key" else None
+        if how == "key" and not key:
+            return self._j({"ok": False, "said": "lanowl has no ssh key yet"})
+        acc = getattr(self.a, "access", None) or access.Access(self.a.cfg, self.a.inv)
+        r = await trylogin.try_login(acc, kind, ip, str(body.get("user") or "").strip()[:128],
+                                     str(body.get("password") or "")[:SECRET_MAX], str(body.get("token") or "")[:SECRET_MAX], key)
+        log.info("setup: %s's login tried (%s): %s", ip, kind, "accepted" if r.get("ok") else "refused")
+        return self._j(r)
+
+    async def _fping(self, net: str) -> tuple:
+        """(addresses that answered one ping, {ip: mac} from this machine's ARP table, error)."""
+        try:
+            proc = await asyncio.create_subprocess_exec("fping", "-a", "-q", "-r", "1", "-t", "300", "-g", net,
+                                                        stdout=asyncio.subprocess.PIPE,
+                                                        stderr=asyncio.subprocess.DEVNULL)
+            o, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+        except (OSError, asyncio.TimeoutError) as e:
+            return [], {}, f"the ping sweep did not run: {e}"
+        alive = [x.strip() for x in o.decode(errors="ignore").split() if _IP.match(x.strip())]
+        macs = {}
+        try:
+            with open("/proc/net/arp", encoding="ascii") as f:
+                for ln in f.read().splitlines()[1:]:
+                    p = ln.split()
+                    if len(p) >= 4 and p[3] != "00:00:00:00:00:00":
+                        macs[p[0]] = p[3].upper()
+        except OSError:
+            pass
+        return alive, macs, ""
 
     async def sweep(self, request):
         """No MikroTik: ping every address of the main network once (fping), then read the
         host's ARP table for the MACs. Addresses, MACs, makers — no names."""
-        from .model import main_lans
         from .oui import vendor
-        nets = []
-        for n in main_lans(self.a.cfg) or []:
-            try:
-                net = ipaddress.ip_network(str(n), strict=False)
-            except ValueError:
-                continue
-            if net.version == 4 and net.num_addresses <= 1024:
-                nets.append(str(net))
-        if not nets:
-            return self._j({"ok": False, "error": "no main network to sweep (sites.list, the site keyed home)"}, 409)
+        body = await self.d._body(request) or {}
+        net, why = sweep_net(self.a.cfg, router_url(str(body.get("dhcp_source") or "")) or "",
+                             lan_ip(request, self.a.cfg))
+        if not net:
+            return self._j({"ok": False, "error": why}, 409)
+        nets = [net]
         try:
             proc = await asyncio.create_subprocess_exec("fping", "-a", "-q", "-r", "1", "-t", "300", "-g", *nets[:1],
                                                         stdout=asyncio.subprocess.PIPE,
@@ -668,7 +903,7 @@ class SettingsRoutes:
             rows.append({"ip": ip, "mac": mac, "name": "", "vendor": v, "kind": guess_kind(v),
                          "static": False, "here": True, "last_seen": ""})
         rows.sort(key=lambda r: tuple(int(o) for o in r["ip"].split(".")))
-        return self._j({"ok": True, "router": "", "rows": rows, "swept": nets[0]})
+        return self._j({"ok": True, "router": "", "rows": rows, "swept": nets[0], "swept_why": why})
 
     # --- Telegram, from the setup: the token, then /start -----------------------------------
     async def _tg(self, token: str, method: str, params: dict = None, timeout: float = 15) -> dict:
@@ -807,6 +1042,26 @@ class SettingsRoutes:
             return self._j({"ok": False, "error": "the bot's token does not look like one"}, 400)
         if token and token != access.token(self.a.cfg, "telegram"):
             sops.append({"op": "set", "path": ["tokens", "telegram"], "value": token})
+        # Home Assistant: its token, and its address filled in from the device (access.ha_url)
+        ha = body.get("ha") if isinstance(body.get("ha"), dict) else {}
+        ha_ip, ha_tok = str(ha.get("ip") or "").strip(), str(ha.get("token") or "").strip()
+        if ha_tok:
+            if not _IP.match(ha_ip) or len(ha_tok) > SECRET_MAX:
+                return self._j({"ok": False, "error": "Home Assistant: its address and its token"}, 400)
+            if ha_tok != access.token(self.a.cfg, "homeassistant"):
+                sops.append({"op": "set", "path": ["tokens", "homeassistant"], "value": ha_tok})
+        # what lanowl does with the devices it can log in to: each feature their kind can do, if chosen
+        feats = body.get("features") if isinstance(body.get("features"), dict) else {}
+        wanted = [f for k, fs in (("updates", ["updates"]), ("security", ["security"]), ("config", ["config"]),
+                                  ("approve", ["reboot", "upgrade"])) if feats.get(k) for f in fs]
+        on = set()
+        for i, d in enumerate(devs):
+            reach = d.get("credentials") or d.get("kind") == "shelly" or (d.get("kind") == "homeassistant" and ha_tok)
+            if wanted and d.get("kind") and reach and not d.get("manage"):
+                can = [f for f in wanted if f in kinds.get(d["kind"], [])]
+                if can:
+                    devs[i] = _ordered({**d, "manage": can}, {})
+                    on.update(can)
         itext = self.s.files["inventory"].read()
         raw = load(itext) or {}
         have = [x for x in raw.get("devices") or [] if isinstance(x, dict)]
@@ -818,6 +1073,11 @@ class SettingsRoutes:
         mk = self.a.cfg.get("mikrotik") or {}
         for k in ("dhcp_source", "credentials"):
             v = str(router.get(k) or "").strip().rstrip("/") if k in router else None
+            if k == "dhcp_source" and v:
+                v = router_url(v)
+                if v is None:
+                    return self._j({"ok": False, "error": "the router's address is its IP address or name, "
+                                                          "e.g. 192.168.88.1"}, 400)
             if v is not None and v != str(mk.get(k) or ""):
                 cops.append({"op": "set", "path": ["mikrotik", k], "value": v})
         chat = str(tg.get("chat_id") or "").strip()
@@ -829,12 +1089,21 @@ class SettingsRoutes:
         tz = str(body.get("timezone") or "").strip()
         if tz and valid_tz(tz) and not env_tz() and not str(self.a.cfg.get("timezone") or "").strip():
             cops.append({"op": "set", "path": ["timezone"], "value": tz})
+        if ha_tok and str((self.a.cfg.get("access") or {}).get("ha_url") or "") != f"http://{ha_ip}:8123":
+            cops.append({"op": "set", "path": ["access", "ha_url"], "value": f"http://{ha_ip}:8123"})
+        for sec, fs in (("updates", {"updates"}), ("exposure", {"security"}), ("configwatch", {"config"}),
+                        ("actions", {"reboot", "upgrade"})):
+            if on & fs and not (self.a.cfg.get(sec) or {}).get("enabled"):
+                cops.append({"op": "set", "path": [sec, "enabled"], "value": True})
+                if sec == "actions":
+                    cops.append({"op": "set", "path": ["actions", "mode"], "value": "live"})
         if body.get("preview"):
             sp = self.s.plan("secrets", sops, stext) if sops else None
             after = sp["text"] if sp and sp.get("ok") else None
-            out = {"ok": True, "secrets": sp,
-                   "inventory": self.s.plan("inventory", iops, itext, secrets_text=after) if iops else None,
-                   "config": self.s.plan("config", cops, secrets_text=after) if cops else None}
+            cp = self.s.plan("config", cops, secrets_text=after) if cops else None
+            out = {"ok": True, "secrets": sp, "config": cp,
+                   "inventory": self.s.plan("inventory", iops, itext, secrets_text=after,
+                                            config_text=cp["text"] if cp and cp.get("ok") else None) if iops else None}
             for k in ("secrets", "inventory", "config"):
                 if out[k]:
                     out[k].pop("text", None)
@@ -843,14 +1112,62 @@ class SettingsRoutes:
         bases = body.get("bases") or {}
         ip = request.remote or ""
         r = {"ok": True}
-        for name, ops in (("secrets", sops), ("inventory", iops), ("config", cops)):
+        # config.yaml before inventory.yaml: a device's features may need what config.yaml gets
+        # here (Home Assistant's address); each is checked with the others as they will be
+        for name, ops in (("secrets", sops), ("config", cops), ("inventory", iops)):
             if not ops:
                 continue
-            r[name] = self.s.save(name, ops, str(bases.get(name) or ""), ip, how="setup")
+            r[name] = self.s.save(name, ops, str(bases.get(name) or ""), ip, how="setup", tell=False)
             r[name].pop("text", None)
             if not r[name]["ok"]:
                 return self._j({"ok": False, **r[name], "done": [k for k in r if k not in ("ok", name)]}, 409)
+        if any(k in r for k in ("secrets", "inventory", "config")):
+            await self._tell_setup(setup_line(devs, cfg_router=bool(router.get("dhcp_source")) and
+                                              any(o["path"] == ["mikrotik", "dhcp_source"] for o in cops),
+                                              chat=bool(chat), ip=ip), token, chat)
         return self._j(r)
+
+    async def _tell_setup(self, line: str, token: str, chat: str):
+        """The setup's one Telegram line. Telegram is often set up by this very write, before
+        lanowl runs with it: then it goes with the bot and the chat just written."""
+        if getattr(self.a, "no_telegram", False):
+            log.info("telegram suppressed (--no-telegram) [setup]: %s", line)
+            return
+        running = str((self.a.cfg.get("telegram") or {}).get("chat_id") or "") and access.token(self.a.cfg, "telegram")
+        if running and not (token and chat):
+            self.a._emit_telegram("digest", line)
+            return
+        if not (token and chat):
+            log.info("setup: no Telegram to tell: %s", line)
+            return
+        j = await self._tg(token, "sendMessage", {"chat_id": chat, "text": line, "parse_mode": "HTML"})
+        if j.get("ok"):
+            log.info("setup: told on Telegram: %s", line)
+            rec = getattr(self.a, "_on_event", None)        # in the Timeline with every other line it sent
+            if callable(rec):
+                import json
+                rec("telegram", None, json.dumps({"channel": "digest", "text": line[:1500]}, ensure_ascii=False))
+        else:
+            log.warning("setup: the Telegram line was not sent (%s): %s", str(j.get("description") or "?")[:120], line)
+
+    def _welcome_tz(self, tz: str, ip: str):
+        """The time zone the welcome page offered, from the browser: into config.yaml and in
+        use at once, so the log, the digests and the dashboard read local time from the first
+        minute — unless TZ in the environment, or the file, already says one."""
+        from .firstrun import apply_timezone, env_tz, valid_tz
+        if not tz or not valid_tz(tz) or env_tz() or str(self.a.cfg.get("timezone") or "").strip():
+            return
+        f = self.s.files["config"]
+        if not f.status()["writable"]:
+            return
+        was = "config" in self.s.pending()
+        r = self.s.save("config", [{"op": "set", "path": ["timezone"], "value": tz}], digest(f.read()), ip,
+                        how="setup", tell=False)
+        if r.get("ok"):
+            self.a.cfg["timezone"] = tz
+            apply_timezone(self.a.cfg)
+            self.s.applied("config", was)
+            log.info("time zone %s, from the browser that set the password", tz)
 
     async def claim(self, request):
         """The first page of a new install: the setup code, then the password. Open without a
@@ -869,6 +1186,7 @@ class SettingsRoutes:
             hashed = await asyncio.get_running_loop().run_in_executor(None, hash_password, pw)
             w = self._write_hash(hashed, request.remote or "", "setup")
             token = lg.set_from_page(hashed, bool(w.get("in_config")), keep_in=True)
+            self._welcome_tz(str(body.get("timezone") or "").strip(), request.remote or "")
         resp = self._j({"ok": True, "in_config": bool(w.get("in_config"))})
         from .web import _https
         resp.set_cookie(COOKIE, token, max_age=SESSION_S, path="/", httponly=True, samesite="Lax",
@@ -881,6 +1199,117 @@ class SettingsRoutes:
 _FORM_KEYS = {"ip", "name", "mac", "group", "criticality", "role", "note", "site", "depends_on",
               "expect_offline", "debounce_fails", "kind", "credentials", "manage", "restart", "logs",
               "reboot", "upgrade", "backup", "checks"}
+
+
+def setup_line(devs: list, cfg_router: bool, chat: bool, ip: str) -> str:
+    """The setup's Telegram line: what it set, in one sentence."""
+    n = len(devs)
+    nl = sum(1 for d in devs if d.get("credentials"))
+    bits = [f"{n} device{'' if n == 1 else 's'}" + (f" ({nl} with a login)" if nl else "")] if n else []
+    bits += ["the router's DHCP list"] if cfg_router else []
+    bits += ["this chat"] if chat else []
+    where = f" ({html.escape(ip)})" if ip else ""
+    return (f"🦉 <b>lanowl is set up</b> from the dashboard{where}: " + (", ".join(bits) or "its files")
+            + ". It restarts now, then watches them.")
+
+
+def arp_nets(cfg: dict) -> list:
+    """Where the router's ARP table means the main network: the main site's own networks
+    (sites.list), else the router's /24 — as the running lanowl reads it (sites.py)."""
+    from .model import MAIN_SITE, router_lan
+    home = next((x for x in ((cfg or {}).get("sites") or {}).get("list") or []
+                 if isinstance(x, dict) and str(x.get("key")) == MAIN_SITE), None) or {}
+    out = []
+    for n in home.get("nets") or []:
+        try:
+            net = ipaddress.ip_network(str(n), strict=False)
+        except ValueError:
+            continue
+        if net.version == 4 and net.prefixlen < 32:
+            out.append(net)
+    return out or router_lan(cfg)
+
+
+def router_url(text: str):
+    """The router's REST address as typed: "192.168.88.1", "router.lan:8080" or a whole
+    http(s):// address. http:// when none is said. None: not an address."""
+    t = text.strip().rstrip("/")
+    if not t:
+        return ""
+    if not re.match(r"^https?://", t, re.I):
+        t = "http://" + t
+    return t if re.match(r"^https?://[A-Za-z0-9.\-\[\]:]+$", t, re.I) else None
+
+
+def _private(ip: str) -> bool:
+    """A home network's address (RFC 1918): not loopback, not a documentation range."""
+    from .model import is_lan
+    return is_lan(ip)
+
+
+def lan_ip(request, cfg: dict) -> str:
+    """lanowl's address on the home network, as the devices see it: the address this page was
+    opened at (behind Docker's NAT the container's own address is not the one the router
+    sees), else the one lanowl found for itself. "" when neither is a LAN address."""
+    host = ""
+    try:
+        host = (request.host or "").rsplit(":", 1)[0].strip("[]") if request is not None else ""
+    except Exception:
+        host = ""
+    if _private(host):
+        return host
+    me = str(((cfg or {}).get("observer") or {}).get("host_ip") or "")
+    return me if _private(me) else ""
+
+
+def default_gateway() -> str:
+    """The default route's gateway, from /proc/net/route ("" off Linux)."""
+    try:
+        with open("/proc/net/route", encoding="ascii") as f:
+            for ln in f.read().splitlines()[1:]:
+                p = ln.split()
+                if len(p) >= 3 and p[1] == "00000000" and p[2] != "00000000":
+                    return str(ipaddress.IPv4Address(int(p[2], 16).to_bytes(4, "little")))
+    except (OSError, ValueError):
+        pass
+    return ""
+
+
+def gateway(me: str) -> dict:
+    """Where the router most likely is: the default gateway when it is on lanowl's own
+    network ({"how": "found"}), else that network's .1 ({"how": "guess"}). {} with no network."""
+    if not me:
+        return {}
+    net = ipaddress.ip_network(me + "/24", strict=False)
+    gw = default_gateway()
+    if gw and ipaddress.ip_address(gw) in net and gw != me:
+        return {"ip": gw, "how": "found"}
+    guess = str(net.network_address + 1)
+    return {"ip": guess, "how": "guess"} if guess != me else {}
+
+
+def sweep_net(cfg: dict, router: str, me: str) -> tuple:
+    """(network, why) the setup's sweep pings: the main site's network when sites.list names
+    one, else the /24 the router is on, else lanowl's own /24. Only a private network of 1024
+    addresses or fewer; ("", why not) otherwise."""
+    from urllib.parse import urlparse
+    from .model import MAIN_SITE, router_host
+    home = next((x for x in ((cfg or {}).get("sites") or {}).get("list") or []
+                 if isinstance(x, dict) and str(x.get("key")) == MAIN_SITE), None) or {}
+    for n in home.get("nets") or []:
+        try:
+            net = ipaddress.ip_network(str(n), strict=False)
+        except ValueError:
+            continue
+        if net.version == 4 and _private(str(net.network_address)) and net.num_addresses <= 1024:
+            return str(net), "the main site's network"
+    host = (urlparse(router).hostname if router else "") or router_host(cfg)
+    if _private(host or ""):
+        return str(ipaddress.ip_network(host + "/24", strict=False)), "the router's network"
+    if me:
+        return str(ipaddress.ip_network(me + "/24", strict=False)), "lanowl's own network"
+    return "", ("lanowl cannot tell which network is yours: open this page at lanowl's address "
+                "(e.g. http://192.168.88.20:8088), or type your router's address above")
 
 
 def _ordered(dev: dict, kept: dict) -> dict:
@@ -915,6 +1344,36 @@ def _ops(raw) -> tuple:
 HOME = "home"
 SITE_ROUTERS = {"mikrotik": "routeros", "openwrt": "openwrt"}    # a device's kind -> its site's
 SITE_KEYS = ("key", "name", "nets", "router", "kind", "criticality")
+
+
+def router_nets(ip: str, text: str) -> list:
+    """From a router's own address list (RouterOS `print terse`, or `ip -4 -o addr`): the
+    networks it serves, without the one lanowl reaches it through (a tunnel's), and its own
+    address as a /32."""
+    try:
+        me = ipaddress.ip_address(ip)
+    except ValueError:
+        return []
+    nets = []
+    for m in re.finditer(r"(?:address=|inet )(\d{1,3}(?:\.\d{1,3}){3}/\d{1,2})", text or ""):
+        try:
+            n = ipaddress.ip_interface(m.group(1)).network
+        except ValueError:
+            continue
+        if n.is_loopback or n.prefixlen >= 32 or me in n or not _private(str(n.network_address)):
+            continue
+        if str(n) not in nets:
+            nets.append(str(n))
+    return nets + [f"{ip}/32"] if nets else []
+
+
+def site_nets_guess(cfg: dict, ip: str) -> list:
+    """Without the router's own list: its /24 when it sits on lanowl's own side, else only its
+    address (/32) — never a tunnel's whole network."""
+    from .model import on_main_side
+    if on_main_side(cfg, ip):
+        return [str(ipaddress.ip_network(ip + "/24", strict=False))]
+    return [f"{ip}/32"]
 
 
 def _site_nets(s) -> list:
@@ -1117,7 +1576,7 @@ def login_users(cfg: dict, inv, raw: dict) -> dict:
     for ip, n in ((raw or {}).get("devices") or {}).items() if isinstance((raw or {}).get("devices"), dict) else ():
         used.setdefault(str(n), []).append(str(ip))
     if (cfg.get("mikrotik") or {}).get("dhcp_source"):
-        used.setdefault(access.service_login_name(cfg, "mikrotik"), []).append("the router's read-only user")
+        used.setdefault(access.service_login_name(cfg, "mikrotik"), []).append("the router's login, for reading it")
     if (cfg.get("mqtt") or {}).get("host"):
         used.setdefault(access.service_login_name(cfg, "mqtt"), []).append("the MQTT broker")
     return used
@@ -1145,7 +1604,7 @@ def secrets_view(cfg: dict, inv) -> dict:
         if sec == "mikrotik" and not (cfg.get("mikrotik") or {}).get("dhcp_source"):
             continue
         used.setdefault(access.service_login_name(cfg, sec), []).append(
-            "the router's read-only user" if sec == "mikrotik" else "the MQTT broker")
+            "the router's login, for reading it" if sec == "mikrotik" else "the MQTT broker")
     logins = [{"name": n, "set": True, "type": "key + password" if lg.key and lg.password else
                "key" if lg.key else "password", "how": "key" if lg.key else "password", "user": lg.user,
                "used_by": used.get(n, [])} for n, lg in sorted(d["logins"].items())]

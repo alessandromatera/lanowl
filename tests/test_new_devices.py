@@ -210,6 +210,65 @@ def test_remembered_and_told():
           "Ask finds the friend, with the first visit; last seen unknown, apart from when a read last listed it")
 
 
+def test_networks_given_later():
+    print("\n-- the main site's fixed addresses: from the router's /24 at once; networks given later; a device already watched never 'joined' --")
+    out = {}
+    NAS = "00:11:32:AA:BB:CC"
+    ROUTER = {"mikrotik": {"dhcp_source": "http://192.168.10.1"}}
+
+    async def go(d):
+        leases = [lease("192.168.10.150", PI)]
+        arps = [arp("192.168.10.2", SWITCH), arp("192.168.10.201", ROGUE)]
+
+        async def fetch_leases(cfg):
+            return leases
+
+        async def fetch_arp(cfg):
+            return arps
+        real = DI.fetch_leases, DI.fetch_arp
+        DI.fetch_leases, DI.fetch_arp = fetch_leases, fetch_arp
+        try:
+            now = time.time()
+            # no router known by address, no networks: nothing to look at, no baseline from nothing
+            m, a = _auditor(os.path.join(d, "a"), {"discovery": CFG["discovery"]})
+            a._last_discovery = 0
+            await a.run_discovery(now)
+            out["none"] = ([x["mac"] for x in a._discovery["unknown"] if x.get("how") == "arp"], list(a._discovery["new"]))
+            # a new install: the router, and no networks named for the main site
+            m, a = _auditor(d, {"discovery": CFG["discovery"], **ROUTER})
+            a._last_discovery = 0
+            await a.run_discovery(now)
+            out["first"] = ([x["mac"] for x in a._discovery["unknown"] if x.get("how") == "arp"], list(a._discovery["new"]))
+            m, a = _auditor(d, {**CFG, **ROUTER})                       # the networks, set later
+            a._last_discovery = 0
+            await a.run_discovery(now + 60)
+            out["later"] = [x["mac"] for x in a._discovery["new"]]
+            arps.append(arp("192.168.10.202", "00:0C:42:AA:BB:03"))      # a fixed address set tonight
+            a._last_discovery = 0
+            await a.run_discovery(now + 120)
+            out["tonight"] = [x["mac"] for x in a._discovery["new"]]
+            # the owner adds the NAS to inventory.yaml; then it gets its lease for the first time
+            from lanowl.model import Device
+            a.inv.devices.append(Device("192.168.10.30", "NAS", "servers", "low", attrs={"mac": NAS}))
+            leases.append(lease("192.168.10.30", NAS, "nas"))
+            a._last_discovery = 0
+            await a.run_discovery(now + 180)
+            out["nas"] = [x["mac"] for x in a._discovery["new"]]
+        finally:
+            DI.fetch_leases, DI.fetch_arp = real
+
+    def go_all(d):
+        os.makedirs(os.path.join(d, "a"))
+        return go(d)
+    _run(go_all)
+    check(out["none"] == ([], []), "no router known by its address, no networks: no fixed address looked at, none new")
+    check(sorted(out["first"][0]) == sorted([SWITCH, ROGUE]) and out["first"][1] == [],
+          "a new install: the fixed addresses on the router's /24 are listed from the first read, and none is 'new'")
+    check(out["later"] == [], f"the networks given later: what was on them all along is not new ({out['later']})")
+    check(out["tonight"] == ["00:0C:42:AA:BB:03"], "...a fixed address that appears after that still is")
+    check(out["nas"] == [], "a device the owner put in inventory.yaml is not a NEW device when it first shows up")
+
+
 def test_gran():
     print("\n-- Lake's site: its own record, its ARP table, its monthly scan --")
     out = {}
@@ -364,7 +423,7 @@ def test_heard():
 
 
 if __name__ == "__main__":
-    for t in (test_guest_marked, test_remembered_and_told, test_gran, test_parsers, test_heard):
+    for t in (test_guest_marked, test_remembered_and_told, test_networks_given_later, test_gran, test_parsers, test_heard):
         t()
     print("\nFAILED:\n  " + "\n  ".join(_fails) if _fails else "\nall ok")
     sys.exit(1 if _fails else 0)

@@ -57,8 +57,11 @@ docker exec lanowl lanowl --setup-code
 At its first start lanowl writes its own `config.yaml`, `inventory.yaml`, `secrets.yaml` and
 ssh key into the empty `config/` folder. Open `http://<this host>:8088/`: it asks for the
 setup code the last command printed and a password, then opens on a setup that reads your
-router's DHCP list (its address, user and password typed there), lets you pick the devices
-and give each a login, finds your Telegram chat from `/start`, and writes the three files.
+router's DHCP list and the fixed addresses in its ARP table (its address found for you, the
+two RouterOS lines for a read-only user ready to copy), pings your network once and asks each
+device a few ports to tell what it is; lets you tick the devices and give each its own login,
+tried on the spot; finds your Telegram chat from `/start`; and writes the three files. The owl stays off until you tell lanowl where Ollama runs (Settings → The
+model): nothing warns about a model you have not set up.
 Everything else in `config.yaml`, every login and every token can be changed from the gear,
 too; a password or a token goes in and is never shown again. On Linux, allow unprivileged
 ping first (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
@@ -123,8 +126,10 @@ to look into something; leave them out and it simply cannot. lanowl watches its 
 a change to it that grants more than `mikrotik.lanowl_policy` is reported like any other
 configuration change.
 
-Then type its address, the user and the password in the first-run setup (or Settings → Add
-from the router's list). By hand instead: in `config.yaml`, `mikrotik.dhcp_source:
+Then type its address (`192.168.88.1`; the setup fills in your gateway), the user and the
+password in the first-run setup (or Settings → Add from the router's list), which also gives
+the first two lines above with lanowl's address filled in. The third keeps WebFig over plain
+HTTP from your own computer out too: yours to choose. By hand instead: in `config.yaml`, `mikrotik.dhcp_source:
 "http://192.168.88.1"` and `mikrotik.credentials: router-read`, and in `secrets.yaml` that
 login: `router-read: {user: lanowl, password: "a long one"}`.
 

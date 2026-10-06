@@ -5,11 +5,12 @@ What happens after `docker compose up -d`, and what is worth tuning in the first
 ## Right away
 
 - **The first sweep** runs within a minute: every device in the inventory is probed, and the
-  dashboard fills. A device is shown down only after two missed sweeps in a row
+  dashboard fills. Until then a grey bar says it is under way; it turns red only if no sweep
+  has come three minutes after the start. A device is shown down only after two missed sweeps in a row
   (`cadence.debounce_fails`), so a single lost ping never turns anything red.
 - **The internet** gets its own loop: the addresses in `wan.targets` are pinged every 15
   seconds. The dashboard's Internet card fills as the record grows.
-- **The owl's first audit** (with a model) runs at the first sweep, then every hour
+- **The owl's first audit** (with a model set, [The model](../setup/model.md)) runs at the first sweep, then every hour
   (`cadence.llm_interval_s`). It sends a digest only if it has something new to say; on a
   healthy network you hear nothing.
 

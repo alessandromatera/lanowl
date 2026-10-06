@@ -805,7 +805,8 @@ class Dashboard:
         return web.json_response({
             "ok": True, "now": time.time(), "conv": self.chats.view(str(request.query.get("c", ""))),
             "recent": self.chats.recent(),
-            "model": {"off": bool(a.no_llm), "cli": bool(a._no_llm_cli), "busy": bool(a._llm_busy),
+            "model": {"off": bool(a.no_llm), "cli": bool(a._no_llm_cli),
+                      "unset": bool(getattr(a, "_no_model", False)), "busy": bool(a._llm_busy),
                       "audit": audit is not None and not audit.done(),
                       "queued": len([t for t in self.chats.pending() if not t.get("started")])},
         }, dumps=_dumps)

@@ -41,6 +41,7 @@ from typing import Optional
 
 from .login import MAX_LEN, MIN_LEN, WAIT_S as PW_WAIT_S, hash_password
 from .memory import strip_footer
+from .model import NO_MODEL
 from .pause import find_devices
 from .prompts import (QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
                       investigation_brief, with_actions, with_memory_tools, with_shell)
@@ -265,6 +266,8 @@ class Chat:
         v = a.model_view()
         if v["cli"]:
             return "🔌 The local model is off for this run (lanowl was started with --no-llm)."
+        if v.get("unset"):
+            return f"🦉 The owl is off: {NO_MODEL}."
         if v["on"]:
             return (f"🦉 The owl is awake: the local model is <b>on</b>{' (' + _html(v['name']) + ')' if v['name'] else ''}."
                     "\n<i>/model off</i> switches it off: no diagnoses, answers or reviews; alerts "
@@ -598,9 +601,13 @@ class Chat:
 
     def _off_text(self, stopped: bool) -> str:
         rep = self.a._last_report
-        head = ("🦉 The owl fell asleep before it could answer (the local model was switched off)."
-                if stopped else "🦉 The owl is asleep (the local model is off), so it can't answer questions.")
-        tail = "" if self.a._no_llm_cli else " <i>/model on</i> switches it back on."
+        if getattr(self.a, "_no_model", False) and not self.a._no_llm_cli:
+            head, tail = "🦉 No model is set yet, so the owl can't answer questions.", \
+                " Settings → The model says where Ollama runs."
+        else:
+            head = ("🦉 The owl fell asleep before it could answer (the local model was switched off)."
+                    if stopped else "🦉 The owl is asleep (the local model is off), so it can't answer questions.")
+            tail = "" if self.a._no_llm_cli else " <i>/model on</i> switches it back on."
         return (head + tail + (" Here is what I know for certain:\n\n"
                                + format_digest(rep, title="Right now") if rep else ""))
 

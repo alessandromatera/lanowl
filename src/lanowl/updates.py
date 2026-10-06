@@ -1130,6 +1130,7 @@ class Updates:
                 "findings": sorted(({k: v for k, v in f.items() if k != "fp"} for f in fs),
                                    key=lambda f: (not f["page"], f["key"])),
                 "scan": {"ts": s.get("done"), "devices": s.get("devices"), "error": s.get("error"),
+                         "deny": sorted(self.scan_deny),
                          "day": self.scan_day,
                          "check": self.a.cves.view() if getattr(self.a, "cves", None) is not None else None,
                          "found": {ip: self._found_view(ip, v) for ip, v in (s.get("found") or {}).items()}}}

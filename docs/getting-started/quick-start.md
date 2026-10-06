@@ -36,28 +36,66 @@ router's log times are read in it.
 
 ## 3. Your router
 
-lanowl reads your router's DHCP list to find your devices. Type its address
-(`http://192.168.88.1`), and the user and password lanowl logs in with: a read-only user is
-enough ([making one on a MikroTik](../setup/mikrotik.md)). **Try the router** logs in and
-counts the addresses on its DHCP list. Nothing is written yet.
+lanowl reads your router's DHCP list to find your devices. Its address is filled in already:
+lanowl's gateway, marked "found", or a guess at your network's `.1`, marked as a guess. Change it
+if it is wrong; `192.168.88.1` is enough, without `http://`. Then the user and password lanowl
+logs in with: a read-only user is enough. No such user yet? **Make one: 2 lines to paste on the
+router** shows the two RouterOS lines, with lanowl's address in them and a Copy button
+([more on a MikroTik](../setup/mikrotik.md)). **Try the router** logs in and counts the
+addresses on its DHCP list, and says so if that user may also change the router (a read-only
+one is safer). Nothing is written yet.
 
 The password goes into `secrets.yaml` at the last step and is never shown again, on this page
 or any other. It crosses your network once, in plain HTTP unless lanowl sits behind an HTTPS
 proxy, as the dashboard password does.
 
-Not a MikroTik? lanowl reads DHCP only from RouterOS. **Sweep the network instead** pings every
-address of the main network once and lists who answered.
+Not a MikroTik, or no router login? **Next, without the router** finds your devices without
+it, with the ping and the probe below. Your network is the main site's if Settings → Sites
+names one, else the `/24` your router's address is on, else lanowl's own `/24`.
 
-## 4. Your devices
+## 4. Find my devices
 
-Pick what to watch from the list. Each gets a name, a group, a criticality and a ping check.
-A kind guessed from the maker (a MikroTik, a Shelly, a Reolink) is marked as a guess.
+**Next: find my devices** takes about half a minute and changes nothing anywhere. It looks in
+three places, then asks each device a question:
 
-With a kind, a device asks for its login right there: the user and the password lanowl logs
-in with, and then lanowl can check its updates, back it up and reboot it when you approve.
-Leave them empty and it is only watched. Instead of a password, a Linux machine can use
-lanowl's own ssh key: the page gives the one line to run on it, ready to copy. Or pick a login
-that is there already, to share one between devices.
+- the router's DHCP list;
+- its ARP table: the devices with a fixed address (switches, access points, cameras, servers),
+  which hold no lease;
+- one ping to every address of your network;
+- then a few ports on each device it found, once (22, 80, 443, 554, 631, 1883, 8006, 8123,
+  8291, 9000, 11434): what answers tells what it is. Port 8291 is a MikroTik, 8123 Home
+  Assistant, 9000 with 554 a Reolink, `/shelly` a Shelly, LuCI an OpenWrt, ssh's greeting a
+  Linux machine. Only addresses of your home network are asked, and the answers are kept for
+  an hour, so a reload asks nothing again.
+
+The page says what it looked at and how many each source gave. Then the devices, grouped
+(Router and Wi-Fi, Servers, Cameras, Smart home, Other, Don't know yet, Phones), each with its
+address, where it was seen (DHCP, ARP, ping), whether it is here now, and **why** lanowl thinks
+it is what it says ("port 8123 answers like Home Assistant"). What it recognised is ticked;
+phones, tablets, laptops and what it does not know are listed but not ticked. A device lanowl
+already watches is marked so. **Add a device by address** asks one more the same way.
+
+Each ticked one gets a name (its DHCP name, a Shelly's own, else what it is and its number), a
+group, how much it matters, in words (*Message me at once, day or night* · *In the next digest,
+as a serious problem* · *In the next digest* · *Mentioned in the digest, never a problem* ·
+*Just noted, never a problem*), a kind, and its login:
+
+- **A user and a password**, the usual user filled in (`admin` on a MikroTik or a Reolink, `root`
+  on OpenWrt), **Show** to read back what you typed, and **Try**: one login the way lanowl will
+  log in, and the device's own answer, word for word ("Permission denied (publickey,password)."),
+  or what it is ("RLN8-410 · v3.3.0"). Nothing is written by a Try. Leave the password empty and
+  the device is only watched.
+- **The same login as** another device you typed one for: nine cameras, one password typed once.
+- **lanowl's own ssh key**, for a Linux machine or a kind of your own: the page gives the one line
+  to run on it. Other kinds log in with a password only.
+- **Home Assistant** takes a token, not a password: the page says where to make one (your
+  profile → Security → Long-lived access tokens) and links there. Its address is filled in for
+  you.
+- **A Shelly** needs no login: lanowl talks to it the way its own app does. Its Try reads what it
+  is. One with a password set on it can only be watched.
+
+The router itself is always watched, with **the same login as above** chosen once that login
+worked: if it may do more than read, lanowl can check its updates and back it up too.
 
 ## 5. Telegram
 
@@ -72,13 +110,22 @@ Optional: **Skip** it and the dashboard works alone. Settings → Secrets sets t
 
 ## 6. Write
 
-The last step lists what it will write into each file, in words and never a password or a
-token, and checks the new files with `lanowl --check`'s rules: anything wrong is said there. **Write and restart** writes all
-three and restarts lanowl, which starts watching. The first sweep is done within a minute.
-Send `/start` to your bot: it answers with what it can do.
+The last step asks what lanowl does with the devices it can log in to, each a switch, in
+words: check their updates each morning, review what each exposes, tell what changed in their
+settings (all three on), and reboot or update one when you approve (off). Each applies where the
+device's kind can do it. Then it lists what it will write into each file, in words and never a
+password or a token, and checks the new files with `lanowl --check`'s rules: anything wrong is
+said there. **Write and restart** writes all three, at once, and restarts lanowl, which starts
+watching. A grey bar says the first sweep is under
+way; it is done within a minute. Telegram gets one line saying what was set up. Send `/start`
+to your bot: it answers with what it can do.
 
 Next, in Settings (the gear): **The model**, where Ollama runs for the owl's answers
-([The model](../setup/model.md)), and the features you want, each off until you switch it on.
+([The model](../setup/model.md)). Until then the owl is off: lanowl asks no model, checks for
+none and warns about none, and the owl's card on Now says where to set it. Settings opens on
+the essentials (the model, Telegram, sites, updates, security, backups, approvals, the shell);
+every other key of `config.yaml` is under **Every setting**. A switch that is not in your file
+shows lanowl's own default for it, not the example's.
 
 ## Check the plan
 

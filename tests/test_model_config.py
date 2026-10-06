@@ -1,7 +1,7 @@
 """The model's settings: run with `python -m tests.test_model_config`.
 
   1. config.yaml's `model:` section reaches the agent, the dashboard and the report; without
-     one, the defaults; LANOWL_MODEL_URL wins over the file;
+     one there is no model (the owl is off, test_model_switch); LANOWL_MODEL_URL wins over the file;
   2. `lanowl --check` flags what it would not read: a leftover `ollama:` section, the old
      `model.model` key, a provider that is not built yet — each a silent fall back to the
      defaults otherwise.
@@ -15,7 +15,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from lanowl.agent import LlmAgent
-from lanowl.model import DEFAULT_MODEL, load_config, model_name, model_report
+from lanowl.model import DEFAULT_MODEL, load_config, model_name, model_report, model_set
 
 _fails = []
 
@@ -82,8 +82,15 @@ def test_check():
     check(bad == 1 and "should be a section" in text, "a value instead of a section is ✗")
 
     text, bad = model_report({})
-    check(bad == 0 and f"Model: ollama · {DEFAULT_MODEL} at http://127.0.0.1:11434" in text,
-          "no section at all is fine: the defaults")
+    check(bad == 0 and "no model set: the owl is off" in text and "127.0.0.1" not in text,
+          "no section at all (a new install): no model, the owl is off — not a ✗, and no address made up")
+    check(not model_set({}) and model_set({"model": {"provider": "ollama"}}) and not model_set({"model": {}}),
+          "a model is set by a `model:` section with something in it")
+    os.environ["LANOWL_MODEL_URL"] = "http://192.168.88.6:11434"
+    try:
+        check(model_set({}), "...or by LANOWL_MODEL_URL")
+    finally:
+        os.environ.pop("LANOWL_MODEL_URL", None)
 
 
 if __name__ == "__main__":

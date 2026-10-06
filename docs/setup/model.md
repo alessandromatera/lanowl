@@ -7,6 +7,11 @@ works the same with the model switched off.
 
 ## Setting it up
 
+Until `config.yaml` has a `model:` section (or `LANOWL_MODEL_URL` gives one), there is no model:
+the owl is off. lanowl asks nothing, checks no model server and warns about none; the alerts,
+the digests and the dashboard work as always, and the owl's card on Now says where to set one.
+A new install starts this way.
+
 1. Install Ollama on the machine with the most memory or the best GPU (it can be another
    machine than lanowl's).
 2. Pull a model with tool calling, for example `ollama pull qwen3.8:27b`, the one lanowl is

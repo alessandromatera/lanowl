@@ -420,6 +420,34 @@ def test_formats():
           "the weekly")
 
 
+# --- 6. no model set (a new install) -----------------------------------------------------------
+def test_no_model():
+    print("\n-- no `model:` in config.yaml: the owl is off, nothing probed, nothing missing --")
+    out = {}
+
+    async def go(d):
+        m, a = _auditor(d, {"model": None})
+        out["off"] = (a.no_llm, a.model_view()["unset"], a.model_view()["on"])
+        out["on"] = a.set_model(True, "dashboard")
+        out["probe"] = await a._probe_ollama()
+        snap, rep = _sweep(a)
+        out["issues"] = [i.get("device") for i in rep.get("issues") or []]
+        out["health"] = rep.get("overall_health")
+        out["cmd"] = a.chat.model_command("")
+        out["off_text"] = a.chat._off_text(False)
+        m2, a2 = _auditor(d)
+        out["set"] = (a2.no_llm, a2.model_view()["unset"])
+
+    with tempfile.TemporaryDirectory() as d:
+        asyncio.run(go(d))
+    check(out["off"] == (True, True, False), "no model: off, and said to be unset (not switched off)")
+    check(not out["on"]["ok"] and "no model set" in out["on"]["text"], "it cannot be switched on: it says where to set one")
+    check(out["probe"] is None, "Ollama is not probed")
+    check("Ollama" not in out["issues"] and out["health"] == "ok", f"no Ollama warning, not degraded ({out['issues']})")
+    check("no model set" in out["cmd"] and "Settings → The model" in out["off_text"], "/model and a question say how to set one")
+    check(out["set"] == (False, False), "with a `model:` section the owl is on, as before")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

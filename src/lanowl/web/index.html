@@ -74,6 +74,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .stale[hidden]{display:none}
 .stale{max-width:1180px;margin:0 auto 8px;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:600;
   background:color-mix(in srgb,var(--red) 14%,var(--card));color:var(--red-t);display:flex;gap:8px;align-items:center}
+.stale.calm{background:var(--card2);color:var(--ink2);font-weight:500}
+.stale.calm .spin{width:14px;height:14px}
 
 /* ---- tab bar: bottom on a phone, a segmented control in the top bar from 900px ---- */
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:space-around;
@@ -936,6 +938,17 @@ html.modal{overflow:hidden}
 .cmd{display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--fill2);border-radius:9px;padding:7px 7px 7px 10px}
 .cmd code{background:none;padding:0;font-size:11.5px;flex:1;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,"SF Mono",Menlo,monospace}
 .cmd .sbtn{min-height:28px;padding:0 9px;font-size:12.5px}
+.cmd code.ml{white-space:pre-wrap}
+.grp{display:flex;align-items:baseline;gap:8px;margin:18px 4px 6px;font-size:13px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+.grp .r{margin-left:auto;font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink3)}
+.pk .why{display:block;font-size:12.5px;color:var(--ink2);margin-top:3px}
+.pk .how{display:inline-flex;gap:3px;margin-left:6px}.pk .how span{font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:5px;background:var(--fill);color:var(--ink2)}
+.pk .meta .here{margin-left:6px}
+.pk .pkm .ml{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--ink2)}
+.pk .pkm .ml.wide{grid-column:1/-1}
+.scan{background:var(--card);border:1px solid var(--sep);border-radius:var(--r);padding:6px 12px;margin-bottom:10px}
+.scan .ln{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px}.scan .ln+.ln{border-top:1px solid var(--sep)}
+.scan .ln b{margin-left:auto}.scan .ln .spin{width:14px;height:14px}
 .tgc h4{margin:0 0 3px;font-size:15px;font-weight:650;display:flex;gap:8px;align-items:center}
 .tgc h4 i{font-style:normal;width:21px;height:21px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:11.5px;font-weight:700;flex:none}
 .tgc.done h4 i{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green-t)}
@@ -1039,7 +1052,7 @@ html.modal{overflow:hidden}
 
   <section class="view" id="v-sec" role="tabpanel" aria-label="Security">
     <h1 class="ttl">Security</h1>
-    <p class="sub">What could let someone in, and whether every machine is patched and backed up. Checked by itself every morning at <span id="sec-at">06:30</span>; only what matters goes to Telegram.</p>
+    <p class="sub">What could let someone in, and whether every machine is patched and backed up. <span id="sec-when">Checked by itself every morning at <span id="sec-at">06:30</span>; only what matters goes to Telegram.</span></p>
     <div class="chips sitechips" id="sec-sites" role="group" aria-label="Site"></div>
     <div id="sec"></div>
   </section>
@@ -1247,7 +1260,7 @@ function put(el, html) {
 
 // ---------------------------------------------------------------- vocabulary
 const HEALTH = {ok: ["All good", "check", "green"], degraded: ["Degraded", "warn", "orange"],
-                critical: ["Critical", "xo", "red"], unknown: ["Waiting", "clock", "gray"]};
+                critical: ["Critical", "xo", "red"], unknown: ["Waiting", "clock", "gray"], empty: ["Nothing watched yet", "clock", "gray"]};
 const SEV = {critical: "red", high: "orange", warning: "yellow", info: "gray"};
 const DSTATE = {up: ["Up", "green"], asleep: ["Asleep on schedule", "gray"], paused: ["Paused — not watched", "indigo"], held: ["Rebooting — alerts held", "indigo"], shadow: ["Unreachable — behind a link that is down", "orange"], down: ["Down", "red"]};
 const GROUP_ORDER = ["network", "servers", "services", "vpn", "security", "cameras", "energy", "home", "iot", "media"];
@@ -1319,14 +1332,19 @@ function dayAxis(t0, t1, short) {
 
 // ---------------------------------------------------------------- header + tabs
 function renderHeader(d) {
-  const h = HEALTH[d.health] || HEALTH.unknown;
+  const h = d.sweep.ts && !(d.devices || []).length ? HEALTH.empty : HEALTH[d.health] || HEALTH.unknown;
   const chip = $("hchip");
   chip.className = "hchip c-" + h[2];
   put(chip, ic(h[1]) + esc(h[0]));
-  const stale = !d.sweep.ts || NOW - d.sweep.ts > 180;
+  // just started (a restart, a new install): the first sweep is under way, nothing is wrong yet
+  const starting = !d.sweep.ts && d.sweep.started && NOW - d.sweep.started < 180;
+  const stale = !starting && (!d.sweep.ts || NOW - d.sweep.ts > 180);
   const st = $("stale");
-  st.hidden = !stale;
-  if (stale) put(st, ic("warn") + (d.sweep.ts ? "No fresh sweep for " + esc(dur(NOW - d.sweep.ts)) + " — showing the last one." : "Waiting for lanowl's first sweep."));
+  st.hidden = !stale && !starting;
+  st.classList.toggle("calm", !!starting);
+  if (starting) put(st, `<span class="spin"></span>lanowl just started: its first sweep is under way.`);
+  else if (stale) put(st, ic("warn") + (d.sweep.ts ? "No fresh sweep for " + esc(dur(NOW - d.sweep.ts)) + " — showing the last one."
+    : "No sweep since lanowl started" + (d.sweep.started ? " " + esc(dur(NOW - d.sweep.started)) + " ago" : "") + ": its log says why (docker exec lanowl tail /state/lanowl.log)."));
   $("live").classList.toggle("bad", stale);
   document.title = ({ok: "🟢", critical: "🔴", degraded: "🟡"}[d.health] || "⚪") + " lanowl";
   const col = {ok: "#30d158", degraded: "#ff9f0a", critical: "#ff453a"}[d.health] || "#8e8e93";
@@ -1344,6 +1362,9 @@ function renderHeader(d) {
 function tickAgo() {
   const d = S.d;
   $("ago").textContent = !d ? "connecting…" : d.sweep.ts ? "swept " + ago(d.sweep.ts) : "no sweep yet";
+  // the sidebar's own counters, every second like the header's: not only when the state comes
+  document.querySelectorAll("#sys [data-dur]").forEach(e => { if (e.dataset.dur) e.textContent = dur(now() - +e.dataset.dur); });
+  document.querySelectorAll("#sys [data-ago]").forEach(e => { e.textContent = ago(+e.dataset.ago); });
 }
 
 function setTab(t, fromHash) {
@@ -1413,8 +1434,8 @@ function renderSites(d) {
   const withD = (d.sites || []).filter(x => x.dhcp);
   if (S.site === "all") {
     put("sitedhcp", withD.length ? `<div class="sh">Not watched, on each network</div><div class="list">` + withD.map(x =>
-      `<button class="row" type="button" data-act="site" data-sk="${esc(x.key)}"><span class="sd c-${x.dhcp.unknown ? "yellow" : "gray"}"></span><span class="rt"><span class="rn">${esc(x.name)}</span>
-        <span class="rs">${x.dhcp.rows.length} device${x.dhcp.rows.length === 1 ? "" : "s"} · ${x.dhcp.unknown ? `${x.dhcp.unknown} nobody knows` : "all known"}</span></span>${ic("chev", "chev")}</button>`).join("") + `</div>` : "");
+      `<button class="row" type="button" data-act="site" data-sk="${esc(x.key)}"><span class="sd c-${x.dhcp.rows.some(r => r.new && !r.known) ? "yellow" : "gray"}"></span><span class="rt"><span class="rn">${esc(x.name)}</span>
+        <span class="rs">${x.dhcp.rows.length} device${x.dhcp.rows.length === 1 ? "" : "s"} · ${x.dhcp.unknown ? `${x.dhcp.unknown} not watched` : x.dhcp.rows.length && !x.dhcp.rows.some(r => r.routed !== false) ? "not reachable from here" : "all watched or known"}${x.dhcp.rows.some(r => r.new && !r.known) ? " · new ones" : ""}</span></span>${ic("chev", "chev")}</button>`).join("") + `</div>` : "");
     return;
   }
   const s = withD.find(x => x.key === S.site);
@@ -1435,14 +1456,14 @@ function renderSites(d) {
   // never on the network before, or here since when — remembered for good, so a friend back
   // after months is "here since" the day of the first visit
   const seen = r => r.new ? `<span class="rs wrap"><span class="tagx c-yellow">new</span> first seen ${esc(clock(r.first_seen))}${r.guest ? " · guest Wi-Fi" : ""}</span>`
-    : r.first_seen || r.guest ? `<span class="rs wrap">${[r.first_seen ? (r.here ? "here since " : "first seen ") + (r.before ? "before " : "") + esc(dmy(r.first_seen)) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · ")}</span>` : "";
+    : r.first_seen || r.guest ? `<span class="rs wrap">${[r.first_seen ? (r.before ? "already here when lanowl first looked, " : r.here ? "here since " : "first seen ") + esc(dmy(r.first_seen)) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · ")}</span>` : "";
   // when the router or lanowl last heard from it — not when a table last listed it
   const lastTxt = r => r.here ? "here now" : r.heard ? `last seen ${esc(clock(r.heard))} (${esc(ago(r.heard))})`
-    : D.heard_from ? `not heard from since ${esc(clock(D.heard_from))}` : "";
+    : D.heard_from ? `the router has not heard from it since ${esc(clock(D.heard_from))}` : "";
   const last = r => lastTxt(r) ? `<span class="rs wrap">${lastTxt(r)}</span>` : "";
   // no DHCP lease: an address set by hand, seen in the router's ARP table or by the monthly scan —
   // or only a stale ARP entry, which says nothing of how its address was set
-  const fixed = r => r.how === "arp" ? `<span class="rs wrap">${r.stale ? "stale ARP entry — no DHCP lease" : "fixed address — no DHCP"}</span>`
+  const fixed = r => r.how === "arp" ? `<span class="rs wrap">${r.stale && !r.here ? "fixed address, no DHCP · its ARP entry is old: the router has not talked to it lately" : "fixed address — no DHCP"}</span>`
     : r.how === "scan" ? `<span class="rs wrap">fixed address — found by the scan${r.found ? " of " + esc(dmy(r.found)) : ""}</span>` : "";
   const row = r => `<div class="row row2"><span class="rt"><span class="rn">${title(r)}</span>
       <span class="rs wrap mono">${esc(r.ip)} · ${esc(r.mac)}</span>${maker(r) ? `<span class="rs wrap">${maker(r)}</span>` : ""}${fixed(r)}${seen(r)}${last(r)}${r.routed === false ? `<span class="rs wrap">not routed here — the tunnels do not carry that network, so it cannot be watched</span>` : ""}</span>${btns(r) ? `<span class="rbtns">${btns(r)}</span>` : ""}</div>`;
@@ -1539,7 +1560,7 @@ function renderStatus(d) {
   const missed = devs.filter(x => devState(x, sh) === "down" && ["critical", "high", "warning"].includes(x.criticality)
                                   && !all.some(i => i.ip === x.ip));
   const tone = !d.sweep.ts ? "gray" : worst ? TONE[worst] || "orange" : missed.length ? "gray" : "green";
-  const title = !d.sweep.ts ? "Waiting for the first sweep" : iss.length > 1 ? `${iss.length} problems` : iss.length ? issueTitle(iss[0])
+  const title = !d.sweep.ts ? "Waiting for the first sweep" : !devs.length ? "Nothing watched yet" : iss.length > 1 ? `${iss.length} problems` : iss.length ? issueTitle(iss[0])
     : missed.length === 1 ? `${missed[0].name} missed a check` : missed.length ? `${missed.length} devices missed a check` : "All clear";
   const watched = devs.length - n.paused;
   const said = !d.sweep.ts ? "" : [`${n.up} of ${watched} devices answering${n.asleep ? `, ${n.asleep} asleep on schedule` : ""}${n.held ? `, ${n.held} rebooting` : ""}${n.paused ? `, ${n.paused} paused` : ""}.`,
@@ -1616,9 +1637,9 @@ function renderLanes24(d) {
 function renderSys(d) {
   const sw = d.sweep || {}, l = d.llm || {}, fresh = sw.ts && NOW - sw.ts < 180, off = (d.model_switch || {}).on === false;
   put("sys", `<div class="h">lanowl</div>
-    <div><span class="sd c-${fresh ? "green" : "red"}"></span>Last sweep<span class="v">${sw.ts ? esc(ago(sw.ts)) : "none yet"}</span></div>
+    <div><span class="sd c-${fresh ? "green" : "red"}"></span>Last sweep<span class="v"${sw.ts ? ` data-ago="${esc(sw.ts)}"` : ""}>${sw.ts ? esc(ago(sw.ts)) : "none yet"}</span></div>
     <div><span class="sd c-${off ? "gray" : l.running ? "indigo" : l.fresh ? "green" : "gray"}"></span>Model audit<span class="v">${off ? "switched off" : l.running ? "running…" : l.at ? esc(ago(l.at)) : "not yet"}</span></div>
-    <div><span class="sd c-gray"></span>Running for<span class="v">${sw.started ? esc(dur(NOW - sw.started)) : "—"}</span></div>
+    <div><span class="sd c-gray"></span>Running for<span class="v" data-dur="${esc(sw.started || "")}">${sw.started ? esc(dur(now() - sw.started)) : "—"}</span></div>
     <div><span class="sd c-gray"></span>Weekly review<span class="v">${d.weekly_last ? esc(wd(d.weekly_last) + " " + hm(d.weekly_last)) : "not yet"}</span></div>`);
 }
 
@@ -1686,14 +1707,22 @@ function renderNet(d) {
 function modelSwHtml(d) {
   const m = d.model_switch || {};
   const expl = m.cli ? "Off for this run — lanowl was started with --no-llm."
+    : m.unset ? "No model set yet: Settings → The model says where Ollama runs."
     : m.on ? `${m.name ? m.name + ": audits" : "Audits"}, diagnoses, answers and reviews. Off stops them and frees its memory; alerts and digests go on.`
     : `Off since ${clock(m.since)}${m.by ? " from " + (BY[m.by] || m.by) : ""}: no audits, diagnoses, answers or reviews. Alerts and digests go on without it.`;
   return `<div class="list"><label class="row mon"><span class="sd c-${m.on ? "green" : "gray"}"></span><span class="rt"><span class="rn">Local model</span><span class="rs wrap">${esc(expl)}</span></span>
-    <span class="sw"><input type="checkbox" data-model="1" aria-label="Local model"${m.on ? " checked" : ""}${m.cli || S.modelBusy ? " disabled" : ""}><span></span></span></label></div>`;
+    <span class="sw"><input type="checkbox" data-model="1" aria-label="Local model"${m.on ? " checked" : ""}${m.cli || m.unset || S.modelBusy ? " disabled" : ""}><span></span></span></label></div>`;
 }
 
 function renderModel(d) {
   const l = d.llm || {}, m = d.model_switch || {};
+  if (m.on === false && m.unset && !m.cli) {
+    put("model", `<div class="sh">The owl</div><div class="card"><div class="mh">${ic("owl")}<b>No model yet</b><span class="tagx c-gray">off</span></div>
+      <p class="mtext muted">The owl reads the network, explains what went wrong and answers your questions, with a model you run on your own machine (Ollama). Tell lanowl where it runs: <a class="lnk" href="#set/s/model">Settings → The model</a>. Everything else works without it.</p>
+      <div class="ibtns" style="align-items:center"><button class="sbtn" data-act="check"${l.running ? " disabled" : ""}>${ic("refresh")}Digest now</button>
+      <span class="fine">what the monitor sees, to Telegram</span></div></div>`);
+    return;
+  }
   if (m.on === false) {
     put("model", `<div class="sh">The owl</div><div class="card"><div class="mh">${ic("owl")}<b>The owl is asleep</b><span class="tagx c-gray">off</span></div>
       <p class="mtext muted">${m.cli ? "lanowl was started with --no-llm." : `The local model is switched off${m.since ? " since " + esc(clock(m.since)) : ""} — wake it in <a class="lnk" href="#more">Ask the owl → The model</a>.`}</p>
@@ -1861,7 +1890,7 @@ const tlType = x => ({incident: "out", wan: "wan", security: "sec", action: "act
 // under Everything: what is news. The rest is one filter away
 const quietIt = x => (x.type === "incident" && x.cat !== "down") || (x.type === "check" && !x.problem) || x.type === "telegram" || x.type === "refused";
 function tlSite(d, x) {
-  if (S.site === "all") return true;
+  if (S.site === "all" || x.type === "telegram") return true;     // what lanowl told you, whatever the site
   if (x.type === "incident") return x.members.some(m => siteOf(d, m.ip) === S.site);
   if (x.type === "wan") return S.site === "home";
   if (x.type === "new_device") return x.site === S.site;
@@ -2035,7 +2064,7 @@ function renderSeen(d) {
 // the conversation itself lives on lanowl, so it is the same on the phone and the laptop.
 // While an answer is being written the page polls /api/chat every second and shows it arrive:
 // the model thinking, each read-only check it makes, then the text.
-const SUGGEST = ["Why did the internet drop last?", "Which devices are getting worse?", "Anything unusual in the logs today?", "Is the VPS being attacked?"];
+const SUGGEST = ["Why did the internet drop last?", "Which devices are getting worse?", "Anything unusual in the logs today?", "Did anyone try to log in to my servers?"];
 const CH = {cid: load("chat", null), conv: null, recent: [], model: {}, loaded: false, busy: false, timer: 0,
             seen: load("chatSeen", 0), bottom: false, arm: null, armT: 0, how: new Set()};
 const turnsOf = () => (CH.conv && CH.conv.turns) || [];
@@ -2128,6 +2157,7 @@ function renderAsk() {
   syncSend();
   const m = CH.model || {}, p = pendingTurn();
   put("askfoot", m.off ? (m.cli ? "The model is off for this run of lanowl (--no-llm)." :
+    m.unset ? `🦉 No model is set yet, so the owl can't answer: <a class="lnk" href="#set/s/model">Settings → The model</a> says where Ollama runs.` :
     `🦉 The owl is asleep: the local model is switched off. <button class="more" type="button" data-act="modelon"${S.modelBusy ? " disabled" : ""}>Wake it</button>`) :
     p ? "You can type the next question while it answers." + ` <span class="kb">Esc stops it.</span>` :
     turns.length ? `Follow-ups remember this conversation. <span class="kb">Enter sends · Shift+Enter for a new line.</span>` :
@@ -2235,6 +2265,8 @@ $("chats").addEventListener("click", e => { if (e.target === $("chats")) closeCh
 document.addEventListener("toggle", e => {
   const id = e.target.dataset && e.target.dataset.how;
   if (id) e.target.open ? CH.how.add(id) : CH.how.delete(id);
+  const keep = e.target.dataset && e.target.dataset.keep;      // a fold remembered in this browser
+  if (keep) save(keep, e.target.open);
 }, true);
 
 // ---------------------------------------------------------------- proposed actions
@@ -2623,11 +2655,11 @@ function renderMore(d) {
   const sw = d.sweep || {}, l = d.llm || {};
   const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`;
   const A = d.about || {};
-  put("about", modelSwHtml(d) + `<div class="list">` + (A.model ? kv("Model", A.model) : "") +
+  put("about", modelSwHtml(d) + `<div class="list">` + ((d.model_switch || {}).unset ? kv("Model", "none set") : A.model ? kv("Model", A.model) : "") +
     kv("Audits", (d.model_switch || {}).on === false ? "switched off" : A.llm_mode === "times" ? `at ${(A.llm_times || []).join(", ")}, and on every incident` : `every ${dur(A.llm_every_s || 3600)}, and on every incident`) + kv("Running since", sw.started ? clock(sw.started) + " · " + dur(NOW - sw.started) : "—") +
     kv("Sweeps since then", sw.sweeps ?? "—") + kv("Last sweep", sw.ts ? ago(sw.ts) : "—") +
     kv("Last model audit", l.at ? ago(l.at) : "—") + kv("Weekly review", d.weekly_last ? clock(d.weekly_last) : "not yet") +
-    loginHtml(d, kv) + `</div>`);
+    `</div>`);
 }
 
 // The login (login.py): where the password came from, how long this browser stays in — a
@@ -2777,7 +2809,7 @@ function secItems(d, all) {
               sub: logSub(x)});
   for (const s of d.sites || []) if (s.dhcp && s.dhcp.unknown && (all || S.site === "all" || S.site === s.key))
     out.push({sev: "info", top: false, go: s.key, from: "DHCP", sub: "Watch them, or mark them Known",
-              text: `${s.dhcp.unknown} device${s.dhcp.unknown > 1 ? "s" : ""} on ${s.name}'s network that nobody knows`});
+              text: `${s.dhcp.unknown} device${s.dhcp.unknown > 1 ? "s" : ""} on ${s.name}'s network, neither watched nor marked known`});
   return out.sort((a, b) => (RANK[a.sev] ?? 3) - (RANK[b.sev] ?? 3));
 }
 // A log event's text: what the line said, the model's read of it when a rule paged first, and
@@ -2844,7 +2876,9 @@ function renderSec(d) {
   const top = secItems(d, true).filter(x => x.top && !x.dis).length;      // the badge: every site
   b.hidden = !top; b.textContent = top || "";
   const items = secItems(d), R = U.running || {}, hs = (U.hosts || []).filter(x => inSite(d, x.ip)), sc = U.scan || {};
-  $("sec-at").textContent = U.at || "06:30";
+  const noModel = (d.model_switch || {}).on === false;
+  if (U.enabled === false) $("sec-when").textContent = "The morning check is off until you switch it on: Settings → Updates.";
+  else $("sec-when").innerHTML = `Checked by itself every morning at <span id="sec-at">${esc(U.at || "06:30")}</span>; only what matters goes to Telegram.`;
   const found = Object.entries(sc.found || {}).filter(([ip]) => inSite(d, ip));
   const matters = items.filter(x => x.top && !x.dis), later = items.filter(x => !x.top && !x.dis), dism = items.filter(x => x.dis);
   const hand = handledRows(d);
@@ -2852,14 +2886,14 @@ function renderSec(d) {
   const busy = R.check || X.running, unread = (X.machines || []).filter(m => !m.ok), conf = found.filter(([, v]) => v.confirmed).length;
   const kpi = (v, l, c) => `<div class="kpi${v && c ? " c-" + c : ""}"><b>${v}</b><span>${esc(l)}</span></div>`;
   let h = `<div class="secgrid"><div class="card"><div class="mh">${ic("owl")}<b>The model's review</b><span class="fine" style="margin-left:auto">${X.reviewed ? esc(ago(X.reviewed)) : "not yet"}</span></div>
-    ${X.summary ? `<p class="mtext">${linkify(d, X.summary)}</p>` : `<p class="mtext muted">No review yet: it runs every morning after the update check.</p>`}
+    ${X.summary ? `<p class="mtext">${linkify(d, X.summary)}</p>` : noModel ? `<p class="mtext muted">No model is set, so there is no review: the checks below run without it. <a class="lnk" href="#set/s/model">Settings → The model</a>.</p>` : U.enabled === false ? `<p class="mtext muted">No review yet: it follows the morning update check, which is off (Settings → Updates).</p>` : `<p class="mtext muted">No review yet: it runs every morning after the update check.</p>`}
     <div class="fine" style="margin-top:8px">${U.last ? "Checked " + esc(ago(U.last)) : "Not checked yet"}${unread.length ? " · not read: " + esc(unread.map(m => m.name).join(", ")) : ""}${sc.ts ? " · deep scan " + esc(clock(sc.ts)) : ""}${X.enabled ? (X.paging ? " · a new critical finding pages you, once" : ` · nothing from the review goes to Telegram before ${esc(X.page_from)}`) : ""}</div>
     <div class="ibtns"><button class="sbtn" type="button" data-act="updcheck"${busy ? " disabled" : ""}>${busy ? `<span class="spin"></span>${R.check ? "Checking…" : "Reviewing…"}` : ic("refresh") + "Check now"}</button>
       <button class="sbtn" type="button" data-act="updscan"${R.scan ? " disabled" : ""}>${R.scan ? '<span class="spin"></span>Scanning…' : ic("search") + "Deep scan"}</button></div>
-    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), scans the VPS from here, and the model reviews it all: about 6 minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks every device which software answers on its ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so the alarm and cheap IoT are left out. By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
+    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the model reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks every device which software answers on its ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so fragile groups are left out (${esc((sc.deny || ["security", "iot"]).join(", "))}: Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
     <div class="kpis">${kpi(matters.length, "to decide", "red")}${kpi(waiting, "updates waiting", "orange")}${kpi(reb, "reboots pending", "orange")}${kpi(conf, "with a CVE ≥ 7 that applies", "orange")}</div></div>`;
   h += `<div class="sh">To decide${matters.length ? ` <span class="r">${matters.length}</span>` : ""}</div><div class="card nbox">` + (matters.length ? matters.map(nitHtml).join("")
-    : `<div class="nzero">${ic("check")}${U.last ? "Nothing to decide." : "The first check runs at " + esc(U.at || "06:30") + "."}</div>`) + `</div>`;
+    : `<div class="nzero">${ic("check")}${U.last ? "Nothing to decide." : U.enabled === false ? "The morning check is off: Settings → Updates switches it on." : "The first check runs at " + esc(U.at || "06:30") + "."}</div>`) + `</div>`;
   if (later.length) h += `<div class="sh">Worth fixing, not urgent <span class="r">${later.length}</span></div><div class="list">` + later.map(itemRow).join("") + `</div>`;
   h += `<div class="sh">Machines <span class="r">tap one to update, reboot or back it up</span></div>` + fleetHtml(d);
   h += cfgHtml(d);
@@ -3059,8 +3093,9 @@ function secHtml(d, ip) {
 // on and what hangs on it, what lanowl can do to it and how. Never a login.
 const EXPECT_OFF = {day: "by day, on purpose — powered only at night", night: "at night, on purpose",
                     night_pv: "at night, on purpose (no sun)"};
-const CRIT_WORDS = {critical: "pages you the moment it is down", high: "reported in the next digest",
-                    warning: "reported in the next digest", low: "listed, never pages", info: "listed, never pages"};
+// how much a device matters, in what lanowl does when it goes down (report.py's _SEV; docs/using/alerts.md)
+const CRIT_WORDS = {critical: "Message me at once, day or night", high: "In the next digest, as a serious problem",
+                    warning: "In the next digest", low: "Mentioned in the digest, never a problem", info: "Just noted, never a problem"};
 function checkName(c) {
   return c.name ? `${c.name}${c.port ? " :" + c.port : ""}` : c.type === "icmp" ? "ping" : c.type === "arp" ? "ARP, through the router"
     : c.type === "link" ? `its link${c.iface ? " " + c.iface : ""} on the router` : c.type === "http" ? `web :${c.port || 80}`
@@ -3266,7 +3301,7 @@ function renderSheet() {
   const siteRow = x && x.can_site ? `<div class="row"><span class="sd c-gray"></span><span class="rt"><span class="rn">Another network</span><span class="rs wrap">behind this router? Make it a site: its own chip, its devices, its DHCP list</span></span>
     <button class="rowbtn" type="button" data-act="mksite">Make it a site</button></div>` : "";
   h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow + siteRow) + `<div id="sx-sec"></div>` + secH;
-  h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the model about it</button>`;
+  if ((d.model_switch || {}).on !== false) h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the model about it</button>`;
   h += `<div id="sx-details"></div>` + detailsHtml();
   const keepY = $("sheet").scrollTop;
   const rebuilt = put("sheet-in", h);
@@ -3819,7 +3854,8 @@ function renderSet() {
   if (p === "setup/telegram") return setupTelegram();
   if (p === "setup/write") return setupWrite();
   if (p === "setup/done") return setupDone();
-  return setupRouter();
+  if (p === "setup") return setupRouter();
+  put("set", `<div class="setw">${back("set", "Settings")}${setHead("No such page")}<div class="list"><div class="empty">Nothing is at #${esc(p)}.</div></div></div>`);
 }
 const SKEL = `<div class="skel" style="margin-top:22px"></div>`;
 // a page that waits for lanowl says what for, with a spinner
@@ -3853,27 +3889,41 @@ async function setHome() {
   h += pendHtml(D) + fileWarn(D);
   h += `<div class="sh">Devices</div><div class="list">
     <button class="row" type="button" data-sgo="set/devices"><span class="rico">${ic("grid")}</span><span class="rt"><span class="rn">Devices</span><span class="rs"><span class="k">inventory.yaml</span> · what lanowl watches, and what it does with each</span></span>${ic("chev", "chev")}</button>
-    <button class="row" type="button" data-sgo="setup"><span class="rico">${ic("plus")}</span><span class="rt"><span class="rn">Add from the router's list</span><span class="rs">the first-run setup: pick devices from its DHCP list</span></span>${ic("chev", "chev")}</button></div>`;
+    <button class="row" type="button" data-sgo="setup"><span class="rico">${ic("plus")}</span><span class="rt"><span class="rn">Add from the router's list</span><span class="rs">the first-run setup: pick devices from its DHCP list and its fixed addresses</span></span>${ic("chev", "chev")}</button></div>`;
+  // the essentials first, in words; every other section of config.yaml under one fold
+  const secRow = (sec, sub) => {
+    const en = sec.fields.find(f => f.path && f.path.length === 2 && f.path[1] === "enabled" && f.type === "bool");
+    const on = en ? (en.source === "file" || en.source === "env" ? en.value : en.default !== undefined ? en.default : en.example) : null;
+    const nf = sec.fields.filter(f => f.type !== "group").length;
+    return `<button class="row" type="button" data-sgo="set/s/${esc(sec.key)}"><span class="rt"><span class="rn">${esc(sec.title)}</span>
+      <span class="rs">${sub ? esc(sub) : `<span class="k">${esc(sec.key)}</span> · ${nf} setting${nf === 1 ? "" : "s"}${sec.present ? "" : " · not in your file"}`}</span></span>
+      ${en ? `<span class="rv${on ? " on" : ""}">${on ? "on" : "off"}</span>` : ""}${ic("chev", "chev")}</button>`;
+  };
+  const ESS = [["model", "where Ollama runs: the owl's answers and reviews"], ["telegram", "where lanowl writes to you"],
+               ["sites", "other networks: their DHCP lists, their devices"], ["updates", "every morning: what waits to be installed"],
+               ["exposure", "what each device exposes, every day"], ["backups", "monthly, and before an update"],
+               ["actions", "reboots and updates you approve with a button"], ["shell", "the owl's own shell, in a sandbox"]];
+  const bykey = Object.fromEntries((D.sections || []).map(x => [x.key, x]));
+  h += `<div class="sh">Essentials</div><div class="list">` + ESS.filter(([k]) => bykey[k]).map(([k, sub]) => secRow(bykey[k], sub)).join("") + `</div>`;
+  const rest = (D.sections || []).filter(x => !ESS.some(([k]) => k === x.key));
+  h += `<details class="sadv"${load("setAll", false) ? " open" : ""} data-keep="setAll"><summary>${ic("chev")}Every setting, as config.yaml has it · ${rest.length} sections</summary>`;
   let heading = null;
-  for (const sec of D.sections || []) {
+  for (const sec of rest) {
     if (sec.heading !== heading) {
       if (heading !== null) h += `</div>`;
       heading = sec.heading;
       h += `<div class="sh">${esc(heading.replace(/\s*\(.*\)$/, "") || "Settings")}</div><div class="list">`;
     }
-    const en = sec.fields.find(f => f.path && f.path.length === 2 && f.path[1] === "enabled" && f.type === "bool");
-    const on = en ? (en.source === "file" ? en.value : en.example) : null;
-    const nf = sec.fields.filter(f => f.type !== "group").length;
-    h += `<button class="row" type="button" data-sgo="set/s/${esc(sec.key)}"><span class="rt"><span class="rn">${esc(sec.title)}</span>
-      <span class="rs"><span class="k">${esc(sec.key)}</span> · ${nf} setting${nf === 1 ? "" : "s"}${sec.present ? "" : " · not in your file"}</span></span>
-      ${en ? `<span class="rv${on ? " on" : ""}">${on ? "on" : "off"}</span>` : ""}${ic("chev", "chev")}</button>`;
+    h += secRow(sec, "");
   }
   if (heading !== null) h += `</div>`;
+  h += `</details>`;
   h += `<div class="sh">lanowl</div><div class="list">
     <button class="row" type="button" data-sgo="set/secrets"><span class="rico">${ic("key")}</span><span class="rt"><span class="rn">Secrets</span><span class="rs"><span class="k">secrets.yaml</span> · set or missing, never a value</span></span>${secMissing(D) ? `<span class="rv bad">${secMissing(D)} missing</span>` : ""}${ic("chev", "chev")}</button>
     <button class="row" type="button" data-sgo="set/history"><span class="rico">${ic("undo")}</span><span class="rt"><span class="rn">History</span><span class="rs">${(D.history || []).length} save${(D.history || []).length === 1 ? "" : "s"} · undo any of them</span></span>${ic("chev", "chev")}</button>
     ${D.login.on ? `<button class="row" type="button" data-sact="password"><span class="rico">${ic("lock")}</span><span class="rt"><span class="rn">Change the password</span><span class="rs">every browser logs in again</span></span></button>` : ""}
     <button class="row" type="button" data-sact="restart"><span class="rico">${ic("refresh")}</span><span class="rt"><span class="rn">Restart lanowl</span><span class="rs">running since ${esc(clock(D.restart.since))}</span></span></button></div>`;
+  if (S.d && (S.d.login || {}).on) h += `<div class="sh">This browser</div><div class="list">${loginHtml(S.d, (k, v) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`)}</div>`;
   put("set", `<div class="setw">${h}</div>`);
 }
 const secMissing = D => ((D.secrets || {}).logins || []).filter(x => !x.set).length + ((D.secrets || {}).tokens || []).filter(x => x.needed && !x.set).length;
@@ -3895,8 +3945,10 @@ function fieldHtml(f) {
   const k = pkey(f.path), e = ST.edits[k], v = fieldVal(f), id = "f-" + k.replace(/[^A-Za-z0-9_]/g, "_");
   const lock = f.source === "env";
   const ex = f.source === "default" && f.example !== null && f.example !== undefined && f.example !== "" ? fmtV(f.example) : "";
+  const known = f.source === "default" && f.default !== undefined;    // lanowl's own default, from its code (schema.DEFAULTS)
   const help = (f.help ? esc(f.help) : "") + (lock ? `<br><span class="fq">Set in the environment (docker/.env), which wins over config.yaml: change it there.</span>`
     : f.found ? `<br><span class="fq">${f.source === "default" ? "Not in your file" : "Empty"}: lanowl uses the address it found, ${esc(f.found)}.</span>`
+    : known ? `<br><span class="fq">Not in your file: ${f.default ? "on" : "off"}, lanowl's default${ex && fmtV(f.default) !== ex ? ` (the example file has it ${esc(ex)})` : ""}.</span>`
     : f.source === "default" ? `<br><span class="fq">Not in your file: lanowl uses its built-in default${ex ? ` (the example file has ${esc(ex)})` : ""}.</span>` : "");
   const was = e ? `<div class="fwas">was ${esc(f.source === "default" ? "not in your file" : fmtV(f.value) || '""')}</div>` : "";
   const head = `<div class="fh"><label class="lab" for="${id}">${esc(f.label)}</label>${srcChip(f)}</div>`;
@@ -3906,7 +3958,7 @@ function fieldHtml(f) {
       <button class="sbtn" type="button" data-sact="password">${ic("lock")}Change the password</button><div class="fhelp">Never shown here: only its hash is kept.</div></div>`;
   }
   if (f.type === "bool") {
-    const on = v === null ? !!f.example : !!v;
+    const on = v === null ? (known ? !!f.default : !!f.example) : !!v;
     return `<div class="${cls} fswr"><div class="fb">${head}${was}${help ? `<div class="fhelp">${help}</div>` : ""}</div>
       <label class="sw"><input type="checkbox" id="${id}" data-k="${esc(k)}" data-t="bool"${on ? " checked" : ""}${lock ? " disabled" : ""}><span></span></label></div>`;
   }
@@ -4278,9 +4330,17 @@ function siteStart(key, router) {
       // from a router: named after its group (a group of its own, not one of the usual), on its /24
       const r = (X.routers || []).find(x => x.ip === router);
       const g = r && r.group && !GROUPS.includes(r.group) ? r.group : "";
-      d = {name: r ? cap(g || r.name) : "", nets: r ? router.split(".").slice(0, 3).join(".") + ".0/24" : "", router: r ? router : "", criticality: "info"};
+      d = {name: r ? cap(g || r.name) : "", nets: "", router: r ? router : "", criticality: "info"};
     }
     ST.site = {id, key, orig, d, base: JSON.stringify(d), router};
+    // its networks: read from the router itself, over its login (the page fills them in when they come)
+    if (!orig && router) post("/api/settings/site/nets", {router}).then(r => {
+      const T = ST.site;
+      if (!r.ok || !T || T.id !== id || T.d.nets) return;
+      T.d.nets = r.nets.join(", "); T.base = JSON.stringify(T.d);
+      T.netsHow = r.how === "read" ? "read from the router: the networks it serves, and its own address" : `a guess${r.said ? " (the router's list could not be read: " + r.said + ")" : ""}: add its LAN's network`;
+      if (S.setp && S.setp.startsWith("set/site/new/")) setSitePage(S.setp.slice(9));
+    }).catch(() => {});
   }
   return ST.site;
 }
@@ -4305,7 +4365,7 @@ async function setSitePage(rest) {
   h += `<div class="list">` + fld("Name", inp("name", "Office")) +
     fld("Networks", inp("nets", home ? (X.home_default || []).join(", ") : "192.168.0.0/24"),
       home ? `Empty: ${esc((X.home_default || []).join(", "))}, every address no other site has.`
-        : "The addresses on its side, comma-separated. Reached over a VPN? Add the address lanowl reaches its router at too, like 10.8.0.9/32. The most specific network wins: a site can sit inside the main one's.") +
+        : (T.netsHow ? `<b>${esc(T.netsHow)}.</b> ` : router && !d.nets ? "Reading the router's own networks… " : "") + "The addresses on its side, comma-separated. Reached over a VPN? Add the address lanowl reaches its router at too, like 10.8.0.9/32. The most specific network wins: a site can sit inside the main one's.") +
     (home ? "" : fld("Router", `<div class="fsw"><select class="fsel" data-sf="router"><option value=""${d.router ? "" : " selected"}>none: its devices are placed by address</option>${R.map(r => `<option value="${esc(r.ip)}"${r.ip === d.router ? " selected" : ""}>${esc(r.name)} · ${esc(r.ip)} · ${esc(r.kind)}</option>`).join("")}</select></div>`,
       !d.router ? "With its router, lanowl reads that network's DHCP list: what is on it, named, with Watch and Known. A router is a mikrotik or an openwrt in Settings → Devices."
         : cur && !cur.login ? `<span style="color:var(--orange-t)">${esc(cur.name)} has no login yet: give it one on its page, Settings → Devices. lanowl reads its DHCP list over ssh.</span>`
@@ -4345,7 +4405,7 @@ async function siteReview(removeKey) {
 const GUESSABLE = ["mikrotik", "openwrt", "linux", "esxi", "unifi", "homeassistant", "reolink", "shelly", "generic"];
 // the groups a device can be put in: those inventory.yaml has (its groups: and every one a
 // device uses), then the usual ones
-const GROUPS = ["network", "servers", "cameras", "home", "iot", "media", "misc"];
+const GROUPS = ["network", "servers", "cameras", "iot", "media", "misc"];
 const groupList = (have, cur) => Array.from(new Set([...(have || []), ...GROUPS, ...(cur ? [cur] : [])]));
 async function devData(force) { if (!ST.devs || force) ST.devs = await getJ("/api/settings/devices"); return ST.devs; }
 async function setDevices() {
@@ -4367,7 +4427,7 @@ function devStart(ip) {
   const V = ST.devs || {};
   const orig = ip === "new" ? null : (V.devices || []).find(d => String(d.ip) === ip) || null;
   if (!ST.dev || ST.dev.key !== ip) {
-    ST.dev = {key: ip, orig, d: JSON.parse(JSON.stringify(orig || {ip: "", name: "", group: (V.groups || [])[0] || "home", criticality: "low", checks: [{type: "icmp"}]})), ckt: "icmp"};
+    ST.dev = {key: ip, orig, d: JSON.parse(JSON.stringify(orig || {ip: "", name: "", group: "misc", criticality: "low", checks: [{type: "icmp"}]})), ckt: "icmp"};
     // its login: its own when no other device names it, one it shares, or none
     const S2 = ST.dev, c = (orig || {}).credentials, L = c && (V.logins || []).find(l => l.name === c);
     if (c && L && (L.used || []).length <= 1) Object.assign(S2, {lmode: L.how === "key" ? "own-key" : "own-pw", luser: L.user || "", lname: c, lset: L.type !== "key"});
@@ -4377,7 +4437,7 @@ function devStart(ip) {
   }
   return ST.dev;
 }
-const CRITH = {critical: "pages at once", high: "pages", warning: "in the digest", low: "in the digest, never pages", info: "reported once, never pages"};
+const CRITH = CRIT_WORDS;
 async function setDevice(ip) {
   const V = await devData(), D = await setData();
   if (!V.ok) { renderSet(); return; }
@@ -4391,20 +4451,27 @@ async function setDevice(ip) {
   h += `<div class="sh">Watching</div><div class="list">` +
     fld("name", inp("name", "A name you will recognise")) + fld("ip", inp("ip", "192.168.88.10", "decimal")) +
     fld("mac", inp("mac", "optional"), "follows it when DHCP moves it") +
-    fld("group", `<div class="fsw"><select class="fsel" data-dk="group">${groups.map(g => `<option${g === d.group ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">A new group…</option></select></div>`) +
+    fld("group", `<div class="fsw"><select class="fsel" data-dk="group">${groups.map(g => `<option${g === d.group ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">A new group…</option></select></div>` +
+      (S2.newGroup ? `<input class="fin" data-dk="group" value="${esc(d.group || "")}" placeholder="the new group's name" style="margin-top:8px" autocomplete="off" spellcheck="false">` : "")) +
     fld("criticality", `<div class="segc" role="group">${["critical", "high", "warning", "low", "info"].map(c => `<button type="button" data-sact="crit" data-v="${c}" aria-pressed="${(d.criticality || "low") === c}">${c}</button>`).join("")}</div>`, esc(CRITH[d.criticality || "low"])) +
-    fld("checks", `<div class="ckl">${(d.checks || []).map((c, i) => `<div class="ck"><span class="t">${esc(c.type)}${c.port ? " " + esc(c.port) : ""}${c.path ? " " + esc(c.path) : ""}${c.name ? ` · ${esc(c.name)}` : ""}</span><button type="button" data-sact="ckdel" data-i="${i}" aria-label="Remove">${ic("x")}</button></div>`).join("")}</div>
-      <div class="ckadd"><div class="fsw"><select class="fsel" id="ckt">${["icmp", "tcp", "http", "snmp", "arp", "link", "lease"].map(t => `<option${t === S2.ckt ? " selected" : ""}>${t}</option>`).join("")}</select></div><input class="fin" id="ckp" placeholder="port" inputmode="numeric"><button class="sbtn" type="button" data-sact="ckadd">Add</button></div>`) +
+    fld("checks", `<div class="ckl">${(d.checks || []).map((c, i) => `<div class="ck"><span class="t">${esc(c.type)}${c.port ? " " + esc(c.port) : ""}${c.path ? " " + esc(c.path) : ""}${c.iface || c.interface ? " " + esc(c.iface || c.interface) : ""}${c.name ? ` · ${esc(c.name)}` : ""}</span><button type="button" data-sact="ckdel" data-i="${i}" aria-label="Remove">${ic("x")}</button></div>`).join("")}</div>
+      <div class="ckadd"><div class="fsw"><select class="fsel" id="ckt">${["icmp", "tcp", "http", "snmp", "arp", "link", "lease"].map(t => `<option${t === S2.ckt ? " selected" : ""}>${t}</option>`).join("")}</select></div><input class="fin" id="ckp" placeholder="port · link: ether3" autocomplete="off" spellcheck="false"><button class="sbtn" type="button" data-sact="ckadd">Add</button></div>`) +
     fld("depends_on", inp("depends_on", "nothing, wan, or an address"), "down because what it is reached through is down: one message, not many") +
     fld("expect_offline", `<div class="segc" role="group">${[["", "never"], ["sun", "at night"], ["day", "by day"]].map(([v, l]) => `<button type="button" data-sact="eo" data-v="${v}" aria-pressed="${(d.expect_offline || "") === v}">${l}</button>`).join("")}</div>`) +
     fld("role", inp("role", "optional")) + fld("note", inp("note", "optional")) + `</div>`;
   h += `<div class="sh">Managing</div><div class="list">` +
     fld("kind", `<div class="fsw"><select class="fsel" data-dk="kind"><option value=""${!d.kind ? " selected" : ""}>none: watched only</option>${Object.keys(V.kinds || {}).map(k => `<option${k === d.kind ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></div>`) +
-    (d.kind ? fld("login", `<div class="fsw"><select class="fsel" data-dk="lmode">${lmodeOpts(S2.lmode, logins, !!(V.secrets || {}).public_key, !!(V.secrets || {}).writable)}</select></div><div class="lgf">${loginFields("dev", "dev", {lmode: S2.lmode, user: S2.luser, set: S2.lset})}</div>`,
-      (S2.lmode || "").startsWith("own") ? `In secrets.yaml as <span class="k">${esc(S2.lname || "(named after the device)")}</span>. A password is never shown again${S2.lset ? ": leave it empty to keep the one there is" : ""}.`
-        : (S2.lmode || "").startsWith("use:") ? "Shared with the devices that use it; change it in Settings → Secrets." : "lanowl only watches it.") : "") +
+    (d.kind === "shelly" ? fld("login", `<div class="lgf"><span class="wide"><button class="sbtn pri" type="button" data-sact="dtry">Try</button></span>${tryLine(S2.tryRes)}</div>`,
+        "A Shelly needs no login: lanowl talks to it the way its own app does, without a password. One with a password set on it can only be watched.")
+      : d.kind === "homeassistant" ? fld("its token", `<div class="pwrow"><input class="fin" type="password" id="dtok" data-dk="htok" placeholder="${(V.secrets || {}).ha_token ? "set: paste a new one to replace it" : "paste the token"}" autocomplete="off" aria-label="Token"><button class="sbtn" type="button" data-sact="eye" data-for="dtok">Show</button></div><div class="lgf"><span class="wide"><button class="sbtn pri" type="button" data-sact="dtry">Try</button></span>${tryLine(S2.tryRes)}</div>`,
+        `Home Assistant takes a token, not a password: your profile → <b>Security</b> → <b>Long-lived access tokens</b> → <b>Create token</b>. Its address, http://${esc(d.ip || "…")}:8123, is filled in for you (access.ha_url).`)
+      : d.kind ? fld("login", `<div class="fsw"><select class="fsel" data-dk="lmode">${lmodeOpts(S2.lmode, logins, keyKind({public_key: (V.secrets || {}).public_key, key_kinds: V.key_kinds}, d.kind), !!(V.secrets || {}).writable)}</select></div><div class="lgf">${loginFields("dev", "dev", {lmode: S2.lmode, user: S2.luser, set: S2.lset})}${S2.lmode && S2.lmode !== "none" ? `<span class="wide"><button class="sbtn pri" type="button" data-sact="dtry">Try</button></span>${tryLine(S2.tryRes)}` : ""}</div>`,
+      (S2.lmode || "").startsWith("own") ? `In secrets.yaml as the login <span class="k">${esc(S2.lname || slugName(d.name || d.ip, new Set(logins.map(l => l.name))))}</span>. A password is never shown again${S2.lset ? ": leave it empty to keep the one there is" : ""}.`
+        : (S2.lmode || "").startsWith("use:") ? "Shared with the devices that use it; change it in Settings → Secrets." : GIVES[d.kind] ? `lanowl only watches it. With a login: ${GIVES[d.kind]}.` : "lanowl only watches it.") : "") +
     fld("manage", can.length ? `<div class="schips">${can.map(f => `<button class="schip" type="button" data-sact="man" data-f="${f}" aria-pressed="${(d.manage || []).includes(f)}">${f}</button>`).join("")}</div>` : `<span class="fine">${d.kind ? "a " + esc(d.kind) + " device is watched only" : "pick a kind first"}</span>`,
-      (d.manage || []).filter(f => V.switches && V.switches[f] === false).map(f => `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`).join("<br>")) +
+      (d.manage || []).filter(f => V.switches && (V.switches[f] === false || (V.running || {})[f] === false)).map(f => V.switches[f] === false
+        ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`
+        : `<span class="muted">${esc(f)}: switched on, from the next restart</span>`).join("<br>")) +
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
   if (S2.orig) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);
   if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
@@ -4417,13 +4484,11 @@ function onDevField(el) {
   const S2 = ST.dev; if (!S2) return;
   const k = el.dataset.dk;
   if (k === "lmode") { S2.lmode = el.value; S2.lchanged = true; if (S2.lmode.startsWith("own") && !S2.lname) S2.lset = false; setDevice(S2.key); return; }
-  if (k === "luser" || k === "lpw") { S2[k] = el.value; S2.lchanged = true; const bar = $("sbar"); if (bar) bar.hidden = false; return; }
+  if (k === "luser" || k === "lpw" || k === "htok") { S2[k] = el.value; S2.lchanged = true; S2.tryRes = null; const bar = $("sbar"); if (bar) bar.hidden = false; return; }
   if (k === "group" && el.value === "__new") {
-    // a box for the new group's name, under the list
-    el.value = S2.d.group || "";
-    const box = document.createElement("input");
-    box.className = "fin"; box.placeholder = "the new group's name"; box.style.marginTop = "8px"; box.dataset.dk = "group";
-    el.closest(".fld").appendChild(box); box.focus();
+    // a box for the new group's name, under the list: part of the page, so a redraw keeps it
+    S2.newGroup = true; S2.d.group = ""; setDevice(S2.key);
+    const box = document.querySelector('#set input[data-dk="group"]'); if (box) box.focus();
     return;
   }
   if (k === "units") S2.d.restart = {...(S2.d.restart || {}), units: el.value.split(",").map(x => x.trim()).filter(Boolean)};
@@ -4433,6 +4498,7 @@ function onDevField(el) {
     const can = ((ST.devs || {}).kinds || {})[el.value] || []; S2.d.manage = (S2.d.manage || []).filter(f => can.includes(f)); if (!S2.d.manage.length) delete S2.d.manage;
     if (!el.value) S2.lmode = "none";
     else if (S2.lmode === "none" && ((ST.devs || {}).secrets || {}).writable) S2.lmode = "own-pw";
+    else if (S2.lmode === "own-key" && !((ST.devs || {}).key_kinds || ["linux"]).includes(el.value)) S2.lmode = "own-pw";
     setDevice(S2.key); return;
   }
   const bar = $("sbar"); if (bar) bar.hidden = false;
@@ -4440,6 +4506,8 @@ function onDevField(el) {
 // the device as the form has it, and its own login: {device, login} or {error}
 function devBody(S2) {
   const d = JSON.parse(JSON.stringify(S2.d)), m = S2.lmode || "none";
+  if (d.kind === "homeassistant") { delete d.credentials; return {device: d, login: null, ...((S2.htok || "").trim() ? {ha_token: S2.htok.trim()} : {})}; }
+  if (d.kind === "shelly") { delete d.credentials; return {device: d, login: null}; }
   if (!d.kind || m === "none") { delete d.credentials; return {device: d, login: null}; }
   if (m.startsWith("use:")) { d.credentials = m.slice(4); return {device: d, login: null}; }
   const user = (S2.luser || "").trim(), pw = S2.lpw || "";
@@ -4454,7 +4522,7 @@ async function devReview(remove) {
   const S2 = ST.dev, V = ST.devs;
   const B = remove ? {device: null, login: null} : devBody(S2);
   if (B.error) { toast(B.error); return; }
-  const body = {ip: S2.orig ? S2.orig.ip : null, device: B.device, ...(B.login ? {login: B.login} : {})};
+  const body = {ip: S2.orig ? S2.orig.ip : null, device: B.device, ...(B.login ? {login: B.login} : {}), ...(B.ha_token ? {ha_token: B.ha_token} : {})};
   const p = await post("/api/settings/device", {...body, preview: true}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
   openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : p.secrets ? "Save the device and its login" : "Save to inventory.yaml",
@@ -4475,19 +4543,23 @@ async function migrateSheet() {
   }, {blocked: (p.problems || []).length > 0, label: "Move them"});
 }
 
+// a maker as people say it: "Reolink Innovation Limited" → "Reolink" (identify.short_vendor)
+const shortVendor = v => String(v || "").replace(/\s*\(.*?\)/g, "").replace(/[,.]?\s*(Innovation|Technolog(y|ies)|Electronics?|Communications?|Networks?|Systems?|Industrial|Information|International|Holdings?|Group|Corp(oration)?|Co|Ltd|Limited|Inc|LLC|GmbH|AG|AB|SA|BV|Company)\b\.?.*$/i, "").trim() || String(v || "");
 // -- Watch, from a site's DHCP list on the Devices tab: a device into inventory.yaml --
 async function watchDevice(siteKey, mac, name) {
   const d = S.d || {}, site = (d.sites || []).find(x => x.key === siteKey) || {};
   const row = (((site.dhcp || {}).rows) || []).find(r => r.mac === mac) || {};
   if (!row.ip) { toast("That device is not on the list any more."); return; }
   const home = siteKey === "home";
-  const dev = {ip: row.ip, name: name || row.name || (row.vendor ? row.vendor + " " + row.ip : row.ip), mac: mac.toUpperCase(),
-               group: home ? "home" : "remote", criticality: home ? "low" : (site.criticality || "info"), checks: [{type: "icmp"}],
+  const dev = {ip: row.ip, name: name || row.name || (row.vendor ? shortVendor(row.vendor) + " " + row.ip.split(".").pop() : row.ip), mac: mac.toUpperCase(),
+               group: home ? "misc" : "remote", criticality: home ? "low" : (site.criticality || "info"), checks: [{type: "icmp"}],
                ...(home ? {} : {site: siteKey, debounce_fails: 5, ...(site.router ? {depends_on: site.router} : {})})};
   const p = await post("/api/settings/device", {ip: null, device: dev, preview: true, how: "watch"}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "It cannot be watched."); return; }
   ST.data = ST.data || {recent: false};
-  openSet(`Watch ${dev.name}?`, `<p class="fine" style="margin:0 4px 10px">Pinged from now on, and written into inventory.yaml so it stays after a restart. Change it later in Settings → Devices.</p>` + planHtml(p, "inventory.yaml"), async () => {
+  openSet(`Watch ${dev.name}?`, `<div class="fld" style="margin:0 0 10px"><div class="fh"><label class="lab plain" for="wname">Its name</label></div><input class="fin" id="wname" value="${esc(dev.name)}" autocomplete="off" spellcheck="false"></div><p class="fine" style="margin:0 4px 10px">Pinged from now on, and written into inventory.yaml so it stays after a restart. Change it later in Settings → Devices.</p>` + planHtml(p, "inventory.yaml"), async () => {
+    const nm = (($("wname") || {}).value || "").trim();
+    if (nm) dev.name = nm;
     const r = await saveCall("/api/settings/device", {ip: null, device: dev, base: p.base, how: "watch"});
     if (r.ok) { refresh(); toast(`Watching ${dev.name}.`); }
     return r;
@@ -4504,27 +4576,37 @@ async function setupData(force) { if (!ST.setup || force) ST.setup = await getJ(
 const secretsWritable = U => !!(((U || {}).files || {}).secrets || {}).writable;
 async function setupRouter() {
   const U = await setupData(true);
-  if (!ST.router) ST.router = {dhcp_source: U.dhcp_source || "", credentials: U.credentials || "router-read", user: U.login_user || "", password: "", result: null};
+  const gw = U.gateway || {};
+  if (!ST.router) ST.router = {dhcp_source: (U.dhcp_source || "").replace(/^http:\/\//, "") || gw.ip || "", gw: !U.dhcp_source && !!gw.ip, credentials: U.credentials || "router-read", user: U.login_user || "", password: "", result: null};
   const R = ST.router, res = R.result, W = secretsWritable(U);
-  let h = back("set", "Settings") + steps(2) + setHead("Your router", "lanowl reads its DHCP list to find your devices. A read-only user is enough.");
+  let h = back("set", "Settings") + steps(2) + setHead("Your router", "lanowl reads its DHCP list and its ARP table to find your devices. A read-only user is enough.");
   if (U.needed) h += `<div class="pend"><div class="pt"><b>${U.needed === "example" ? "inventory.yaml still has the example's devices" : "inventory.yaml has no devices yet"}</b>${U.needed === "example" ? "The setup replaces them with yours; the file's comments stay." : "Pick them from your router's list."}</div><button class="sbtn" type="button" data-sact="later">Not now</button></div>`;
   const pwChip = R.password ? `<span class="src chg">typed</span>` : U.login_set ? `<span class="src ok">set in secrets.yaml</span>` : `<span class="src def">not set</span>`;
-  h += `<div class="list"><div class="fld"><div class="fh"><label class="lab plain" for="rsrc">Address</label></div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="http://192.168.88.1" autocomplete="off" spellcheck="false" autocapitalize="off"><div class="fhelp">its web address: lanowl reads RouterOS's REST API there</div></div>`;
-  if (W) h += `<div class="fld"><div class="fh"><label class="lab plain" for="ruser">User</label></div><input class="fin" id="ruser" value="${esc(R.user)}" autocomplete="off" spellcheck="false" autocapitalize="off"></div>
+  const gwChip = R.gw && R.dhcp_source === gw.ip ? `<span class="src ${gw.how === "found" ? "ok" : "def"}">${gw.how === "found" ? "found: your gateway" : "a guess: your network's .1"}</span>` : "";
+  h += `<div class="list"><div class="fld"><div class="fh"><label class="lab plain" for="rsrc">Address</label>${gwChip}</div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="192.168.88.1" autocomplete="off" spellcheck="false" autocapitalize="off"><div class="fhelp">its address: lanowl reads RouterOS's REST API there</div></div>`;
+  if (W) h += `<div class="fld"><div class="fh"><label class="lab plain" for="ruser">User</label></div><input class="fin" id="ruser" value="${esc(R.user)}" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <div class="fhelp">A read-only user is enough. <button class="flnk" type="button" data-sact="howro">${R.howro ? "Hide the lines" : "Make one: 2 lines to paste on the router"}</button></div>${R.howro ? rosLines(U, R) : ""}</div>
     <div class="fld"><div class="fh"><label class="lab plain" for="rpw">Password</label>${pwChip}</div>
       <div class="pwrow"><input class="fin" id="rpw" type="password" autocomplete="new-password" placeholder="${U.login_set ? "set: type a new one to replace it" : "the router user's password"}"><button class="sbtn" type="button" data-sact="eye" data-for="rpw">Show</button></div>
       <div class="fhelp">Kept in secrets.yaml on lanowl's machine. Never shown again, here or anywhere.</div></div>`;
   h += `</div><details class="sadv"${R.credentials !== "router-read" ? " open" : ""}><summary>${ic("chev")}Advanced</summary><div class="list"><div class="fld"><div class="fh"><label class="lab plain" for="rcred">Its name in secrets.yaml</label></div>
     <input class="fin" id="rcred" value="${esc(R.credentials)}" autocomplete="off" spellcheck="false" autocapitalize="off"><div class="fhelp">mikrotik.credentials. Only matters if you also edit the file by hand.</div></div></div></details>`;
-  if (res && res.ok) h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Logged in as <b>${esc(res.user)}</b>${res.version ? " · RouterOS " + esc(res.version) : ""} · ${res.leases} address${res.leases === 1 ? "" : "es"} on its DHCP list</span></div>`;
+  if (res && res.ok) h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Logged in as <b>${esc(res.user)}</b>${res.version ? " · RouterOS " + esc(res.version) : ""} · ${res.leases} address${res.leases === 1 ? "" : "es"} on its DHCP list</span></div>`
+    + (res.can_write ? `<div class="swarn" style="margin-bottom:10px"><b>${esc(res.user)}</b> may also change the router. lanowl only reads with it here, but a user that can only read is safer: <button class="flnk" type="button" data-sact="howro">make one with 2 lines</button>. If it may write, the router's own row (next step) can use it for updates and backups.</div>` : "");
   else if (res && res.error) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(R.at || "")} · ${esc(res.error)}.</span></div>`;
   if (!W && !U.login_set) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml in lanowl's config folder (lanowl reads it as ${esc(U.secrets_path || "/config/secrets.yaml")}; it cannot write it: ${esc((((U.files || {}).secrets) || {}).why === "readonly" ? "the compose file mounts the folder read-only" : "the file is not writable")}):<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">lanowl reads the file again by itself, no restart: then Try the router again.</p></div>`;
-  h += `<button class="btn ghost" type="button" data-sact="rtry">${res && res.ok ? "Try again" : "Try the router"}</button>`;
-  h += `<button class="btn" type="button" data-sact="rnext"${res && res.ok ? "" : " disabled"}>Next</button>`;
-  h += `<p class="fine" style="margin:16px 4px 4px">No read-only user on the router yet? The docs say how to make one: docs/setup/mikrotik.md.</p>`;
-  h += `<p class="fine" style="margin:0 4px 16px">Not a MikroTik? lanowl reads DHCP only from RouterOS. <button class="flnk" type="button" data-sact="sweep">Sweep the network instead</button>: every address of the main network gets one ping, and lanowl's machine says who answered (address, maker; no names).</p>`;
+  h += res && res.ok ? `<button class="btn ghost" type="button" data-sact="rtry">Try again</button><button class="btn" type="button" data-sact="rnext">Next: find my devices</button>`
+    : `<button class="btn" type="button" data-sact="rtry">Try the router</button><button class="btn ghost" type="button" data-sact="rnext">Next, without the router</button>`;
+  h += `<p class="fine" style="margin:16px 4px 16px">Not a MikroTik? lanowl reads DHCP only from RouterOS. <button class="flnk" type="button" data-sact="sweep">Sweep the network instead</button>: every address of your network gets one ping, and lanowl's machine says who answered (address, maker; no names).</p>`;
   put("set", `<div class="setw">${h}</div>`);
   if ($("rpw") && R.password) $("rpw").value = R.password;
+}
+// the read-only user, made on the router: two lines, lanowl's address in them
+function rosLines(U, R) {
+  const me = U.lan_ip || "";
+  const txt = `/user group add name=lanowl-ro policy=read,test,sniff,api,rest-api\n/user add name=lanowl group=lanowl-ro${me ? ` address=${me}/32` : ""} password="a long one"`;
+  return `<div class="cmd"><code class="ml" id="roscmd">${esc(txt)}</code><button class="sbtn" type="button" data-sact="copy" data-for="roscmd">Copy</button></div>
+    <div class="fhelp">In the router's Terminal (Winbox or WebFig). Put your own password in place of <i>a long one</i>, then type <b>lanowl</b> and that password here.${me ? ` <b>${esc(me)}</b> is lanowl's address: only it may log in as this user.` : " Add <code>address=</code> lanowl's address<code>/32</code> so only lanowl may log in as this user."} If the router's <i>www</i> service only lets some addresses in, add lanowl's.</div>`;
 }
 function routerBody() {
   const R = ST.router || {};
@@ -4542,19 +4624,23 @@ async function routerTry() {
 }
 // a device's login, in the setup and on its own page: its own (a user and a password, or
 // lanowl's key: typed right there), one that is there already, or none
-function lmodeOpts(cur, logins, hasKey, writable) {
+// hasKey: lanowl has a key, and this kind logs in by ssh (linux, a profile of yours): only then
+// is "lanowl's key" offered, and a login by key only; `extra`: [value, label] offered first
+function lmodeOpts(cur, logins, hasKey, writable, extra) {
   const opt = (v, l) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
-  let h = "";
-  if (writable) h += opt("own-pw", "its own login: a user and a password") + (hasKey ? opt("own-key", "its own login: lanowl's ssh key") : "");
-  for (const l of logins || []) h += opt("use:" + l.name, `the login ${l.name} · ${l.user || "no user"}, ${l.how === "key" ? "lanowl's key" : "password"}`);
+  let h = (extra || []).map(([v, l]) => opt(v, l)).join("");
+  if (writable) h += opt("own-pw", "its own login: a user and a password") + (hasKey || cur === "own-key" ? opt("own-key", "its own login: lanowl's ssh key") : "");
+  for (const l of logins || []) if (hasKey || l.how !== "key" || cur === "use:" + l.name) h += opt("use:" + l.name, `the login ${l.name} · ${l.user || "no user"}, ${l.how === "key" ? "lanowl's key" : "password"}`);
   return h + opt("none", "no login: watched only");
 }
+const keyKind = (U, kind) => !!U.public_key && (U.key_kinds || ["linux"]).includes(kind);
 function loginFields(where, id, L) {
   // L: {lmode, user, set}; the password goes in after drawing, never into the page's HTML
   if (!L.lmode || !L.lmode.startsWith("own")) return "";
   const at = k => where === "pick" ? `data-pip="${esc(id)}" data-pk="${k}"` : `data-dk="${k === "user" ? "luser" : "lpw"}"`;
+  const pid = "pw-" + where + "-" + String(id).replace(/[^A-Za-z0-9]/g, "_");
   return `<input class="fin" ${at("user")} value="${esc(L.user || "")}" placeholder="user" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="User">` +
-    (L.lmode === "own-pw" ? `<input class="fin" type="password" ${at("password")} placeholder="${L.set ? "set: empty keeps it" : "password"}" autocomplete="new-password" aria-label="Password">`
+    (L.lmode === "own-pw" ? `<span class="pwrow"><input class="fin" type="password" id="${pid}" ${at("password")} placeholder="${L.set ? "set: empty keeps it" : "password"}" autocomplete="new-password" aria-label="Password"><button class="sbtn" type="button" data-sact="eye" data-for="${pid}">Show</button></span>`
       : `<span class="fhelp wide" style="margin-top:0">On the device, as that user, add lanowl's key:</span><span class="wide">${keyCmd("key-" + String(id).replace(/[^A-Za-z0-9]/g, "_"))}</span>`);
 }
 function slugName(name, taken) {
@@ -4565,63 +4651,131 @@ function slugName(name, taken) {
   return n;
 }
 function defaultLmode(kind) {
-  if (!kind) return "none";
+  if (!kind || kind === "shelly" || kind === "homeassistant") return "none";
   if (!secretsWritable(ST.setup)) return "none";
-  return kind === "linux" && (ST.setup || {}).public_key ? "own-key" : "own-pw";
+  return "own-pw";
+}
+// Find my devices: the router's lists, one ping to every address, a few ports on each (identify.py)
+const GROUP_WORDS = {network: "Router and Wi-Fi", servers: "Servers", cameras: "Cameras", iot: "Smart home", misc: "Other",
+                     unknown: "Don't know yet", phones: "Phones, tablets, laptops"};
+const USER_OF = {mikrotik: "admin", openwrt: "root", reolink: "admin", shelly: "admin", esxi: "root", unifi: "", linux: "", homeassistant: ""};
+const invGroup = g => g === "unknown" ? "misc" : g || "misc";
+function pickOf(x) {
+  return {ip: x.ip, name: x.name || x.what || x.ip, group: invGroup(x.group), criticality: x.crit || "low", kind: x.kind || "",
+          lmode: defaultLmode(x.kind), user: USER_OF[x.kind] || ""};
+}
+async function findDevices(withRouter, ips) {
+  const lines = ips ? ["asking it on a few ports"] : [...(withRouter ? ["the router's DHCP list and its ARP table"] : []), "one ping to every address of your network", "a few ports asked on each: what it is"];
+  if (!ips) put("set", `<div class="setw">${back("setup", "The router")}${steps(3)}${setHead("Finding your devices", "About half a minute. Nothing is changed anywhere.")}
+    <div class="scan">${lines.map(l => `<div class="ln"><span class="spin"></span><span>${esc(l)}</span></div>`).join("")}</div></div>`);
+  const r = await post("/api/setup/find", {...routerBody(), with_router: !!withRouter, ...(ips ? {ips} : {})}).catch(() => ({ok: false, error: "lanowl did not answer"}));
+  if (ips) return r;
+  if (!r.ok) { ST.rows = {ok: true, router: "", rows: [], failed: r.error || "Nothing was found", lines: r.lines || []}; ST.picked = {}; return; }
+  ST.rows = r; ST.picked = {};
+  const RR = ST.router || {}, rok = RR.result && RR.result.ok && RR.credentials && ((RR.user && RR.password) || (ST.setup || {}).login_set);
+  for (const x of r.rows) if (!x.watched && !x.phone && x.group !== "unknown" && x.ip !== r.router) ST.picked[x.ip] = pickOf(x);
+  if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", lmode: rok ? "use:" + RR.credentials : defaultLmode("mikrotik"), user: "admin", fixed: true};
 }
 async function setupPick() {
   if (!ST.router) { setNav("setup"); return; }
-  if (!ST.rows) {
-    put("set", `<div class="setw">${back("setup", "The router")}${steps(3)}${setHead("Pick what to watch")}${loading("Reading the router's DHCP list…")}</div>`);
-    const r = await post("/api/setup/leases", routerBody()).catch(() => ({ok: false}));
-    if (!r.ok) { toast(r.error || "The router's list could not be read."); setNav("setup"); return; }
-    ST.rows = r; ST.picked = {};
-    if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", lmode: defaultLmode("mikrotik"), fixed: true};
-  }
-  const R = ST.rows, rows = R.rows || [], F = ST.pf || "all";
-  const shown = rows.filter(x => F === "all" || (F === "static" && x.static) || (F === "here" && x.here));
+  if (!ST.rows) { await findDevices(!!(ST.router.result && ST.router.result.ok)); if (S.setp !== "setup/pick") return; }
+  const R = ST.rows, rows = R.rows || [], U = ST.setup || {};
+  const fld = (label, body, wide) => `<div class="ml${wide ? " wide" : ""}"><span>${esc(label)}</span>${body}</div>`;
   const one = x => {
-    const P = ST.picked[x.ip], on = !!P, v = P || {name: x.name || (x.vendor ? x.vendor + " " + x.ip.split(".").pop() : x.ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || "", lmode: "none"};
-    return `<div class="pk${on ? " on" : ""}"><button class="cb" type="button" data-sact="pick" data-pi="${esc(x.ip)}" aria-pressed="${on}" aria-label="Pick">${ic("check")}</button>
-      <span class="rt"><span class="rn">${esc(x.name || x.vendor || x.ip)}</span><span class="meta"><span>${esc(x.ip)}</span>${x.vendor ? `·<span>${esc(x.vendor)}</span>` : ""}${R.router ? `·<span>${x.static ? "static" : "dynamic"}</span>` : ""}${x.here ? `·<span class="here">here now</span>` : x.last_seen ? `·<span>seen ${esc(x.last_seen)} ago</span>` : ""}</span>
-      <span class="pkm"><input class="fin wide" data-pip="${esc(x.ip)}" data-pk="name" value="${esc(v.name)}" aria-label="Name">
-        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group" aria-label="Group">${groupList((ST.setup || {}).groups, v.group).map(g => `<option${g === v.group ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></span>
-        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="criticality" aria-label="Criticality">${["critical", "high", "warning", "low", "info"].map(g => `<option${g === v.criticality ? " selected" : ""}>${g}</option>`).join("")}</select></span>
-        <span class="fsw wide"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="kind" aria-label="Kind"><option value="">kind: none (watched only)</option>${GUESSABLE.map(g => `<option${g === v.kind ? " selected" : ""}>${g}</option>`).join("")}</select></span>
-        ${x.kind ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}
-        ${v.kind ? loginBlock(x.ip, v) : `<span class="fhelp wide" style="margin-top:0">Choose its kind, and it can have a login: lanowl then checks its updates, backs it up, reboots it when you approve.</span>`}</span></span></div>`;
+    const P = ST.picked[x.ip], on = !!P, v = P || pickOf(x);
+    const how = (x.how || []).map(h => `<span>${esc(h)}</span>`).join("");
+    const meta = `<span class="meta"><span>${esc(x.ip)}</span>${x.what ? `·<span>${esc(x.what)}</span>` : ""}<span class="how">${how}</span>${x.here ? `<span class="here">here now</span>` : ""}</span>`;
+    if (x.watched) return `<div class="pk"><button class="cb" type="button" disabled aria-pressed="false" aria-label="Already watched">${ic("check")}</button>
+      <span class="rt"><span class="rn">${esc(x.name || x.what || x.ip)}</span>${meta}<span class="why">already watched</span></span></div>`;
+    return `<div class="pk${on ? " on" : ""}"><button class="cb" type="button" data-sact="pick" data-pi="${esc(x.ip)}" aria-pressed="${on}" aria-label="Watch ${esc(v.name)}">${ic("check")}</button>
+      <span class="rt"><span class="rn">${esc(v.name)}</span>${meta}${x.why ? `<span class="why">${esc(x.why)}</span>` : ""}
+      <span class="pkm">${fld("Name", `<input class="fin" data-pip="${esc(x.ip)}" data-pk="name" value="${esc(v.name)}" autocomplete="off" spellcheck="false">`, true)}
+        ${fld("Group", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group">${groupList(U.groups, v.group).map(g => `<option value="${esc(g)}"${g === v.group ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></span>`)}
+        ${fld("How much it matters", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="criticality">${CRITS_UI.map(c => `<option value="${c}"${c === v.criticality ? " selected" : ""}>${esc(CRIT_WORDS[c])}</option>`).join("")}</select></span>`)}
+        ${fld("Kind", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="kind"><option value="">none: watched only</option>${GUESSABLE.map(g => `<option${g === v.kind ? " selected" : ""}>${g}</option>`).join("")}</select></span>`, true)}
+        ${x.kind && v.kind === x.kind && !x.why ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}
+        ${v.kind ? fld("Login", loginBlock(x.ip, v), true) : `<span class="fhelp wide" style="margin-top:0">Choose its kind, and it can have a login: lanowl then checks its updates, backs it up, reboots it when you approve.</span>`}</span></span></div>`;
   };
-  const n = Object.keys(ST.picked).length, nl = Object.values(ST.picked).filter(withLogin).length;
-  let h = back("setup", "The router") + steps(3) + setHead("Pick what to watch", `${rows.length} on ${R.router ? "the router's DHCP list" : "the network (" + esc(R.swept || "") + ")"}. Each gets a ping check. Give one a kind and a login, and lanowl can also check its updates, back it up, reboot it when you approve.`);
-  h += `<div class="schips" style="margin-bottom:10px">${[["all", "All", rows.length], ["static", "Static", rows.filter(x => x.static).length], ["here", "Here now", rows.filter(x => x.here).length]].filter(c => R.router || c[0] !== "static").map(([k, l, c]) => `<button class="schip" type="button" data-sact="pf" data-v="${k}" aria-pressed="${F === k}">${l} ${c}</button>`).join("")}
-    ${R.router ? `<button class="schip" type="button" data-sact="pickstatic">Pick every static one</button>` : ""}</div>`;
-  h += `<div class="list">`;
-  if (R.router) {
-    const P = ST.picked[R.router];
-    h += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta">${esc(R.router)} · always watched, critical, kind mikrotik</span>
-      <span class="pkm"><span class="fhelp wide" style="margin-top:0">A login that may do more than read (not the read-only one above) lets lanowl check its updates and back it up. Leave it empty to only read it.</span>${loginBlock(R.router, P)}</span></span></div>`;
+  const n = Object.keys(ST.picked).length;
+  let h = back("setup", "The router") + steps(3) + setHead("Your devices", R.failed ? "" : `${rows.length} found. The ticked ones are watched: each gets a ping check, and with a kind and a login lanowl can also check its updates, back it up, reboot it when you approve.`);
+  if ((R.lines || []).length) h += `<div class="sh">What lanowl looked at</div><div class="scan">${R.lines.map(l => `<div class="ln">${ic(l.error ? "warn" : "check")}<span>${esc(l.t)}${l.error ? ` <span class="muted">· ${esc(l.error)}</span>` : ""}</span><b>${l.error ? "" : esc(l.n)}</b></div>`).join("")}</div>`;
+  if (R.failed) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(R.failed)}.</span></div><p class="fine" style="margin:0 4px 14px">Add a device by address below, or go on without devices and add them later in Settings → Devices.</p>`;
+  const order = ["network", "servers", "cameras", "iot", "misc", "unknown", "phones"];
+  const groups = order.filter(g => rows.some(x => (x.group || "unknown") === g));
+  for (const g of groups) {
+    const gs = rows.filter(x => (x.group || "unknown") === g && x.ip !== R.router), ticked = gs.filter(x => ST.picked[x.ip]).length;
+    let lh = "";
+    if (g === "network" && R.router) {
+      const P = ST.picked[R.router];
+      lh += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta"><span>${esc(R.router)}</span>·<span>always watched, kind mikrotik</span></span>
+        <span class="pkm">${fld("How much it matters", `<span class="fsw"><select class="fsel" data-pip="${esc(R.router)}" data-pk="criticality">${CRITS_UI.map(c => `<option value="${c}"${c === P.criticality ? " selected" : ""}>${esc(CRIT_WORDS[c])}</option>`).join("")}</select></span>`, true)}
+        <span class="fhelp wide" style="margin-top:0">A login that may do more than read lets lanowl check its updates and back it up: the one above if it may, or another. No login: lanowl only reads it.</span>${fld("Login", loginBlock(R.router, P), true)}</span></span></div>`;
+    }
+    h += `<div class="grp">${esc(GROUP_WORDS[g] || g)}<span class="r">${ticked} of ${gs.length}${g === "network" && R.router ? " + the router" : ""}</span></div><div class="list">${lh}${gs.map(one).join("")}</div>`;
   }
-  h += shown.filter(x => x.ip !== R.router).map(one).join("") + `</div>`;
-  h += `<div class="sbar"><span class="cnt" id="pcnt">${pickCount()}</span><button class="btn" type="button" data-sact="pnext"${n ? "" : " disabled"}>Next</button></div>`;
+  h += ST.adding ? `<div class="box2"><div class="lab plain">Add a device by address</div><div class="pwrow" style="margin-top:6px"><input class="fin" id="addip" placeholder="192.168.88.70" inputmode="decimal" autocomplete="off"><button class="sbtn pri" type="button" data-sact="addip">Add</button></div><p class="fine" style="margin:6px 2px 0">lanowl asks it on a few ports, like the others.</p></div>`
+    : `<button class="btn ghost" type="button" data-sact="adding">${ic("plus")}Add a device by address</button>`;
+  h += `<div class="sbar"><span class="cnt" id="pcnt">${pickCount()}</span><button class="btn" type="button" data-sact="pnext">${n ? "Next" : "Next, no devices yet"}</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
-  document.querySelectorAll("#set input[data-pip][data-pk=password]").forEach(i => { i.value = (ST.picked[i.dataset.pip] || {}).password || ""; });
+  document.querySelectorAll("#set input[data-pip][data-pk=password], #set input[data-pip][data-pk=token]").forEach(i => { i.value = (ST.picked[i.dataset.pip] || {})[i.dataset.pk] || ""; });
 }
-const withLogin = P => P.kind && (((P.lmode || "").startsWith("own") && (P.user || "").trim()) || (P.lmode || "").startsWith("use:"));
+const withLogin = P => P.kind && ((P.lmode === "own-pw" && (P.user || "").trim() && P.password) || (P.lmode === "own-key" && (P.user || "").trim()) || (P.lmode || "").startsWith("use:")
+  || ((P.lmode || "").startsWith("same:") && !!ST.picked[P.lmode.slice(5)]) || (P.kind === "homeassistant" && !!(P.token || "").trim()));
 function pickCount() {
   const ps = Object.values(ST.picked), nl = ps.filter(withLogin).length;
   return `<b>${ps.length} picked</b>${nl ? ` · ${nl} with a login` : ""}`;
 }
+// what lanowl can do with a device once it logs in, by kind: said under its login
+const GIVES = {mikrotik: "updates, configuration changes, backups, reboots when you approve", unifi: "updates, reboots when you approve",
+               openwrt: "updates, what it exposes, reboots when you approve", linux: "updates, what it exposes, backups, restarts when you approve",
+               esxi: "updates, what it exposes, backups", reolink: "reboots when you approve", homeassistant: "updates, backups, restarts when you approve"};
+// the result of a Try, under the login: the device's own answer, word for word
+const tryLine = T => !T ? "" : T.wait ? `<div class="twait wide"><span class="spin"></span><span>Trying…</span></div>`
+  : T.ok ? `<div class="chkok wide">${ic("check")}<span>Logged in${T.what ? " · " + esc(T.what) : ""}</span></div>`
+  : `<div class="chkno wide">${ic("warn")}<span>${esc(T.said || "refused")}</span></div>`;
 function loginBlock(ip, P) {
-  const U = ST.setup || {};
-  return `<span class="fsw wide"><select class="fsel" data-pip="${esc(ip)}" data-pk="lmode" aria-label="Login">${lmodeOpts(P.lmode || "none", U.logins, !!U.public_key, secretsWritable(U))}</select></span>` +
-    loginFields("pick", ip, P);
+  const U = ST.setup || {}, R = ST.router || {}, isRouter = ST.rows && ip === ST.rows.router;
+  const tryBtn = `<button class="sbtn pri" type="button" data-sact="ltry" data-pi="${esc(ip)}">${P.tryRes && !P.tryRes.ok && !P.tryRes.wait ? "Try again" : "Try"}</button>`;
+  if (P.kind === "shelly")             // lanowl talks to a Shelly without a login (actions.py, backups.py)
+    return `<span class="fhelp wide" style="margin-top:0">A Shelly needs no login: lanowl talks to it the way its own app does, without a password. One with a password set on it can only be watched.</span><span class="wide">${tryBtn}</span>${tryLine(P.tryRes)}`;
+  if (P.kind === "homeassistant") {
+    const pid = "tok-" + String(ip).replace(/[^A-Za-z0-9]/g, "_");
+    return `<span class="fhelp wide" style="margin-top:0">Home Assistant takes a token, not a password. In Home Assistant: your profile → <b>Security</b> → <b>Long-lived access tokens</b> → <b>Create token</b>, name it lanowl, copy it. <a class="lnk" href="http://${esc(ip)}:8123/profile/security" target="_blank" rel="noopener">Open it</a></span>
+      <span class="pwrow wide"><input class="fin" type="password" id="${pid}" data-pip="${esc(ip)}" data-pk="token" placeholder="paste the token" autocomplete="off" aria-label="Token"><button class="sbtn" type="button" data-sact="eye" data-for="${pid}">Show</button></span>
+      <span class="wide">${tryBtn}</span>${tryLine(P.tryRes)}<span class="fhelp wide" style="margin-top:0">With it: ${GIVES.homeassistant}. Its address, http://${esc(ip)}:8123, is filled in for you.</span>`;
+  }
+  // the router itself: the login typed above, as is; any device: the login typed on another one
+  const same = isRouter && R.credentials && ((R.user && R.password) || U.login_set) ? [["use:" + R.credentials, `the same login as above · ${R.user || U.login_user || "its user"}`]] : [];
+  const others = Object.values(ST.picked).filter(Q => Q.ip !== ip && Q.kind && (Q.lmode === "own-pw" || Q.lmode === "own-key") && withLogin(Q))
+    .map(Q => ["same:" + Q.ip, `the same login as ${Q.name} · ${Q.user}`]);
+  return `<span class="fsw wide"><select class="fsel" data-pip="${esc(ip)}" data-pk="lmode" aria-label="Login">${lmodeOpts(P.lmode || "none", (U.logins || []).filter(l => !same.length || l.name !== R.credentials), keyKind(U, P.kind), secretsWritable(U), [...same, ...others])}</select></span>` +
+    loginFields("pick", ip, P) + (P.lmode && P.lmode !== "none" ? `<span class="wide">${tryBtn}</span>${tryLine(P.tryRes)}` : "") +
+    (P.kind === "unifi" ? `<span class="fhelp wide" style="margin-top:0">UniFi: the ssh login set in your UniFi app, Settings → System → Device authentication.</span>` : "") +
+    (GIVES[P.kind] && (!P.lmode || P.lmode === "none") ? `<span class="fhelp wide" style="margin-top:0">With a login: ${GIVES[P.kind]}.</span>` : "");
+}
+// a Try from the pick list: the login as typed (or the one it uses), never written
+async function loginTry(ip) {
+  const P = ST.picked[ip];
+  if (!P) return;
+  let body = {ip, kind: P.kind, how: "password", user: (P.user || "").trim(), password: P.password || ""};
+  if (P.kind === "homeassistant") body = {ip, kind: P.kind, how: "token", token: (P.token || "").trim()};
+  else if (P.lmode === "own-key") body.how = "key";
+  else if ((P.lmode || "").startsWith("same:")) { const Q = ST.picked[P.lmode.slice(5)] || {}; body = {...body, how: Q.lmode === "own-key" ? "key" : "password", user: (Q.user || "").trim(), password: Q.password || ""}; }
+  else if ((P.lmode || "").startsWith("use:")) {
+    const R = ST.router || {}, name = P.lmode.slice(4);
+    body = name === R.credentials && R.user && R.password ? {...body, user: R.user, password: R.password} : {ip, kind: P.kind, login: name};
+  }
+  P.tryRes = {wait: true}; setupPick();
+  P.tryRes = await post("/api/setup/try", body).catch(() => ({ok: false, said: "lanowl did not answer"}));
+  if (S.setp === "setup/pick") setupPick();
 }
 function onPick(el) {
   const ip = el.dataset.pip, P = ST.picked[ip], k = el.dataset.pk;
   if (!P) return;
   P[k] = el.value;
   if ((k === "user" || k === "password") && $("pcnt")) $("pcnt").innerHTML = pickCount();
-  if (k === "kind") { P.lmode = defaultLmode(el.value); setupPick(); }
+  if (k === "user" || k === "password" || k === "token") P.tryRes = null;
+  if (k === "kind") { P.lmode = defaultLmode(el.value); P.user = USER_OF[el.value] || ""; P.password = ""; P.token = ""; P.tryRes = null; setupPick(); }
   if (k === "lmode") setupPick();
 }
 // the devices and the logins they bring: a device's own login is named after it (nvr,
@@ -4629,25 +4783,31 @@ function onPick(el) {
 function pickedDevices() {
   const U = ST.setup || {}, logins = {};
   const taken = new Set([...(U.logins || []).map(l => l.name), (ST.router || {}).credentials || "router-read"]);
+  const own = {};                   // ip -> the name of the login typed on that device
+  for (const P of Object.values(ST.picked))
+    if (P.kind && (P.lmode === "own-pw" || P.lmode === "own-key") && withLogin(P) && !["shelly", "homeassistant"].includes(P.kind)) {
+      own[P.ip] = slugName(P.name, taken);
+      logins[own[P.ip]] = {user: P.user.trim(), how: P.lmode === "own-key" ? "key" : "password", ...(P.lmode === "own-pw" ? {password: P.password || ""} : {})};
+    }
+  let ha = null;
   const devices = Object.values(ST.picked).map(P => {
     const x = ((ST.rows || {}).rows || []).find(r => r.ip === P.ip) || {};
     let cred = "";
-    if (P.kind && (P.lmode || "").startsWith("use:")) cred = P.lmode.slice(4);
-    else if (P.kind && (P.lmode || "").startsWith("own") && (P.user || "").trim()) {
-      cred = slugName(P.name, taken);
-      logins[cred] = {user: P.user.trim(), how: P.lmode === "own-key" ? "key" : "password", ...(P.lmode === "own-pw" ? {password: P.password || ""} : {})};
-    }
+    if (P.kind === "homeassistant") { if ((P.token || "").trim()) ha = {ip: P.ip, token: P.token.trim()}; }
+    else if (P.kind === "shelly") cred = "";
+    else if (P.kind && (P.lmode || "").startsWith("use:")) cred = P.lmode.slice(4);
+    else if (P.kind && (P.lmode || "").startsWith("same:")) cred = own[P.lmode.slice(5)] || "";
+    else if (P.kind) cred = own[P.ip] || "";
     return {ip: P.ip, name: P.name, group: P.group, criticality: P.criticality, ...(P.kind ? {kind: P.kind} : {}),
             ...(cred ? {credentials: cred} : {}), ...(x.mac && !x.static ? {mac: x.mac} : {}), checks: [{type: "icmp"}]};
   });
-  return {devices, logins};
+  return {devices, logins, ha};
 }
 // a device's own login half typed: said before going on
 function pickProblem() {
   for (const P of Object.values(ST.picked)) {
     if (!P.kind || !(P.lmode || "").startsWith("own")) continue;
     const u = (P.user || "").trim(), pw = P.password || "";
-    if (P.lmode === "own-pw" && u && !pw) return `${P.name}: type its password, or choose no login.`;
     if (P.lmode === "own-pw" && pw && !u) return `${P.name}: type the user lanowl logs in as.`;
   }
   return "";
@@ -4728,20 +4888,30 @@ async function tgUse(id) {
 
 // -- the last step: secrets.yaml, inventory.yaml, config.yaml --
 function writeBody() {
-  const T = ST.tg || {}, {devices, logins} = pickedDevices();
+  const T = ST.tg || {}, {devices, logins, ha} = pickedDevices();
   let tz = load("tz", "");
   if (!tz) { try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {} }
-  return {devices, router: ST.rows && ST.rows.router ? routerBody() : null, logins,
+  return {devices, router: ST.rows && ST.rows.router ? routerBody() : null, logins, ha, features: ST.feats || {},
           telegram: T.chat && !T.skip ? {token: T.token, chat_id: T.chat.id} : null, timezone: tz};
 }
+// what lanowl does with the devices it can log in to: chosen here, each said in words
+const FEATS = [["updates", "Check their updates each morning", "and tell what waits, with no change made"],
+               ["security", "Review what each exposes", "open ports, old firmware, logins anyone could try"],
+               ["config", "Tell what changed in their settings", "a router's or a server's, read every day"],
+               ["approve", "Reboot or update when I approve", "a button on Telegram or here, never by itself"]];
 async function setupWrite() {
   if (!ST.rows) { setNav("setup"); return; }
+  if (!ST.feats) ST.feats = {updates: true, security: true, config: true, approve: false};
   put("set", `<div class="setw">${back("setup/telegram", "Telegram")}${steps(5)}${setHead("Write your files")}${loading("Checking the three files with lanowl --check's rules…")}</div>`);
   const body = writeBody();
   const p = await post("/api/setup/write", {...body, preview: true}).catch(() => ({ok: false}));
   const U = await setupData();
   let h = back("setup/telegram", "Telegram") + steps(5) + setHead("Write your files", "One save, three files, in lanowl's config folder. Your comments and anything else in them stay." + (U.needed === "example" ? " The example's devices go." : ""));
   if (!p.ok) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(p.error || ["secrets", "inventory", "config"].map(k => (p[k] || {}).error).filter(Boolean).join("; ") || "It cannot be written.")}</span></div>`;
+  const reach = Object.values(ST.picked || {}).filter(P => P.kind && (withLogin(P) || P.kind === "shelly")).length;
+  if (reach) h += `<div class="sh">What lanowl does with them <span class="r">${reach} it can reach</span></div><div class="list">` + FEATS.map(([k, t, sub]) =>
+    `<button class="row" type="button" data-sact="feat" data-f="${k}"><span class="rt"><span class="rn" style="white-space:normal">${esc(t)}</span><span class="rs wrap">${esc(sub)}</span></span><span class="sw"><input type="checkbox" tabindex="-1"${ST.feats[k] ? " checked" : ""} aria-label="${esc(t)}"><span></span></span></button>`).join("") +
+    `</div><p class="fine" style="margin:6px 4px 14px">Each where its kind can do it. Change it later on each device's page, and in Settings.</p>`;
   for (const k of ["secrets", "inventory", "config"]) if (p[k] && p[k].ok) h += planHtml(p[k], FNAME[k]);
   if (p.secrets) h += `<p class="fine" style="margin:10px 4px 0">Passwords and tokens are written, and never shown again.</p>`;
   const blocked = !p.ok || ["secrets", "inventory", "config"].some(k => ((p[k] || {}).problems || []).length);
@@ -4749,10 +4919,11 @@ async function setupWrite() {
   put("set", `<div class="setw">${h}</div>`);
   ST.wbody = body; ST.wbases = {secrets: (p.secrets || {}).base, inventory: (p.inventory || {}).base, config: (p.config || {}).base};
 }
-function writeSheet() {
-  const n = ST.wbody.devices.length;
-  openSet("Write your files", `<p style="margin:0 2px;font-size:15px">${n} device${n === 1 ? "" : "s"}${ST.wbases.secrets ? ", their logins" : ""}${ST.wbody.telegram ? ", Telegram" : ""}. Then lanowl restarts and starts watching them.</p>`, async () => {
-    const r = await saveCall("/api/setup/write", {...ST.wbody, bases: ST.wbases});
+// the write page is the review: its button writes, and lanowl restarts
+async function writeNow() {
+  {
+    const r = await post("/api/setup/write", {...ST.wbody, bases: ST.wbases}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+    if (!r.ok) { toast(r.error || "It was not written."); if (r.why === "changed") setupWrite(); return r; }
     if (r.ok) {
       save("setupLater", 0); save("tz", "");
       ST.rows = null; ST.picked = {}; ST.devs = null; ST.tg = null; ST.wbody = null;
@@ -4764,7 +4935,7 @@ function writeSheet() {
       refresh();
     }
     return r;
-  }, {label: "Write and restart", busy: "Writing…"});
+  }
 }
 async function setupDone() {
   const D = await setData(true), waiting = Object.keys(D.pending || {}).length > 0;
@@ -4806,7 +4977,8 @@ document.addEventListener("click", async e => {
   if (a === "ckadd" && S2) {
     const type = $("ckt").value, port = $("ckp").value.trim();
     if (type === "tcp" && !/^\d+$/.test(port)) { toast("A tcp check needs a port."); return; }
-    S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
+    if (type === "link" && !port) { toast("A link check needs the router port it hangs off, e.g. ether3: type it in the box."); return; }
+    S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), type === "link" ? {type, iface: port} : {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
   }
   if (a === "devreset") { ST.dev = null; renderSet(); return; }
   if (a === "sitecrit" && ST.site) { ST.site.d.criticality = t.dataset.v; setSitePage(ST.site.id); return; }
@@ -4817,23 +4989,47 @@ document.addEventListener("click", async e => {
   if (a === "devdel") { withSpin(t, "Checking…", () => devReview(true)); return; }
   if (a === "later") { save("setupLater", Date.now()); setNav("set"); return; }
   if (a === "rtry") { withSpin(t, "Trying the router…", routerTry); return; }
-  if (a === "rnext") { setNav("setup/pick"); return; }
-  if (a === "sweep") {
-    const r = await withSpin(t, "Sweeping the network: up to a minute…", () => post("/api/setup/sweep", {}).catch(() => ({ok: false})));
-    if (!r) return;
-    if (!r.ok) { toast(r.error || "The sweep did not run."); return; }
-    ST.router = ST.router || {dhcp_source: "", credentials: ""}; ST.rows = r; ST.picked = {}; setNav("setup/pick"); if (S.setp === "setup/pick") setupPick(); return;
+  if (a === "howro") { const R = ST.router; if (R) { if ($("ruser")) { R.user = $("ruser").value.trim(); R.password = $("rpw").value; } R.dhcp_source = $("rsrc").value.trim(); R.howro = !R.howro; setupRouter(); } return; }
+  if (a === "rnext" || a === "sweep") {
+    // with the router's login tried: its lists too; without: the ping and the probe alone
+    ST.router = ST.router || {dhcp_source: "", credentials: ""};
+    if ($("rsrc")) ST.router.dhcp_source = $("rsrc").value.trim();
+    if (!(a === "rnext" && ST.router.result && ST.router.result.ok)) ST.router.result = null;
+    ST.rows = null; ST.adding = false;
+    setNav("setup/pick"); if (S.setp === "setup/pick") setupPick(); return;
+  }
+  if (a === "ltry") { loginTry(t.dataset.pi); return; }
+  if (a === "dtry" && ST.dev) {
+    const S2 = ST.dev, d = S2.d, m = S2.lmode || "none";
+    let body = {ip: d.ip, kind: d.kind, how: m === "own-key" ? "key" : "password", user: (S2.luser || "").trim(), password: S2.lpw || ""};
+    if (d.kind === "homeassistant") body = {ip: d.ip, kind: d.kind, how: "token", token: (S2.htok || "").trim()};
+    else if (m.startsWith("use:")) body = {ip: d.ip, kind: d.kind, login: m.slice(4)};
+    else if (m.startsWith("own") && !S2.lpw && S2.lset && S2.lname) body = {ip: d.ip, kind: d.kind, login: S2.lname};
+    S2.tryRes = {wait: true}; setDevice(S2.key);
+    S2.tryRes = await post("/api/setup/try", body).catch(() => ({ok: false, said: "lanowl did not answer"}));
+    if (ST.dev === S2) setDevice(S2.key);
+    return;
+  }
+  if (a === "feat") { ST.feats = {...(ST.feats || {}), [t.dataset.f]: !(ST.feats || {})[t.dataset.f]}; setupWrite(); return; }
+  if (a === "adding") { ST.adding = true; setupPick(); setTimeout(() => { const i = $("addip"); if (i) i.focus(); }, 0); return; }
+  if (a === "addip") {
+    const ip = ($("addip").value || "").trim();
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { toast("An address like 192.168.88.70."); return; }
+    if (((ST.rows || {}).rows || []).some(x => x.ip === ip)) { toast("It is in the list already."); return; }
+    const r = await withSpin(t, "Asking it…", () => findDevices(false, [ip]));
+    if (!r || !r.ok) { toast((r && r.error) || "lanowl could not ask it."); return; }
+    for (const x of r.rows || []) { ST.rows.rows.push(x); if (!x.watched) ST.picked[x.ip] = pickOf(x); }
+    ST.adding = false; setupPick(); return;
   }
   if (a === "pick") {
     const ip = t.dataset.pi, x = ((ST.rows || {}).rows || []).find(r => r.ip === ip) || {};
+    if (x.watched) return;
     if (ST.picked[ip]) delete ST.picked[ip];
-    else ST.picked[ip] = {ip, name: x.name || (x.vendor ? x.vendor + " " + ip.split(".").pop() : ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || "", lmode: defaultLmode(x.kind)};
+    else ST.picked[ip] = pickOf(x);
     setupPick(); return;
   }
-  if (a === "pickstatic") { ((ST.rows || {}).rows || []).filter(x => x.static && !ST.picked[x.ip]).forEach(x => { ST.picked[x.ip] = {ip: x.ip, name: x.name || x.vendor || x.ip, group: "home", criticality: "low", kind: x.kind || "", lmode: defaultLmode(x.kind)}; }); setupPick(); return; }
-  if (a === "pf") { ST.pf = t.dataset.v; setupPick(); return; }
   if (a === "pnext") { const why = pickProblem(); if (why) { toast(why); return; } setNav("setup/telegram"); return; }
-  if (a === "wgo") { withSpin(t, "One moment…", async () => { await setupData(true); writeSheet(); }); return; }
+  if (a === "wgo") { withSpin(t, "Writing…", writeNow); return; }
   if (a === "eye") { const i = $(t.dataset.for); if (i) { const show = i.type === "password"; i.type = show ? "text" : "password"; t.textContent = show ? "Hide" : "Show"; } return; }
   if (a === "copy") {
     const el = $(t.dataset.for);

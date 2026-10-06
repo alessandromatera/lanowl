@@ -120,9 +120,10 @@ class SecretsFile:
         try:
             with open(self.path, encoding="utf-8") as f:
                 self._data = parse(f.read())
-            log.info("access: %d login(s) for %d device(s), %d token(s) read from %s",
-                     len(self._data["logins"]), len(self._data["devices"]),
-                     len(self._data["tokens"]), self.path)
+            nd = len(self._data["devices"])
+            log.info("access: %d login(s), %d token(s)%s read from %s",
+                     len(self._data["logins"]), len(self._data["tokens"]),
+                     f", {nd} device(s) by address" if nd else "", self.path)
         except (OSError, ValueError) as e:
             self.error = f"unreadable: {e}"
             log.warning("access: %s %s", self.path, self.error)

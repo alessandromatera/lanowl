@@ -24,10 +24,16 @@ On the router, create a user that can read and nothing more, allowed only from l
 `test` and `sniff` let the owl ping, traceroute and capture from the router when you ask it to
 look into something, and let `arp` checks work; leave them out and it simply cannot.
 
+The first-run setup gives the first two lines, with lanowl's address filled in and a Copy
+button (**Make one: 2 lines to paste on the router**). The third is yours to choose: it lets
+only lanowl reach the router's `www` service, the REST API, so WebFig over plain HTTP from your
+own computer stops too. If `www` already accepts only some addresses, add lanowl's to them.
+
 lanowl watches its own group: a change to it that grants more than `mikrotik.lanowl_policy`
 is reported like any other configuration change.
 
-Then give lanowl the router's address, that user and its password: in the first-run setup's
+Then give lanowl the router's address (`192.168.88.1` is enough: `http://` is added), that user
+and its password: in the first-run setup's
 router step (or Settings → Add from the router's list), where **Try the router** checks them.
 The setup writes them into the files. By hand instead, in `config.yaml`:
 

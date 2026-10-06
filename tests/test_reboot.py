@@ -78,7 +78,7 @@ def _auditor(d, mode="shadow"):
     creds = os.path.join(d, "secrets.yaml")
     with open(creds, "w") as f:
         f.write(LIST)
-    cfg = {"telegram": {"via": "direct", "chat_id": "100000001",
+    cfg = {"model": {"provider": "ollama"}, "telegram": {"via": "direct", "chat_id": "100000001",
                         "outbox_file": os.path.join(d, "o.json")},
            "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0},
            "observer": {"host_ip": "192.168.10.103"},

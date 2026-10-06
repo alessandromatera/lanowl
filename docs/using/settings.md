@@ -10,17 +10,21 @@ Secrets are write-only: a password or a token goes in from the page and never co
 
 ## What it shows
 
-Every section of `config.yaml`, under the file's own headings: your network, the model,
-Telegram, the dashboard, and so on, then the optional features with their switch. The forms
+The essentials first, each said in words: the model, Telegram, sites, updates, what devices
+expose, backups, approvals and the shell. Every other section of `config.yaml` is under
+**Every setting**, with the file's own headings (the fold stays as you left it). The forms
 are built from `config.example.yaml`: its values say each setting's type (a switch, a
 number, a list, text), its comments are the help under each field.
 
 Each field says where its value comes from:
 
 - **config.yaml**: it is in your file.
-- **not in your file**: lanowl uses its built-in default. The example file's value is shown as
-  a hint. It is not always the default: the example is a starting point. Type a value and it
-  goes into your file, with the example's comment beside it.
+- **not in your file**: lanowl uses its built-in default. For a switch that is lanowl's own
+  default, read from its code, and the switch is drawn that way (six differ from the example:
+  `telegram.chat`, `web`, `discovery.notify_new_devices` and `weekly` are off without your file,
+  `fixes` and `scorecard` on). For other values the example file's is shown as a hint: it is a
+  starting point, not always the default. Type a value and it goes into your file, with the
+  example's comment beside it.
 - **the environment**: set by a variable in `docker/.env` (`LANOWL_MODEL_URL`,
   `LANOWL_HOST_IP`, `LANOWL_WEB_PORT`, `TZ`), which wins over the file. The field is locked:
   change it there.
@@ -111,10 +115,16 @@ changes, the confirm, a line on Telegram, then Restart.
 - **Watching**: name, address, MAC (lanowl follows it when DHCP moves it), group,
   criticality, checks, what it depends on, whether it is off at night or by day, a role and a
   note.
-- **Managing**: its kind; its login, asked on its page: its own (a user and a password, or
-  lanowl's ssh key; the password never shown again, left empty to keep it), one shared with
-  other devices, or none; and only the features its kind can do. A feature switched off in
-  `config.yaml` says so. A service it may restart is listed under it.
+- **Managing**: its kind; its login, asked on its page: its own (a user and a password with
+  **Show**, or lanowl's ssh key for `linux` and kinds of your own; the password never shown
+  again, left empty to keep it; the page says the login's name in `secrets.yaml`), one shared
+  with other devices, or none, with **Try**: one login the way lanowl will log in, and the
+  device's own answer. Home Assistant takes its token there instead (its address goes into
+  `access.ha_url` with it); a Shelly needs no login. Then only the features its kind can do. A
+  feature switched off in `config.yaml` says so; one switched on in the file but not yet
+  running says "from the next restart". A service it may restart is listed under it.
+- A `link` check takes the router port the device hangs off (`ether3`), typed in the box beside
+  it: without one it could only ever read down, so it is refused.
 
 A save that sets the device's own login writes `secrets.yaml` too: the sheet lists both files'
 changes.
@@ -122,9 +132,9 @@ changes.
 Anything else a device has in the file is kept as it is. **Remove from inventory.yaml** takes
 it out, through the same sheet and confirm.
 
-**Watch**, on the Devices tab's list of what a site's DHCP sees, writes the device into
-`inventory.yaml` (the same sheet), and lanowl pings it at once: it is on the page when the
-sheet closes, with no restart. Devices watched this way before Settings existed lived only in lanowl's state; Settings
+**Watch**, on the Devices tab's list of what a site's DHCP sees, asks its name and writes the
+device into `inventory.yaml` (the same sheet), and lanowl pings it at once: it is on the page
+when the sheet closes, with no restart, and it leaves no "Restart to apply" behind. Devices watched this way before Settings existed lived only in lanowl's state; Settings
 → Devices offers to **Move** them into the file in one save.
 
 ## Sites
@@ -138,8 +148,11 @@ not on the main network): on its dashboard sheet under Manage, and in Settings �
 It opens the site's page, filled in from the router:
 
 - **Name**: the router's group, when it has one of its own; or its name.
-- **Networks**: the router's `/24`. Add what else is on that side, comma-separated, and for a
-  router reached over a VPN the address lanowl reaches it at (`10.8.0.9/32`). The most specific
+- **Networks**: read from the router itself, over its login (RouterOS `/ip address`, OpenWrt
+  `ip addr`): the networks it serves and its own address as a `/32`, leaving out the one lanowl
+  reaches it through (a VPN's network holds other routers too). When its list cannot be read:
+  the router's `/24` if it sits on lanowl's own side, else only its address, said as a guess.
+  Add what else is on that side, comma-separated. The most specific
   network wins, so a site's `/24` can sit inside the main site's `192.168.0.0/16`.
 - **Router**: that router. lanowl reads its DHCP list every `sites.dhcp_every_min` minutes,
   over ssh with the router's login; a router with no login yet says so.
@@ -166,27 +179,45 @@ and whenever `inventory.yaml` has no devices or still has the example's seven. I
 Settings, as **Add from the router's list**.
 
 1. **Welcome**: the setup code, the dashboard's password, and the time zone, from your browser.
-2. **The router**: its address, and the user and password lanowl reads it with (the login's
-   name in `secrets.yaml`, `router-read`, is under Advanced). **Try the router** logs in with
-   what you typed and counts the addresses on its DHCP list; nothing is written yet.
-   [Making the read-only user on a MikroTik](../setup/mikrotik.md).
-3. **Your devices**: the router's DHCP list with names, makers, static or dynamic, and who is
-   here now. Pick what to watch; for each, a name, a group, a criticality and a kind. A kind
-   guessed from the maker (a Shelly, a Reolink, a MikroTik) is marked as a guess. With a kind,
-   its login, typed right there: a user and a password (or lanowl's ssh key, with the line to
-   add on the device), named after the device in `secrets.yaml`; or a login that is there
-   already; or none. The router itself is always watched.
+2. **The router**: its address, filled in with lanowl's gateway (or a guess at its network's
+   `.1`, said as one; `http://` is added when not typed), and the user and password lanowl
+   reads it with (the login's name in `secrets.yaml`, `router-read`, is under Advanced).
+   **Make one: 2 lines to paste on the router** gives the read-only user as two RouterOS lines
+   with lanowl's address in them. **Try the router** logs in with what you typed and counts the
+   addresses on its DHCP list; nothing is written yet.
+   [The read-only user on a MikroTik](../setup/mikrotik.md).
+3. **Your devices** (Find my devices): the router's DHCP list, the fixed addresses in its ARP
+   table (on the main site's networks, else the router's `/24`), one ping to every address of
+   the network, then a few ports asked on each (22, 80, 443, 554, 631, 1883, 8006, 8123, 8291,
+   9000, 11434; home addresses only, kept an hour). The page says what it looked at, then lists
+   the devices by group, each with where it was seen, whether it is here now, what it is and
+   why. What it recognised is ticked; phones and unknown ones are not; one already in
+   `inventory.yaml` is "already watched". **Add a device by address** asks one more. For each
+   ticked one: a name, a group, how much it matters (in words), a kind, and its login: a user
+   and a password (the usual user filled in) with **Show** and **Try**, the same login as
+   another device, lanowl's ssh key (for `linux` and kinds of your own), Home Assistant's token,
+   or none; a Shelly needs none. The router itself is always watched, with **the same login as
+   above** once that worked.
 4. **Telegram**: the bot's token, checked with Telegram; then `/start` to the bot, and **Use
    this chat** ([Telegram](../getting-started/telegram.md)). Optional.
-5. **Write**: what goes into the three files, in words, never a value: `secrets.yaml` (the
-   logins and the token), `inventory.yaml` (the example's devices out, its comments kept; a
-   dynamic address gets its MAC), `config.yaml` (the router, the chat, the time zone). Then
-   lanowl restarts and watches them.
+5. **Write**: first what lanowl does with the devices it can log in to (check their updates,
+   review what each exposes, tell what changed in their settings: on; reboot or update when
+   you approve: off), each a switch, applied where the kind can do it; then what goes into the
+   three files, in words, never a value: `secrets.yaml` (the logins and the tokens),
+   `config.yaml` (the router, the chat, Home Assistant's address, the features switched on),
+   `inventory.yaml` (the example's devices out, its comments kept; a dynamic address gets its
+   MAC). One button writes them, and lanowl restarts and watches them; Telegram gets one line
+   saying what was set up, sent with the bot and the chat this step wrote.
 
+The welcome's time zone is in use at once (the log, the digests and the page read local time
+from the first minute), and the password needs no restart.
 
-Not a MikroTik? lanowl reads DHCP only from RouterOS. **Sweep the network instead** pings
-every address of the main network once (`sites.list`, the site keyed `home`) and lists who
-answered, with the makers from lanowl's machine's ARP table, and no names.
+Not a MikroTik, or no router login? **Next, without the router** finds the devices with the
+ping and the probe alone. Your network is the site keyed `home` in `sites.list` when it names
+one (1024 addresses at most), else the `/24` of the router's address, else lanowl's own `/24`
+(the address this page was opened at). Only a private network is swept. If nothing can be
+found, the page says why and the setup goes on: add devices by address there, or later in
+Settings → Devices.
 
 **Not now** keeps it closed for a day.
 

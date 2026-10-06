@@ -151,7 +151,7 @@ def _auditor(d, cfg_extra=None):
     cfg = {"telegram": {"via": "direct", "chat_id": "100000001",
                         "outbox_file": os.path.join(d, "o.json")},
            "alerts": {"recovery_confirm_s": 0, "cooldown_s": 0},
-           "observer": {"host_ip": "192.168.10.103"}, **(cfg_extra or {})}
+           "observer": {"host_ip": "192.168.10.103"}, "model": {"provider": "ollama"}, **(cfg_extra or {})}
     inv = Inventory(devices=[Device(x.ip, x.name, x.group, x.criticality) for x in DEVICES])
     st = StateStore(os.path.join(d, "s.sqlite"))
     mq = MqttBridge(cfg)
