@@ -270,6 +270,9 @@ def test_routes():
                         out["dev_bad"] = (r.status, await r.json())
                     async with s.post(base + "/api/setup/claim", json={"code": "x", "password": PW}) as r:
                         out["claim_taken"] = r.status
+                    async with s.post(base + "/api/setup/router",
+                                      json={"dhcp_source": "http://198.51.100.1", "credentials": "nobody"}) as r:
+                        out["router_missing"] = (r.status, await r.json())
                     # devices Watch kept in lanowl's state, before it wrote inventory.yaml
                     from lanowl.model import Device
 
@@ -333,6 +336,9 @@ def test_routes():
           "...written into inventory.yaml")
     check(out["dev_bad"][0] == 400 and "cannot logs" in out["dev_bad"][1]["error"], "only what its kind can do")
     check(out["claim_taken"] == 409, "with a password, the setup code opens nothing")
+    rm = out["router_missing"][1]
+    check(rm["login"] is False and "secrets.yaml" in rm["path"] and rm["path"] in rm["error"] and "'nobody'" in rm["error"],
+          "Try the router with no login yet: says which file it read, and the name it looked for")
     check(out["mig_plan"][0] == 200 and len(out["mig_plan"][1]["changes"]) == 2, "the devices kept in the state: their diff")
     inv = load(out["inv_after_mig"])
     kettle = next(d for d in inv["devices"] if d["ip"] == "192.168.88.71")

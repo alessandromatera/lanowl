@@ -417,6 +417,7 @@ class SettingsRoutes:
         lg = access.service_login(self.a.cfg, "mikrotik")
         return self._j({"ok": True, "needed": self._needed(), "dhcp_source": mk.get("dhcp_source") or "",
                         "credentials": name, "login_set": bool(lg.user and lg.password),
+                        "secrets_path": access.secrets_path(self.a.cfg),
                         "files": {k: f.status() for k, f in self.s.files.items()},
                         "bases": {k: digest(f.read()) for k, f in self.s.files.items()},
                         "recent": self._recent(request)})
@@ -448,8 +449,12 @@ class SettingsRoutes:
         name = cfg["mikrotik"]["credentials"]
         lg = access.service_login(cfg, "mikrotik")
         if not (lg.user and lg.password):
-            return self._j({"ok": False, "login": False, "name": name,
-                            "error": f"secrets.yaml has no login {name!r} (a user and a password) yet"})
+            path = access.secrets_path(cfg)
+            sf = access.shared(cfg)
+            why = (f"{path} could not be read: {sf.error}" if sf.error else
+                   f"{path} has no login {name!r} with a user and a password yet" if os.path.exists(path) else
+                   f"there is no {path}")
+            return self._j({"ok": False, "login": False, "name": name, "path": path, "error": why})
         if not cfg["mikrotik"]["dhcp_source"]:
             return self._j({"ok": False, "login": True, "error": "type the router's address"})
         now = time.time()

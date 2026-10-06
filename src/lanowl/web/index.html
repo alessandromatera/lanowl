@@ -4222,7 +4222,8 @@ async function setupRouter() {
   h += `<div class="list"><div class="fld"><div class="fh"><span class="lab">mikrotik.dhcp_source</span></div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="http://192.168.88.1" autocomplete="off" spellcheck="false"><div class="fhelp">the router's REST base: DHCP leases, routes, the log</div></div>
     <div class="fld"><div class="fh"><span class="lab">mikrotik.credentials</span>${res && res.login === false ? `<span class="src miss">missing in secrets.yaml</span>` : res && res.login ? `<span class="src ok">set in secrets.yaml</span>` : U.login_set ? `<span class="src ok">set in secrets.yaml</span>` : `<span class="src miss">missing in secrets.yaml</span>`}</div>
       <input class="fin" id="rcred" value="${esc(R.credentials)}" autocomplete="off" spellcheck="false"><div class="fhelp">its read-only user: a login of that name in secrets.yaml</div></div></div>`;
-  if ((res && res.login === false) || (!res && !U.login_set)) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml on lanowl's machine:<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">lanowl reads secrets.yaml again by itself: no restart. No such user on the router yet? The docs say how to make a read-only one (docs/setup/mikrotik.md).</p></div>`;
+  if (res && res.login === false) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>Checked at ${esc(R.at || "")}: ${esc(res.error)}.</span></div>`;
+  if ((res && res.login === false) || (!res && !U.login_set)) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml in lanowl's config folder (the one beside its compose file; lanowl reads it as ${esc((res && res.path) || U.secrets_path || "/config/secrets.yaml")}):<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">The router's own read-only user and its password: never typed on this page. lanowl reads the file again by itself, no restart: then Try the router again. No such user on the router yet? The docs say how to make a read-only one (docs/setup/mikrotik.md).</p></div>`;
   if (res && res.ok) h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Logged in as <b>${esc(res.user)}</b>${res.version ? " · RouterOS " + esc(res.version) : ""} · ${res.leases} address${res.leases === 1 ? "" : "es"} on its DHCP list</span></div>`;
   else if (res && res.error && res.login !== false) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(res.error)}</span></div>`;
   h += `<button class="btn ghost" type="button" data-sact="rtry">${res && res.ok ? "Try again" : "Try the router"}</button>`;
@@ -4235,6 +4236,7 @@ async function routerTry() {
   R.dhcp_source = $("rsrc").value.trim(); R.credentials = $("rcred").value.trim();
   R.result = {pending: true};
   R.result = await post("/api/setup/router", {dhcp_source: R.dhcp_source, credentials: R.credentials}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  R.at = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false});
   ST.rows = null;
   setupRouter();
 }
