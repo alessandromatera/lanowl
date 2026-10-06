@@ -1,5 +1,6 @@
 # --- secrets and your own config: never commit ------------------------------
-config/
+/config/*
+!/config/.gitignore
 secrets.yaml
 *.secrets.yaml
 .env

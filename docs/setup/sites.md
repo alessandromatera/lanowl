@@ -4,6 +4,9 @@ lanowl can look after more than one network: your home, and the places you reach
 such as a cabin, an office or your parents' house. Each is a **site**, with its own devices
 on the dashboard, its own DHCP list, and its own checks.
 
+Make one from the dashboard: on the router's page, **Make it a site**, or **Settings → Sites →
+Add a site** ([Settings](../using/settings.md#sites)). Or write it into `config.yaml`:
+
 ```yaml
 sites:
   dhcp_every_min: 30
@@ -17,7 +20,7 @@ sites:
 | Key | What it is |
 |---|---|
 | `key`, `name` | An id, and what the dashboard calls it. `home` is the main site; it is added if you leave it out. |
-| `nets` | The networks that belong to it. A device belongs to the first site whose network holds its address; the rest are home's. |
+| `nets` | The networks that belong to it. A device belongs to the site with the most specific network holding its address (a `/24` wins over the `/16` around it, a `/32` over both); the rest are home's. With no `nets` of its own, home has all of 192.168.0.0/16 that no other site has. |
 | `router` | The site's router, an address in the inventory. lanowl logs into it to read its DHCP. |
 | `kind` | `routeros` (MikroTik) or `openwrt`. Taken from the router's inventory entry when left out. |
 | `criticality` | What a device you watch there gets by default: `info` for a remote site, `low` for home. |

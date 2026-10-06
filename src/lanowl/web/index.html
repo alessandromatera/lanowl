@@ -359,6 +359,8 @@ html.kb .askside,html.kb .askseg{display:none}
 .tlt .ic{width:14px;height:14px;margin-top:2px;color:var(--blue)}
 .tlr .pkl{margin-top:2px}
 .lbody{position:relative;display:flex;flex-direction:column;gap:6px}
+.lgrp{font-size:11.5px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--ink3);margin-top:8px}
+.lbody>.lgrp:first-child{margin-top:0}
 .lbands{position:absolute;top:-3px;bottom:-3px;left:calc(var(--lw,108px) + 10px);right:0;pointer-events:none}
 .tlband{position:absolute;top:0;bottom:0;min-width:3px;background:color-mix(in srgb,var(--red) 9%,transparent);border-left:1px dashed color-mix(in srgb,var(--red) 45%,transparent)}
 .tltog{margin:12px 0 0;box-shadow:none;border:1px solid var(--sep);background:var(--bg)}
@@ -855,7 +857,7 @@ html.modal{overflow:hidden}
 .funit .fin{flex:1}
 .funit span{color:var(--ink2);font-size:14px;white-space:nowrap}
 .fhelp{font-size:13px;color:var(--ink2);margin-top:6px;line-height:1.38}
-.fhelp .q{color:var(--ink3)}
+.fhelp .fq{color:var(--ink3)}
 .fwas{font-size:12.5px;color:var(--blue-t);margin-top:5px;font-weight:550}
 .fswr{display:flex;align-items:center;gap:12px}
 .fswr .fb{flex:1;min-width:0}
@@ -927,6 +929,36 @@ html.modal{overflow:hidden}
 .pk .pkm .wide{grid-column:1/-1}
 .pk .pkm .fin,.pk .pkm .fsel{font-size:14px;padding:7px 9px;border-radius:9px}
 .guess{font-size:11.5px;color:var(--indigo-t);font-weight:600}
+.fh .lab.plain{font-family:inherit;font-size:14.5px}
+.pwrow{display:flex;gap:6px;align-items:center}
+.pwrow .fin,.pwrow .sfield{flex:1;min-width:0}
+.pwrow .sbtn{min-height:40px}
+.cmd{display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--fill2);border-radius:9px;padding:7px 7px 7px 10px}
+.cmd code{background:none;padding:0;font-size:11.5px;flex:1;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.cmd .sbtn{min-height:28px;padding:0 9px;font-size:12.5px}
+.tgc h4{margin:0 0 3px;font-size:15px;font-weight:650;display:flex;gap:8px;align-items:center}
+.tgc h4 i{font-style:normal;width:21px;height:21px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:11.5px;font-weight:700;flex:none}
+.tgc.done h4 i{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green-t)}
+.tgc p{margin:0 0 9px;color:var(--ink2);font-size:13.5px}
+.tgc .chkok,.tgc .chkno,.tgc .twait{margin-top:10px}
+.tgc .sbtn{margin-top:9px}
+.twait{display:flex;gap:8px;align-items:center;font-size:14px;padding:10px 12px;border-radius:12px;background:var(--fill2);color:var(--ink2)}
+.chatrow{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 10px;border-radius:11px;background:var(--fill2)}
+.chatrow .rt{flex:1;min-width:0;display:flex;flex-direction:column}
+.chatrow .sbtn{margin-top:0}
+.pubk{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11.5px;line-height:1.5;background:var(--card);border:1px solid var(--sep);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;margin-top:6px}
+.seccol{display:flex;align-items:center;gap:8px;flex:none}
+.seccol .sbtn{min-height:30px;padding:0 10px;font-size:13px}
+.btn .spin,.sbtn .spin,.rowbtn .spin,.flnk .spin{width:15px;height:15px}
+.flnk .spin{vertical-align:-2px;margin-right:5px}
+.btn[data-busy],.sbtn[data-busy]{opacity:.85;cursor:progress}
+.loadl{margin-top:14px}
+.chl{list-style:none;margin:0;padding:10px 14px;background:var(--card);border:1px solid var(--sep);border-radius:12px;font-size:14px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
+.chl li{overflow-wrap:anywhere}
+.chl li.more{color:var(--ink2)}
+.lgf{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.lgf:empty{display:none}
+.lgf .wide{grid-column:1/-1}
 @media (min-width:900px){.sbar{bottom:14px}.setw{max-width:760px}}
 </style>
 </head>
@@ -1346,11 +1378,12 @@ const ip4 = a => a.split(".").reduce((t, b) => t * 256 + (+b), 0);
 function ipSite(d, ip) {
   if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip || "")) return "home";
   const v = ip4(ip);
+  let best = "home", len = -1;          // the most specific network holding it, as sites.py
   for (const s of d.sites || []) for (const n of s.nets || []) {
     const [b, m] = n.split("/"), base = ip4(b);
-    if (v >= base && v < base + 2 ** (32 - +m)) return s.key;
+    if (v >= base && v < base + 2 ** (32 - +m) && +m > len) { best = s.key; len = +m; }
   }
-  return "home";
+  return best;
 }
 const siteOf = (d, ip) => ((d.devices || []).find(x => x.ip === ip) || {}).site || ipSite(d, ip);
 const inSite = (d, ip) => S.site === "all" || siteOf(d, ip) === S.site;
@@ -1731,7 +1764,7 @@ async function loadHistAll() {
   if (S.d) renderAll();         // the lanes on Now and the Timeline hatch from it too
 }
 // A device's first sample in the 7 days (/api/history's f7): undefined while it has not come,
-// or for a device it does not list — the lane then claims nothing either way.
+// or for a device it does not list (the Timeline then draws it as not recorded yet).
 const firstOf = ip => { const h = HA.d && (HA.d.devices || {})[ip]; return h ? h.f7 : undefined; };
 function spark(b, w = 96, h = 24) {
   const H = HA.d, v = (b || []).map(x => x[3]).filter(x => x != null);
@@ -1907,19 +1940,29 @@ function tlLanes(d) {
   if (ws && (st === "backup" || st === "down")) ws.push({a: ww.state_since || ww.down_since || t1 - 60, b: t1, cls: st === "down" ? "bad" : "warn"});
   const wrec = T.wan_since ? Math.max(t0, T.wan_since) : t1;
   const CLS = {down: "bad", sched: "sched", paused: "paus"};
-  const lanes = Object.entries(T.lanes || {}).filter(([ip]) => inSite(d, ip))
-    .map(([ip, l]) => ({ip, name: devName(d, ip, l.name), group: l.group, rec: recFrom(t0, firstOf(ip)),
-                        segs: l.segs.filter(v => S.sched || v[2] === "down").map(v => ({a: v[0], b: v[1], cls: CLS[v[2]] || "bad"}))}))
-    .filter(l => l.segs.length).sort((a, b) => grank(a.group) - grank(b.group) || String(a.name).localeCompare(b.name));
+  // every watched device, grouped as on the Devices tab: one with no trouble is a plain bar;
+  // one no longer watched shows only for what it went through
+  const watched = new Map((d.devices || []).map(x => [x.ip, x]));
+  const lanes = Array.from(new Set([...watched.keys(), ...Object.keys(T.lanes || {})])).filter(ip => inSite(d, ip))
+    .map(ip => { const l = (T.lanes || {})[ip] || {segs: []}, x = watched.get(ip) || {};
+                 // green only from its first sample: no history for it yet (just added, or the
+                 // history not loaded) is "not recorded yet", never a week of answers
+                 return {ip, name: devName(d, ip, l.name || x.name), group: x.group || l.group || "", rec: recFrom(t0, firstOf(ip) ?? null),
+                         segs: l.segs.filter(v => S.sched || v[2] === "down").map(v => ({a: v[0], b: v[1], cls: CLS[v[2]] || "bad"}))}; })
+    .filter(l => l.segs.length || watched.has(l.ip))
+    .sort((a, b) => grank(a.group) - grank(b.group) || String(a.group).localeCompare(String(b.group)) || String(a.name).localeCompare(b.name));
+  const moved = lanes.some(l => l.segs.some(v => v.cls === "bad"));
   const bands = T.items.filter(x => x.type === "incident" && x.cat === "down" && x.members.length > 1 && x.members.some(v => inSite(d, v.ip)));
   const pc = t => (Math.min(Math.max(t, t0), t1) - t0) / (t1 - t0) * 100;
   const lane = (label, segs, rec0, ip, wan) => ip
     ? `<button class="lrow" type="button" data-ip="${esc(ip)}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</button>`
     : `<div class="lrow${wan ? " wan" : ""}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</div>`;
+  let lastGroup = null;
+  const laneRows = lanes.map(l => (l.group !== lastGroup ? `<div class="lgrp">${esc((lastGroup = l.group) || "other")}</div>` : "") + lane(l.name, l.segs, l.rec, l.ip)).join("");
   const nq = Object.entries(T.lanes || {}).filter(([ip]) => inSite(d, ip)).reduce((t, [, l]) => t + l.segs.filter(v => v[2] !== "down").length, 0);
   return `<div class="card"><div class="vizh" style="margin-top:0">Seven days at a glance<span class="r">${bands.length ? `${bands.length} time${bands.length > 1 ? "s" : ""} several went down together: shaded` : ""}</span></div>
     <div class="lanes"><div class="lrow"><span></span>${dayAxis(t0, t1, innerWidth < 700)}</div>${ws ? lane("Internet", ws, wrec, null, true) : ""}
-    <div class="lbody">${lanes.map(l => lane(l.name, l.segs, l.rec, l.ip)).join("") || `<div class="fine">Nothing went down in 7 days${S.sched ? "" : ", schedules and pauses aside"}.</div>`}
+    <div class="lbody">${laneRows || `<div class="fine">No device watched yet.</div>`}${lanes.length && !moved ? `<div class="fine">Nothing went down in 7 days${S.sched ? "" : ", schedules and pauses aside"}.</div>` : ""}
     <div class="lbands">${bands.map(x => `<i class="tlband" style="left:${pc(x.a).toFixed(3)}%;width:${(pc(x.b) - pc(x.a)).toFixed(3)}%"></i>`).join("")}</div></div></div>
     <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${S.sched ? `<span><i class="k-sched"></i>asleep on schedule</span><span><i class="k-paus"></i>paused</span>` : ""}${ws && ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${(ws && wrec > t0) || lanes.some(l => l.rec > t0) ? `<span><i class="k-nodata"></i>not recorded yet</span>` : ""}</div>
     <label class="toggle tltog"><span>Show devices asleep on schedule or paused <span class="fine">(${nq})</span></span><span class="sw"><input type="checkbox" id="sched"${S.sched ? " checked" : ""}><span></span></span></label></div>`;
@@ -3220,7 +3263,9 @@ function renderSheet() {
   h += `<div class="card"><div class="vizh" style="margin-top:0">Last 7 days</div>${strip(segs, O.t0, O.t1, rec7, "thin")}${dayAxis(O.t0, O.t1)}
     <div class="keys"><span><i class="k-ok"></i>up</span><span><i class="k-bad"></i>down</span><span><i class="k-sched"></i>asleep on schedule</span>${segs.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${rec7 > O.t0 ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`;
   if (lbx.length) h += `<div class="sh">Ups &amp; downs</div><div class="list">` + lbx.slice(0, 12).map(e => evRow(e, null, !sameDay(e.ts, NOW))).join("") + `</div>`;
-  h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow) + `<div id="sx-sec"></div>` + secH;
+  const siteRow = x && x.can_site ? `<div class="row"><span class="sd c-gray"></span><span class="rt"><span class="rn">Another network</span><span class="rs wrap">behind this router? Make it a site: its own chip, its devices, its DHCP list</span></span>
+    <button class="rowbtn" type="button" data-act="mksite">Make it a site</button></div>` : "";
+  h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow + siteRow) + `<div id="sx-sec"></div>` + secH;
   h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the model about it</button>`;
   h += `<div id="sx-details"></div>` + detailsHtml();
   const keepY = $("sheet").scrollTop;
@@ -3566,7 +3611,7 @@ document.addEventListener("click", async e => {
     if (act === "gosite") { S.group = null; setTab("devices"); }
     setSite(t.dataset.sk);
   } else if (act === "watch") {
-    watchDevice(t.dataset.sk, t.dataset.mac, t.dataset.nm);
+    withSpin(t, "Watch", () => watchDevice(t.dataset.sk, t.dataset.mac, t.dataset.nm));
   } else if (["unwatch", "siteread", "sitescan", "known", "unknown"].includes(act)) {
     t.disabled = true;
     const body = act === "watch" ? {watch: {site: t.dataset.sk, mac: t.dataset.mac, name: t.dataset.nm}}
@@ -3650,6 +3695,9 @@ document.addEventListener("click", async e => {
     const r = await post("/api/scorecard", {id: cid, verdict: v}).catch(() => ({ok: false, error: "lanowl is not answering."}));
     toast(r.ok ? (v === "clear" ? "Your word taken back — the model's own check stands." : `Noted: ${v}. It counts over the model's own check.`) : r.error || "Could not save it.");
     refresh();
+  } else if (act === "mksite") {
+    const ip = S.sheet;
+    closeSheet(); setNav("set/site/new/" + encodeURIComponent(ip));
   } else if (act === "askdev") {
     const x = (S.d.devices || []).find(v => v.ip === S.sheet);
     const q = `How has ${x ? x.name : S.sheet} (${S.sheet}) been doing this week?`;
@@ -3743,6 +3791,7 @@ document.addEventListener("keydown", e => {
 const ST = {data: null, devs: null, setup: null, edits: {}, dev: null, rows: null, picked: {}, router: null,
             sheet: null, busy: false, restarting: false, src: ""};
 const sameV = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const FNAME = {config: "config.yaml", inventory: "inventory.yaml", secrets: "secrets.yaml"};
 const pkey = p => p.join(".");
 const fmtV = v => v === null || v === undefined ? "" : typeof v === "boolean" ? (v ? "on" : "off") : Array.isArray(v) ? v.join(", ") : typeof v === "object" ? "{…}" : String(v);
 async function getJ(path) {
@@ -3763,18 +3812,31 @@ function renderSet() {
   if (p.startsWith("set/s/")) return setSection(p.slice(6));
   if (p === "set/devices") return setDevices();
   if (p.startsWith("set/device/")) return setDevice(decodeURIComponent(p.slice(11)));
+  if (p.startsWith("set/site/")) return setSitePage(p.slice(9));
   if (p === "set/history") return setHistory();
   if (p === "set/secrets") return setSecrets();
   if (p === "setup/pick") return setupPick();
+  if (p === "setup/telegram") return setupTelegram();
   if (p === "setup/write") return setupWrite();
   if (p === "setup/done") return setupDone();
   return setupRouter();
 }
 const SKEL = `<div class="skel" style="margin-top:22px"></div>`;
+// a page that waits for lanowl says what for, with a spinner
+const loading = what => `<div class="twait loadl"><span class="spin"></span><span>${esc(what)}</span></div>` + SKEL;
+// a button that waits for lanowl: a spinner and what it is doing, until the answer (or the page
+// it brings) is there; pressed again meanwhile, it does nothing
+async function withSpin(btn, label, fn) {
+  if (btn && btn.dataset.busy) return;
+  const html = btn ? btn.innerHTML : "";
+  if (btn) { btn.dataset.busy = "1"; btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${esc(label)}`; }
+  try { return await fn(); }
+  finally { if (btn && btn.isConnected && btn.dataset.busy) { btn.innerHTML = html; btn.disabled = false; delete btn.dataset.busy; } }
+}
 function pendHtml(D) {
   const P = D.pending || {}, names = Object.keys(P);
   if (!names.length) return "";
-  const what = names.map(n => (n === "config" ? "config.yaml" : "inventory.yaml") + (P[n].hand && !P[n].saves.length ? " (changed on the host)" : "")).join(" and ");
+  const what = names.map(n => (FNAME[n] || n) + (P[n].hand && !P[n].saves.length ? " (changed on the host)" : "")).join(" and ");
   return `<div class="pend"><div class="pt"><b>Saved, not running yet</b>${esc(what)} changed since lanowl started. Restart lanowl to apply.</div>
     <button class="sbtn pri" type="button" data-sact="restart">Restart</button></div>`;
 }
@@ -3833,8 +3895,9 @@ function fieldHtml(f) {
   const k = pkey(f.path), e = ST.edits[k], v = fieldVal(f), id = "f-" + k.replace(/[^A-Za-z0-9_]/g, "_");
   const lock = f.source === "env";
   const ex = f.source === "default" && f.example !== null && f.example !== undefined && f.example !== "" ? fmtV(f.example) : "";
-  const help = (f.help ? esc(f.help) : "") + (lock ? `<br><span class="q">Set in the environment (docker/.env), which wins over config.yaml: change it there.</span>`
-    : f.source === "default" ? `<br><span class="q">Not in your file: lanowl uses its built-in default${ex ? ` (the example file has ${esc(ex)})` : ""}.</span>` : "");
+  const help = (f.help ? esc(f.help) : "") + (lock ? `<br><span class="fq">Set in the environment (docker/.env), which wins over config.yaml: change it there.</span>`
+    : f.found ? `<br><span class="fq">${f.source === "default" ? "Not in your file" : "Empty"}: lanowl uses the address it found, ${esc(f.found)}.</span>`
+    : f.source === "default" ? `<br><span class="fq">Not in your file: lanowl uses its built-in default${ex ? ` (the example file has ${esc(ex)})` : ""}.</span>` : "");
   const was = e ? `<div class="fwas">was ${esc(f.source === "default" ? "not in your file" : fmtV(f.value) || '""')}</div>` : "";
   const head = `<div class="fh"><label class="lab" for="${id}">${esc(f.label)}</label>${srcChip(f)}</div>`;
   const cls = `fld${e ? " changed" : ""}`;
@@ -3874,13 +3937,23 @@ async function setSection(key) {
   const sec = ((D || {}).sections || []).find(x => x.key === key);
   if (!sec) { put("set", back("set", "Settings") + setHead("Settings") + `<div class="list"><div class="empty">No such section.</div></div>`); return; }
   ST.cur = sec;
-  const fields = sec.fields.filter(f => !f.advanced), adv = sec.fields.filter(f => f.advanced && f.type !== "group");
+  // sites.list is a list of rows of its own (Edit, Remove), not a box of YAML
+  const shown = key === "sites" ? sec.fields.filter(f => !(f.path && pkey(f.path) === "sites.list")) : sec.fields;
+  const fields = shown.filter(f => !f.advanced), adv = shown.filter(f => f.advanced && f.type !== "group");
   let h = back("set", "Settings") + setHead(sec.title, esc(sec.help || ""));
   h += pendHtml(D) + fileWarn(D);
+  if (key === "sites") h += sitesListHtml(D);
   let body = "";
   for (const f of fields) body += f.type === "group" ? `<div class="fsub">${esc(f.group)}${f.help ? `<div class="fhelp" style="text-transform:none;letter-spacing:0;font-weight:400">${esc(f.help)}</div>` : ""}</div>` : fieldHtml(f);
   h += `<div class="list">${body}</div>`;
   if (adv.length) h += `<details class="sadv"><summary>${ic("chev")}Advanced · paths and plumbing inside the container</summary><div class="list">${adv.map(fieldHtml).join("")}</div></details>`;
+  if (key === "shell") {
+    const hf = (D.sections || []).flatMap(x => x.fields).find(f => f.path && pkey(f.path) === "observer.host_ip") || {};
+    const ip = (hf.source !== "default" && hf.value) || hf.found || "<this machine's address>";
+    h += `<div class="box2">The sandboxes are two containers of their own. Once the shell is on, start them on lanowl's machine, from the repository:
+      <div class="cmd"><code id="shcmd">LANOWL_HOST_IP=${esc(ip)} docker compose -f docker/compose.yaml --profile shell up -d</code><button class="sbtn" type="button" data-sact="copy" data-for="shcmd">Copy</button></div>
+      <p class="fine" style="margin:8px 0 0">LANOWL_HOST_IP is the address they wall off: lanowl's own machine.</p></div>`;
+  }
   h += barHtml(editCount(), "review");
   put("set", `<div class="setw">${h}</div>`);
 }
@@ -3940,23 +4013,20 @@ function badEdits() {
   return "";
 }
 
-// -- the sheet: the diff, what it changes, --check's new ✗, the password when needed --
-function diffHtml(lines) {
-  return `<div class="sdiff">${(lines || []).map(l => `<div class="${l[0] === "+" ? "dxa" : l[0] === "-" ? "dxd" : l.startsWith("@@") ? "dxh" : ""}">${esc(l)}</div>`).join("") || `<div class="dxh">  (no change)</div>`}</div>`;
-}
+// -- the sheet: what it changes, in words; what is wrong with it, if anything; the password
+// when needed. The file itself is not shown: lanowl checks it (--check's rules) and says only
+// what would break.
+const CHG_SHOWN = 12;
 function planHtml(p, fname) {
-  const n = (p.changes || []).length;
-  return ((p.problems || []).length ? `<div class="chkno">${ic("warn")}<span>lanowl --check would say: ${esc(p.problems.join("; "))}. Nothing can be saved like this.</span></div>`
-    : `<div class="chkok">${ic("check")}<span>lanowl --check finds nothing new wrong with it.</span></div>`) +
-    `<div class="dlab">${esc(fname)}<span>${n} change${n === 1 ? "" : "s"}</span></div>` + diffHtml(p.diff);
+  const ch = p.changes || [], n = ch.length;
+  return ((p.problems || []).length ? `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>This cannot be saved: ${esc(p.problems.join("; "))}.</span></div>` : "") +
+    `<div class="dlab">${esc(fname)}<span>${n} change${n === 1 ? "" : "s"}</span></div>` +
+    `<ul class="chl">${ch.slice(0, CHG_SHOWN).map(c => `<li>${esc(c)}</li>`).join("") || "<li>no change</li>"}${n > CHG_SHOWN ? `<li class="more">and ${n - CHG_SHOWN} more</li>` : ""}</ul>`;
 }
 function openSet(title, body, go, opts) {
   ST.sheet = {go, opts: opts || {}};
-  const need = !(ST.data || ST.devs || ST.setup || {}).recent && !(opts || {}).noAuth && !ST.authed;
   put("set-in", `<div class="shd"><div class="grab"></div><div class="shd-row"><h2>${esc(title)}</h2><button class="x" type="button" data-sact="sclose" aria-label="Close">${ic("x")}</button></div></div>
     ${body}
-    <div id="sauth"${need ? "" : " hidden"}><div class="dlab">Your password</div><p class="fine" style="margin:0 4px 7px">Asked again: this browser has not typed it in the last ten minutes.</p>
-      <input class="sfield" id="spw" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password"></div>
     <div class="pinerr" id="serr" role="alert"></div>
     <button class="btn" id="sgo" type="submit"${(opts || {}).blocked ? " disabled" : ""}>${esc((opts || {}).label || "Save")}</button>
     ${(opts || {}).note ? `<p class="fine" style="text-align:center;margin-top:10px">${esc(opts.note)}</p>` : `<p class="fine" style="text-align:center;margin-top:10px">Telegram gets one line saying what changed.</p>`}`);
@@ -3965,30 +4035,26 @@ function openSet(title, body, go, opts) {
   dlg.scrollTop = 0;
 }
 function closeSet() { const d = $("setdlg"); if (d.open) d.close(); }
-$("setdlg").addEventListener("close", () => { ST.sheet = null; document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
+// a close event arrives a moment after close(): a sheet opened in that moment is not closed by it
+$("setdlg").addEventListener("close", () => { if ($("setdlg").open) return; ST.sheet = null; document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
 $("setdlg").addEventListener("click", e => { if (e.target === $("setdlg")) closeSet(); });
 $("setf").addEventListener("submit", async e => {
   e.preventDefault();
   if (!ST.sheet || ST.busy) return;
-  const pw = ($("spw") || {}).value || "";
-  ST.busy = true; $("sgo").disabled = true; $("serr").textContent = "";
+  ST.busy = true; $("serr").textContent = "";
+  const go = $("sgo"), label = go.innerHTML, sheet = ST.sheet;
+  go.disabled = true; go.dataset.busy = "1"; go.innerHTML = `<span class="spin"></span>${esc((sheet.opts || {}).busy || "Saving…")}`;
   let r;
-  try { r = await ST.sheet.go(pw); } catch (err) { r = {ok: false, error: "lanowl did not answer."}; }
-  ST.busy = false; if ($("sgo")) $("sgo").disabled = false;
+  try { r = await sheet.go(); } catch (err) { r = {ok: false, error: "lanowl did not answer."}; }
+  ST.busy = false;
+  if (go.isConnected && ST.sheet === sheet) { go.disabled = false; delete go.dataset.busy; go.innerHTML = label; }
   if (!r) return;
-  if (r.auth) {
-    $("sauth").hidden = false;
-    $("serr").textContent = r.auth === "needed" ? "Type your password to save." : r.auth === "locked" ? `Too many wrong passwords: locked until ${hm(r.until)}.`
-      : r.auth === "wrong" ? "Wrong password. " + (r.left === 1 ? "One more wrong one locks the login for 15 minutes." : `${r.left} tries left before the login locks.`) : "Log in again.";
-    if ($("spw")) { $("spw").value = ""; $("spw").focus(); }
-    return;
-  }
   if (!r.ok) { $("serr").textContent = r.error || "Could not save it."; return; }
-  if (pw) ST.authed = true;
   closeSet();
 });
-async function saveCall(path, body, pw) {
-  const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...body, ...(pw ? {password: pw} : {})})});
+async function saveCall(path, body) {
+  const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  if (r.status === 401) return {ok: false, error: "This browser is logged out: reload the page and log in."};
   return r.json().catch(() => ({ok: r.ok}));
 }
 async function reviewSection() {
@@ -3997,8 +4063,8 @@ async function reviewSection() {
   const ops = opsFromEdits();
   const p = await post("/api/settings/plan", {file: "config", ops}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
-  openSet("Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">The config.yaml it replaces is kept: History can put it back.</p>`, async pw => {
-    const r = await saveCall("/api/settings/save", {file: "config", ops, base: p.base}, pw);
+  openSet("Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">The config.yaml it replaces is kept: History can put it back.</p>`, async () => {
+    const r = await saveCall("/api/settings/save", {file: "config", ops, base: p.base});
     if (r.ok) { ST.edits = {}; await setData(true); renderSet(); refresh(); toast("Saved. Restart lanowl to apply."); }
     else if (r.why === "changed") { await setData(true); renderSet(); }
     return r;
@@ -4007,21 +4073,21 @@ async function reviewSection() {
 
 // -- Restart to apply --
 function restartSheet() {
-  const D = ST.data || {}, wait = ((D.restart || {}).waiting) || [];
+  const D = ST.data || {}, wait = ((D.restart || {}).waiting) || [], answering = ((D.restart || {}).answering) || 0;
   openSet("Restart lanowl?", `<p style="margin:0 2px 4px;font-size:15px">It reads config.yaml and inventory.yaml again. The dashboard is back in about ten seconds; nothing is watched for that long.</p>
-    <div class="dlab">Kept</div><ul class="klist">
+    <div class="dlab">Nothing is lost</div><ul class="klist">
       <li>${ic("check")}Open incidents, and what Telegram was already told about them</li>
       <li>${ic("check")}Paused devices, names, the model's switch</li>
       <li>${ic("check")}Logins: nobody is logged out</li>
       <li>${ic("check")}Proposals waiting for you, the history, the Timeline</li></ul>
-    <div class="dlab">Cut</div><ul class="klist cut"><li>${ic("warn")}An answer the owl is writing, if there is one</li></ul>
+    ${answering ? `<div class="swarn" style="margin-top:12px">The owl is writing ${answering === 1 ? "an answer" : answering + " answers"} right now: ${answering === 1 ? "it stops" : "they stop"} here. Ask again once lanowl is back.</div>` : ""}
     ${wait.length ? `<div class="chkno" style="margin-top:12px">${ic("warn")}<span>It waits: ${esc(wait.join("; "))}.</span></div>` : ""}`,
     async () => {
       const r = await post("/api/restart", {}).catch(() => ({ok: false, error: "lanowl did not answer."}));
       if (!r.ok) return {ok: false, error: r.waiting ? "It waits: " + r.waiting.join("; ") + "." : r.error};
       waitBack((S.d || {}).sweep ? S.d.sweep.started : 0);
       return r;
-    }, {label: "Restart now", noAuth: true, blocked: wait.length > 0, note: "No password needed: it only applies what was saved."});
+    }, {label: "Restart now", busy: "Restarting…", noAuth: true, blocked: wait.length > 0, note: "No password needed: it only applies what was saved."});
 }
 async function waitBack(started) {
   ST.restarting = true;
@@ -4046,11 +4112,11 @@ function passwordSheet() {
   openSet("Change the password", `<p class="fine" style="margin:0 4px 10px">Every browser is logged out, this one too, and logs in with the new one.</p>
     <input class="sfield" id="npw1" type="password" autocomplete="new-password" placeholder="New password: 8 characters or more" aria-label="New password">
     <input class="sfield" id="npw2" type="password" autocomplete="new-password" placeholder="The same again" aria-label="New password again" style="margin-top:8px">`,
-    async pw => {
+    async () => {
       const a = $("npw1").value, b = $("npw2").value;
       if (a.length < 8) return {ok: false, error: "The new password needs 8 characters or more."};
       if (a !== b) return {ok: false, error: "The two are not the same."};
-      const r = await saveCall("/api/settings/password", {new: a}, pw);
+      const r = await saveCall("/api/settings/password", {new: a});
       if (r.ok) { toast("Password changed: log in with the new one."); setTimeout(() => location.reload(), 1500); }
       return r;
     }, {label: "Change it", note: "Only its hash is kept, in config.yaml."});
@@ -4065,7 +4131,7 @@ async function setHistory() {
   H.forEach(x => { if (!(x.file in latest)) latest[x.file] = x.id; });
   let h = back("set", "Settings") + setHead("History", "Every save from the dashboard, the newest first. The file as it was before each one is kept: the last 30 of each.");
   h += H.length ? `<div class="list">` + H.map(x => `<div class="row" style="align-items:flex-start"><span class="rt"><span class="rn" style="white-space:normal">${esc((x.changes || []).slice(0, 3).join("; ") || "no change")}${(x.changes || []).length > 3 ? esc(` and ${x.changes.length - 3} more`) : ""}</span>
-      <span class="rs" style="white-space:normal">${esc(how[x.how] || "")}${esc(clock(x.ts))} · ${x.file === "config" ? "config.yaml" : "inventory.yaml"}${x.from ? " · from " + esc(x.from) : ""}${x.hand ? " · edited on the host before it" : ""}</span></span>
+      <span class="rs" style="white-space:normal">${esc(how[x.how] || "")}${esc(clock(x.ts))} · ${esc(FNAME[x.file] || x.file)}${x.from ? " · from " + esc(x.from) : ""}${x.hand ? " · edited on the host before it" : ""}</span></span>
       ${x.kept ? `<button class="rowbtn" type="button" data-sact="undo" data-id="${esc(x.id)}">${latest[x.file] === x.id ? "Undo" : "Restore"}</button>` : `<span class="rv">not kept</span>`}</div>`).join("") + `</div>`
     : `<div class="list"><div class="empty">Nothing saved from the dashboard yet.</div></div>`;
   put("set", `<div class="setw">${h}</div>`);
@@ -4073,30 +4139,214 @@ async function setHistory() {
 async function undoSheet(id) {
   const p = await post("/api/settings/restore", {id, preview: true}).catch(() => ({ok: false}));
   if (!p.ok) { toast(p.error || "That version is not kept any more."); return; }
-  const fname = p.file === "config" ? "config.yaml" : "inventory.yaml";
-  openSet(`Put ${fname} back`, planHtml(p, fname) + `<p class="fine" style="margin:10px 4px 0">The file as it was before that save — and everything saved after it goes back with it.</p>`, async pw => {
-    const r = await saveCall("/api/settings/restore", {id, base: p.base}, pw);
-    if (r.ok) { await setData(true); ST.devs = null; renderSet(); refresh(); toast("Put back. Restart lanowl to apply."); }
+  const fname = FNAME[p.file] || p.file;
+  openSet(`Put ${fname} back`, planHtml(p, fname) + `<p class="fine" style="margin:10px 4px 0">The file as it was before that save — and everything saved after it goes back with it.</p>`, async () => {
+    const r = await saveCall("/api/settings/restore", {id, base: p.base});
+    if (r.ok) { await setData(true); ST.devs = null; renderSet(); refresh(); toast(p.file === "secrets" ? "Put back: in use now." : "Put back. Restart lanowl to apply."); }
     return r;
   }, {label: "Put it back", blocked: (p.problems || []).length > 0});
 }
 
-// -- Secrets: by name, set or missing --
+// -- Secrets: set, replaced, never shown --
+// secrets.yaml, write-only: a login or a token goes in from here and never comes back. Each save
+// asks the dashboard password, however recently it was typed, and tells Telegram its name.
 async function setSecrets() {
-  const D = await setData(true), X = D.secrets || {};
-  const row = (n, sub, ok, miss) => `<div class="row"><span class="rt"><span class="rn">${esc(n)}</span><span class="rs" style="white-space:normal">${esc(sub)}</span></span><span class="src ${ok ? "ok" : miss ? "miss" : "def"}">${ok ? "set" : miss ? "missing" : "not used"}</span></div>`;
-  let h = back("set", "Settings") + setHead("Secrets", `What ${esc(X.path || "secrets.yaml")} holds, by name: set or missing, never a value. Edit the file on lanowl's machine; lanowl reads it again by itself, no restart.`);
+  const D = await setData(true), X = D.secrets || {}, F = X.file || {}, W = !!F.writable;
+  let h = back("set", "Settings") + setHead("Secrets", W ? "Set or replace them here. A value is never shown again. Each save tells Telegram which one changed."
+    : `What ${esc(X.path || "secrets.yaml")} holds, by name: set or missing, never a value.`);
   if (X.error) h += `<div class="swarn">${esc(X.error)}</div>`;
-  h += `<div class="sh">Logins</div><div class="list">` + ((X.logins || []).map(x => row(x.name, (x.set ? x.type : "named here, not in the file") + ((x.used_by || []).length ? " · " + x.used_by.slice(0, 4).join(", ") + (x.used_by.length > 4 ? "…" : "") : ""), x.set, !x.set)).join("") || `<div class="empty">No logins.</div>`) + `</div>`;
-  h += `<div class="sh">Tokens · key</div><div class="list">` + (X.tokens || []).map(t => row(t.name, t.set ? "from " + t.where : t.needed ? "needed: " + (t.name === "telegram" ? "telegram.chat_id is set" : "access.ha_url is set") : "not needed", t.set, t.needed && !t.set)).join("") +
-    row("ssh_key", X.ssh_key && X.ssh_key.path ? X.ssh_key.path : "none", X.ssh_key && X.ssh_key.exists, X.ssh_key && X.ssh_key.path && !X.ssh_key.exists) + `</div>`;
+  if (!W) h += `<div class="swarn">${esc(F.why_text || "secrets.yaml cannot be written by lanowl.")}</div>`;
+  const btn = (kind, name, set) => W ? `<button class="sbtn" type="button" data-sact="secset" data-k="${kind}" data-n="${esc(name)}">${set ? "Replace" : "Set"}</button>` : "";
+  const chip = (ok, miss) => `<span class="src ${ok ? "ok" : miss ? "miss" : "def"}">${ok ? "set" : miss ? "missing" : "not used"}</span>`;
+  h += `<div class="sh">Logins${W ? `<span class="r"><button class="flnk" type="button" data-sact="secset" data-k="add" data-n="">Add a login</button></span>` : ""}</div><div class="list">` +
+    ((X.logins || []).map(x => `<div class="row"><span class="rt"><span class="rn">${esc(x.name)}</span><span class="rs" style="white-space:normal">${x.set ? "user " + esc(x.user || "(none)") + " · " + esc(x.type === "key" ? "lanowl's key" : x.type === "key + password" ? "lanowl's key + a password" : "password") : "named here, not in the file"}${(x.used_by || []).length ? " · " + esc(x.used_by.slice(0, 4).join(", ") + (x.used_by.length > 4 ? "…" : "")) : ""}</span></span>
+      <span class="seccol">${chip(x.set, !x.set)}${btn("login", x.name, x.set)}</span></div>`).join("") || `<div class="empty">No logins yet.</div>`) + `</div>`;
+  h += `<div class="sh">Tokens</div><div class="list">` + (X.tokens || []).map(t => {
+    const env = t.where && t.where !== "secrets.yaml";
+    const what = t.name === "telegram" ? "the bot lanowl writes with" : "Home Assistant's, for access.ha_url";
+    const sub = env ? `from ${t.where}: change it there` : !t.set && t.needed ? "needed: " + (t.name === "telegram" ? "telegram.chat_id is set" : "access.ha_url is set") : what;
+    return `<div class="row"><span class="rt"><span class="rn">${esc(t.name)}</span><span class="rs" style="white-space:normal">${esc(sub)}</span></span>
+      <span class="seccol">${chip(t.set, t.needed && !t.set)}${env ? "" : btn("token", t.name, t.set)}</span></div>`;
+  }).join("") + `</div>`;
+  const K = X.ssh_key || {};
+  h += `<div class="sh">lanowl's ssh key</div><div class="list"><div class="row"><span class="rico">${ic("key")}</span><span class="rt"><span class="rn">${esc(K.path ? K.path.split("/").pop() : "none")}</span>
+    <span class="rs" style="white-space:normal">${K.exists ? esc(K.path) + " · for the logins that use lanowl's key" : K.path ? esc(K.path) + " is not there" : "no ssh_key in secrets.yaml"}</span></span>
+    ${K.public ? `<span class="seccol"><button class="sbtn" type="button" data-sact="pubkey">Public key</button></span>` : ""}</div></div>`;
   const miss = (X.logins || []).filter(x => !x.set);
-  if (miss.length) h += `<div class="box2 miss"><b>Add what is missing</b> to secrets.yaml:<pre>logins:\n${miss.map(x => `  ${x.name}: {user: …, password: "…"}`).join("\n")}</pre></div>`;
+  if (!W && miss.length) h += `<div class="box2 miss"><b>Add what is missing</b> to secrets.yaml:<pre>logins:\n${miss.map(x => `  ${x.name}: {user: …, password: "…"}`).join("\n")}</pre></div>`;
+  h += `<p class="fine" style="margin:6px 4px 18px">${esc(X.path || "secrets.yaml")}, in lanowl's config folder. You can still edit it by hand: lanowl reads it again by itself, no restart.</p>`;
   put("set", `<div class="setw">${h}</div>`);
+}
+function howSeg(id, how, key) {
+  return `<div class="segc" id="${id}"><button type="button" data-sact="how" data-seg="${id}" data-v="password" aria-pressed="${how !== "key"}">A password</button><button type="button" data-sact="how" data-seg="${id}" data-v="key" aria-pressed="${how === "key"}"${key ? "" : " disabled"}>lanowl's ssh key</button></div>`;
+}
+function keyCmd(id) {
+  const pub = ((ST.data || {}).secrets || {}).ssh_key && ST.data.secrets.ssh_key.public || (ST.setup || {}).public_key || ((ST.devs || {}).secrets || {}).public_key || "";
+  return pub ? `<div class="cmd"><code id="${id}">mkdir -p ~/.ssh && echo '${esc(pub)}' >> ~/.ssh/authorized_keys</code><button class="sbtn" type="button" data-sact="copy" data-for="${id}">Copy</button></div>`
+    : `<p class="fine" style="margin:6px 4px 0">lanowl has no ssh key yet.</p>`;
+}
+function paintHow(seg) {
+  const el = $(seg); if (!el) return;
+  const how = el.querySelector("[aria-pressed=true]").dataset.v;
+  const pw = $(seg + "-pw"), key = $(seg + "-key");
+  if (pw) pw.hidden = how === "key";
+  if (key) key.hidden = how !== "key";
+}
+function secretSheet(kind, name) {
+  const X = (ST.data || {}).secrets || {};
+  const hasKey = !!((X.ssh_key || {}).public);
+  if (kind === "token") {
+    const t = (X.tokens || []).find(x => x.name === name) || {name};
+    openSet((t.set ? "Replace the " : "Set the ") + name + " token", `<p class="fine" style="margin:0 4px 8px">${name === "telegram" ? "The bot lanowl writes with, from @BotFather. A new bot keeps the chat (telegram.chat_id); send it /start once, so it may write to you." : "Home Assistant's long-lived access token: your profile in Home Assistant → Security."}</p>
+      <div class="dlab">${t.set ? "New token" : "Token"}</div><div class="pwrow"><input class="sfield" id="scval" type="password" autocomplete="off" spellcheck="false" aria-label="Token"><button class="sbtn" type="button" data-sact="eye" data-for="scval">Show</button></div>`,
+      async () => {
+        const v = $("scval").value.trim();
+        if (!v) return {ok: false, error: "Paste the token."};
+        const r = await saveCall("/api/settings/secret", {op: "token", name, value: v, base: X.base});
+        if (r.ok) { await setData(true); setSecrets(); toast(`${name} token saved: in use now.`); }
+        return r;
+      }, {note: "Telegram gets one line naming it. Never the value."});
+    return;
+  }
+  const L = kind === "login" ? ((X.logins || []).find(x => x.name === name) || {name, set: false}) : null;
+  const how = L && L.how === "key" ? "key" : "password";
+  const body = (L ? `<p class="fine" style="margin:0 4px 8px">${(L.used_by || []).length ? "Used by " + esc(L.used_by.join(", ")) + "." : "No device uses it yet: pick it on a device, in Settings → Devices."}</p>`
+      : `<div class="dlab">Its name</div><input class="sfield" id="scname" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="cameras" aria-label="Login name"><p class="fine" style="margin:5px 4px 0">Then pick it on a device, in Settings → Devices. Several devices can share one.</p>`) +
+    `<div class="dlab">How lanowl logs in</div>${howSeg("schow", how, hasKey)}
+    <div class="dlab">User</div><input class="sfield" id="scuser" value="${esc((L && L.user) || "")}" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="User">
+    <div id="schow-pw"${how === "key" ? " hidden" : ""}><div class="dlab">${L && L.set ? "New password" : "Password"}</div><div class="pwrow"><input class="sfield" id="scval" type="password" autocomplete="new-password" placeholder="${L && L.set && L.how !== "key" ? "empty: the one there is kept" : ""}" aria-label="Password"><button class="sbtn" type="button" data-sact="eye" data-for="scval">Show</button></div></div>
+    <div id="schow-key"${how === "key" ? "" : " hidden"}><p class="fine" style="margin:10px 4px 0">On the device, add lanowl's public key for that user:</p>${keyCmd("sckey")}</div>
+    ${L && L.set ? `<p style="text-align:center;margin:14px 0 0"><button class="flnk" type="button" data-sact="secrm" data-n="${esc(name)}" style="color:var(--red-t);font-size:14px">Remove this login</button></p>` : ""}`;
+  openSet(L ? (L.set ? "Replace " : "Set ") + name : "Add a login", body, async () => {
+    const n = L ? name : $("scname").value.trim();
+    const hw = $("schow").querySelector("[aria-pressed=true]").dataset.v;
+    const user = $("scuser").value.trim(), v = $("scval").value;
+    if (!n) return {ok: false, error: "Give it a name."};
+    if (!L && (X.logins || []).some(x => x.name === n && x.set)) return {ok: false, error: `${n} is there already: Replace it in the list.`};
+    if (!user) return {ok: false, error: "Type the user lanowl logs in as."};
+    const r = await saveCall("/api/settings/secret", {op: "login", name: n, user, how: hw, value: hw === "key" ? "" : v, base: X.base});
+    if (r.ok) { await setData(true); setSecrets(); ST.devs = null; toast(`Login ${n} saved: in use now.`); }
+    return r;
+  }, {note: "Telegram gets one line naming it. Never the value."});
+}
+function removeSheet(name) {
+  const X = (ST.data || {}).secrets || {};
+  openSet(`Remove ${name}?`, `<p style="margin:0 2px 4px;font-size:15px">The login goes out of secrets.yaml. The file as it was is kept: History can put it back.</p>`, async () => {
+    const r = await saveCall("/api/settings/secret", {op: "remove", name, base: X.base});
+    if (r.ok) { await setData(true); setSecrets(); toast(`${name} removed.`); }
+    return r;
+  }, {label: "Remove it", busy: "Removing…", note: "Telegram gets one line naming it."});
+}
+function pubkeySheet() {
+  const pub = (((ST.data || {}).secrets || {}).ssh_key || {}).public || "";
+  openSet("lanowl's public key", `<p style="margin:0 2px;font-size:15px">For the machines lanowl logs in to by key. The private half stays in lanowl's config folder and is never shown.</p>
+    <div class="pubk" id="pubk">${esc(pub)}</div><div class="dlab">On the machine, as the user lanowl logs in as</div>${keyCmd("pkcmd")}
+    <button class="btn ghost" type="button" data-sact="copy" data-for="pubk">Copy the key</button>`,
+    async () => ({ok: true}), {noAuth: true, label: "Done", note: "Then give that device a login with lanowl's key: Settings → Secrets, Add a login."});
+}
+
+// -- sites: sites.list in config.yaml --
+// A site is another network: its chip next to All sites, its devices (placed by address: the most
+// specific network wins), and with a router lanowl logs into, that router's DHCP list with Watch
+// and Known. Settings → Sites lists them; a router's page offers "Make it a site".
+function sitesListHtml(D) {
+  const X = D.sites || {}, R = X.routers || [];
+  const rn = ip => { const r = R.find(x => x.ip === ip); return r ? `${r.name} (${ip})` : ip; };
+  return `<div class="sh">The sites<span class="r"><button class="flnk" type="button" data-sgo="set/site/new">Add a site</button></span></div><div class="list">` +
+    (X.list || []).map(s => {
+      const nets = s.nets.length ? s.nets.join(", ") : (X.home_default || []).join(", ") + ", lanowl's default";
+      const sub = s.home ? `the main site · ${nets}` : `${nets} · ${s.router ? "its router " + rn(s.router) : "no router: its devices are placed by address"}`;
+      return `<div class="row row2"><span class="rt"><span class="rn">${esc(s.name)}</span><span class="rs wrap">${esc(sub)}</span></span>
+        <span class="rbtns"><button class="rowbtn" type="button" data-sgo="set/site/${esc(encodeURIComponent(s.key))}">Edit</button>${s.home ? "" : `<button class="rowbtn" type="button" data-sact="siterm" data-k="${esc(s.key)}">Remove</button>`}</span></div>`;
+    }).join("") + `</div>`;
+}
+function routerSiteHtml(X, ip) {
+  const r = (X.routers || []).find(x => x.ip === ip);
+  if (!r || r.main) return "";
+  const s = r.site && (X.list || []).find(x => x.key === r.site);
+  if (s) return `<div class="sh">Site</div><div class="list"><button class="row" type="button" data-sgo="set/site/${esc(encodeURIComponent(s.key))}"><span class="rico">${ic("grid")}</span><span class="rt"><span class="rn">${esc(s.name)}'s router</span><span class="rs wrap">${esc(s.nets.join(", "))} · its DHCP list is read from here</span></span>${ic("chev", "chev")}</button></div>`;
+  if (r.main_side) return "";
+  return `<div class="sh">Site</div><div class="list"><button class="row" type="button" data-sgo="set/site/new/${esc(encodeURIComponent(ip))}"><span class="rico">${ic("plus")}</span><span class="rt"><span class="rn">Make it a site</span><span class="rs wrap">another network behind this router: its own chip next to All sites, its devices, its DHCP list</span></span>${ic("chev", "chev")}</button></div>`;
+}
+function siteStart(key, router) {
+  const X = (ST.data || {}).sites || {}, id = key === "new" ? "new/" + router : key;
+  if (!ST.site || ST.site.id !== id) {
+    const orig = key === "new" ? null : (X.list || []).find(s => s.key === key) || null;
+    let d;
+    if (orig) d = {name: orig.name, nets: orig.nets.join(", "), router: orig.router, criticality: orig.criticality};
+    else {
+      // from a router: named after its group (a group of its own, not one of the usual), on its /24
+      const r = (X.routers || []).find(x => x.ip === router);
+      const g = r && r.group && !GROUPS.includes(r.group) ? r.group : "";
+      d = {name: r ? cap(g || r.name) : "", nets: r ? router.split(".").slice(0, 3).join(".") + ".0/24" : "", router: r ? router : "", criticality: "info"};
+    }
+    ST.site = {id, key, orig, d, base: JSON.stringify(d), router};
+  }
+  return ST.site;
+}
+async function setSitePage(rest) {
+  const D = await setData();
+  if (!D || !D.ok) { put("set", back("set", "Settings") + setHead("Site") + `<div class="list"><div class="empty">${esc((D || {}).error || "Settings did not load.")}</div></div>`); return; }
+  const X = D.sites || {};
+  const isNew = rest === "new" || rest.startsWith("new/");
+  const key = isNew ? "new" : decodeURIComponent(rest), router = rest.startsWith("new/") ? decodeURIComponent(rest.slice(4)) : "";
+  if (!isNew && !(X.list || []).some(s => s.key === key)) { put("set", back("set/s/sites", "Sites") + setHead("Site") + `<div class="list"><div class="empty">No such site in config.yaml.</div></div>`); return; }
+  const T = siteStart(key, router), d = T.d, home = !!(T.orig && T.orig.home);
+  const fromR = router && (X.routers || []).find(x => x.ip === router);
+  const R = (X.routers || []).filter(r => r.ip === d.router || (!r.main && !r.main_side && (!r.site || r.site === T.key)));
+  const cur = R.find(r => r.ip === d.router);
+  const every = (((D.sections || []).flatMap(x => x.fields)).find(f => f.path && pkey(f.path) === "sites.dhcp_every_min") || {});
+  const mins = every.source === "file" ? every.value : every.example || 30;
+  const fld = (lab, body, help) => `<div class="fld"><div class="fh"><span class="lab plain">${esc(lab)}</span></div>${body}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
+  const inp = (k, ph, mode) => `<input class="fin" data-sf="${k}" value="${esc(d[k] || "")}" placeholder="${esc(ph)}"${mode ? ` inputmode="${mode}"` : ""} autocomplete="off" spellcheck="false" autocapitalize="off">`;
+  let h = (fromR ? back("set/device/" + encodeURIComponent(router), fromR.name) : back("set/s/sites", "Sites")) +
+    setHead(T.orig ? T.orig.name : fromR ? "Make it a site" : "A new site", T.orig ? (home ? "The main site: the network lanowl runs on." : `${esc(T.orig.key)} · in config.yaml`) : "It goes into config.yaml, under sites.");
+  h += pendHtml(D) + fileWarn(D);
+  h += `<div class="list">` + fld("Name", inp("name", "Office")) +
+    fld("Networks", inp("nets", home ? (X.home_default || []).join(", ") : "192.168.0.0/24"),
+      home ? `Empty: ${esc((X.home_default || []).join(", "))}, every address no other site has.`
+        : "The addresses on its side, comma-separated. Reached over a VPN? Add the address lanowl reaches its router at too, like 10.8.0.9/32. The most specific network wins: a site can sit inside the main one's.") +
+    (home ? "" : fld("Router", `<div class="fsw"><select class="fsel" data-sf="router"><option value=""${d.router ? "" : " selected"}>none: its devices are placed by address</option>${R.map(r => `<option value="${esc(r.ip)}"${r.ip === d.router ? " selected" : ""}>${esc(r.name)} · ${esc(r.ip)} · ${esc(r.kind)}</option>`).join("")}</select></div>`,
+      !d.router ? "With its router, lanowl reads that network's DHCP list: what is on it, named, with Watch and Known. A router is a mikrotik or an openwrt in Settings → Devices."
+        : cur && !cur.login ? `<span style="color:var(--orange-t)">${esc(cur.name)} has no login yet: give it one on its page, Settings → Devices. lanowl reads its DHCP list over ssh.</span>`
+        : `lanowl reads its DHCP list every ${esc(mins)} minutes, over ssh with its login. Nothing is written to it.`) +
+      fld("Criticality", `<div class="segc" role="group">${CRITS_UI.map(c => `<button type="button" data-sact="sitecrit" data-v="${c}" aria-pressed="${d.criticality === c}">${c}</button>`).join("")}</div>`,
+        `For the devices you Watch from its DHCP list: ${esc(CRITH[d.criticality] || "")}.`)) + `</div>`;
+  if (T.orig && !home) h += `<button class="btn ghost" type="button" data-sact="siterm" data-k="${esc(T.key)}" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove this site</button>`;
+  const changed = !T.orig || JSON.stringify(d) !== T.base;
+  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${T.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="sitereset">Discard</button><button class="btn" type="button" data-sact="sitereview">Review</button></div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+const CRITS_UI = ["critical", "high", "warning", "low", "info"];
+function onSiteField(el, redraw) {
+  const T = ST.site; if (!T) return;
+  T.d[el.dataset.sf] = el.value;
+  if (redraw) { setSitePage(T.id); return; }
+  const bar = $("sbar"); if (bar) bar.hidden = JSON.stringify(T.d) === T.base && !!T.orig;
+}
+async function siteReview(removeKey) {
+  const T = ST.site, X = (ST.data || {}).sites || {};
+  const body = removeKey ? {key: removeKey, site: null}
+    : {key: T.orig ? T.key : null, site: {name: T.d.name, nets: String(T.d.nets || "").split(/[,\s]+/).filter(Boolean), router: T.d.router || "", criticality: T.d.criticality}};
+  const p = await post("/api/settings/site", {...body, preview: true}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
+  const s = (X.list || []).find(x => x.key === removeKey) || {};
+  const after = removeKey ? "Its devices stay in inventory.yaml: from the next restart they count as the main site's, or another site's whose networks hold them."
+    : `From the next restart: its chip next to All sites, its devices${body.site.router ? ", its router's DHCP list" : ""}.`;
+  openSet(removeKey ? `Remove ${s.name || removeKey}?` : "Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">${esc(after)} The config.yaml it replaces is kept: History can put it back.</p>`, async () => {
+    const r = await saveCall("/api/settings/site", {...body, base: p.base});
+    if (r.ok) { ST.site = null; await setData(true); setNav("set/s/sites"); if (S.setp === "set/s/sites") renderSet(); refresh(); toast((removeKey ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
+    else if (r.why === "changed") { await setData(true); renderSet(); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0, label: removeKey ? "Remove it" : "Save"});
 }
 
 // -- devices: inventory.yaml --
 const GUESSABLE = ["mikrotik", "openwrt", "linux", "esxi", "unifi", "homeassistant", "reolink", "shelly", "generic"];
+// the groups a device can be put in: those inventory.yaml has (its groups: and every one a
+// device uses), then the usual ones
+const GROUPS = ["network", "servers", "cameras", "home", "iot", "media", "misc"];
+const groupList = (have, cur) => Array.from(new Set([...(have || []), ...GROUPS, ...(cur ? [cur] : [])]));
 async function devData(force) { if (!ST.devs || force) ST.devs = await getJ("/api/settings/devices"); return ST.devs; }
 async function setDevices() {
   const V = await devData(true);
@@ -4116,18 +4366,26 @@ async function setDevices() {
 function devStart(ip) {
   const V = ST.devs || {};
   const orig = ip === "new" ? null : (V.devices || []).find(d => String(d.ip) === ip) || null;
-  if (!ST.dev || ST.dev.key !== ip) ST.dev = {key: ip, orig, d: JSON.parse(JSON.stringify(orig || {ip: "", name: "", group: (V.groups || [])[0] || "home", criticality: "low", checks: [{type: "icmp"}]})), ckt: "icmp"};
+  if (!ST.dev || ST.dev.key !== ip) {
+    ST.dev = {key: ip, orig, d: JSON.parse(JSON.stringify(orig || {ip: "", name: "", group: (V.groups || [])[0] || "home", criticality: "low", checks: [{type: "icmp"}]})), ckt: "icmp"};
+    // its login: its own when no other device names it, one it shares, or none
+    const S2 = ST.dev, c = (orig || {}).credentials, L = c && (V.logins || []).find(l => l.name === c);
+    if (c && L && (L.used || []).length <= 1) Object.assign(S2, {lmode: L.how === "key" ? "own-key" : "own-pw", luser: L.user || "", lname: c, lset: L.type !== "key"});
+    else if (c && L) S2.lmode = "use:" + c;
+    else if (c) Object.assign(S2, {lmode: "own-pw", luser: "", lname: c, lset: false});
+    else S2.lmode = S2.d.kind && (V.secrets || {}).writable ? "own-pw" : "none";
+  }
   return ST.dev;
 }
 const CRITH = {critical: "pages at once", high: "pages", warning: "in the digest", low: "in the digest, never pages", info: "reported once, never pages"};
 async function setDevice(ip) {
-  const V = await devData();
+  const V = await devData(), D = await setData();
   if (!V.ok) { renderSet(); return; }
   const S2 = devStart(ip), d = S2.d, can = (V.kinds || {})[d.kind || ""] || [];
-  const changed = !sameV(S2.d, S2.orig || null) && (S2.orig || d.ip || d.name);
+  const changed = (!sameV(S2.d, S2.orig || null) && (S2.orig || d.ip || d.name)) || S2.lchanged;
   const inp = (k, ph, mode) => `<input class="fin" data-dk="${k}" value="${esc(d[k] == null ? "" : d[k])}" placeholder="${esc(ph || "")}"${mode ? ` inputmode="${mode}"` : ""} autocomplete="off" spellcheck="false">`;
   const fld = (k, body, help) => `<div class="fld"><div class="fh"><span class="lab">${esc(k)}</span></div>${body}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
-  const groups = Array.from(new Set([...(V.groups || []), d.group || "misc"]));
+  const groups = groupList(V.groups, d.group || "misc");
   const logins = V.logins || [];
   let h = back("set/devices", "Devices") + setHead(S2.orig ? (S2.orig.name || S2.orig.ip) : "A new device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "It goes into inventory.yaml.");
   h += `<div class="sh">Watching</div><div class="list">` +
@@ -4142,17 +4400,24 @@ async function setDevice(ip) {
     fld("role", inp("role", "optional")) + fld("note", inp("note", "optional")) + `</div>`;
   h += `<div class="sh">Managing</div><div class="list">` +
     fld("kind", `<div class="fsw"><select class="fsel" data-dk="kind"><option value=""${!d.kind ? " selected" : ""}>none: watched only</option>${Object.keys(V.kinds || {}).map(k => `<option${k === d.kind ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></div>`) +
-    fld("credentials", `<div class="fsw"><select class="fsel" data-dk="credentials"><option value="">none</option>${logins.map(l => `<option value="${esc(l.name)}"${l.name === d.credentials ? " selected" : ""}>${esc(l.name)} · ${esc(l.type)}</option>`).join("")}${d.credentials && !logins.find(l => l.name === d.credentials) ? `<option selected>${esc(d.credentials)} (missing in secrets.yaml)</option>` : ""}</select></div>`, "its login, by name, in secrets.yaml. Never a password on this page.") +
+    (d.kind ? fld("login", `<div class="fsw"><select class="fsel" data-dk="lmode">${lmodeOpts(S2.lmode, logins, !!(V.secrets || {}).public_key, !!(V.secrets || {}).writable)}</select></div><div class="lgf">${loginFields("dev", "dev", {lmode: S2.lmode, user: S2.luser, set: S2.lset})}</div>`,
+      (S2.lmode || "").startsWith("own") ? `In secrets.yaml as <span class="k">${esc(S2.lname || "(named after the device)")}</span>. A password is never shown again${S2.lset ? ": leave it empty to keep the one there is" : ""}.`
+        : (S2.lmode || "").startsWith("use:") ? "Shared with the devices that use it; change it in Settings → Secrets." : "lanowl only watches it.") : "") +
     fld("manage", can.length ? `<div class="schips">${can.map(f => `<button class="schip" type="button" data-sact="man" data-f="${f}" aria-pressed="${(d.manage || []).includes(f)}">${f}</button>`).join("")}</div>` : `<span class="fine">${d.kind ? "a " + esc(d.kind) + " device is watched only" : "pick a kind first"}</span>`,
       (d.manage || []).filter(f => V.switches && V.switches[f] === false).map(f => `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`).join("<br>")) +
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
+  if (S2.orig) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);
   if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
   h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Review</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
+  const pw = document.querySelector("#set input[data-dk=lpw]");
+  if (pw) pw.value = S2.lpw || "";
 }
 function onDevField(el) {
   const S2 = ST.dev; if (!S2) return;
   const k = el.dataset.dk;
+  if (k === "lmode") { S2.lmode = el.value; S2.lchanged = true; if (S2.lmode.startsWith("own") && !S2.lname) S2.lset = false; setDevice(S2.key); return; }
+  if (k === "luser" || k === "lpw") { S2[k] = el.value; S2.lchanged = true; const bar = $("sbar"); if (bar) bar.hidden = false; return; }
   if (k === "group" && el.value === "__new") {
     // a box for the new group's name, under the list
     el.value = S2.d.group || "";
@@ -4164,26 +4429,47 @@ function onDevField(el) {
   if (k === "units") S2.d.restart = {...(S2.d.restart || {}), units: el.value.split(",").map(x => x.trim()).filter(Boolean)};
   else if (el.value === "") delete S2.d[k];
   else S2.d[k] = el.value;
-  if (k === "kind") { const can = ((ST.devs || {}).kinds || {})[el.value] || []; S2.d.manage = (S2.d.manage || []).filter(f => can.includes(f)); if (!S2.d.manage.length) delete S2.d.manage; setDevice(S2.key); return; }
+  if (k === "kind") {
+    const can = ((ST.devs || {}).kinds || {})[el.value] || []; S2.d.manage = (S2.d.manage || []).filter(f => can.includes(f)); if (!S2.d.manage.length) delete S2.d.manage;
+    if (!el.value) S2.lmode = "none";
+    else if (S2.lmode === "none" && ((ST.devs || {}).secrets || {}).writable) S2.lmode = "own-pw";
+    setDevice(S2.key); return;
+  }
   const bar = $("sbar"); if (bar) bar.hidden = false;
+}
+// the device as the form has it, and its own login: {device, login} or {error}
+function devBody(S2) {
+  const d = JSON.parse(JSON.stringify(S2.d)), m = S2.lmode || "none";
+  if (!d.kind || m === "none") { delete d.credentials; return {device: d, login: null}; }
+  if (m.startsWith("use:")) { d.credentials = m.slice(4); return {device: d, login: null}; }
+  const user = (S2.luser || "").trim(), pw = S2.lpw || "";
+  if (!user && !pw && !S2.lset) { delete d.credentials; return {device: d, login: null}; }
+  if (!user) return {error: "Its login: type the user lanowl logs in as."};
+  if (m === "own-pw" && !pw && !S2.lset) return {error: "Its login: type its password, or choose no login."};
+  const taken = new Set(((ST.devs || {}).logins || []).map(l => l.name));
+  const name = S2.lname || slugName(d.name || d.ip, taken);
+  return {device: d, login: {name, user, how: m === "own-key" ? "key" : "password", password: m === "own-pw" ? pw : ""}};
 }
 async function devReview(remove) {
   const S2 = ST.dev, V = ST.devs;
-  const body = {ip: S2.orig ? S2.orig.ip : null, device: remove ? null : S2.d};
+  const B = remove ? {device: null, login: null} : devBody(S2);
+  if (B.error) { toast(B.error); return; }
+  const body = {ip: S2.orig ? S2.orig.ip : null, device: B.device, ...(B.login ? {login: B.login} : {})};
   const p = await post("/api/settings/device", {...body, preview: true}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
-  openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : "Save to inventory.yaml", planHtml(p, "inventory.yaml"), async pw => {
-    const r = await saveCall("/api/settings/device", {...body, base: p.base}, pw);
+  openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : p.secrets ? "Save the device and its login" : "Save to inventory.yaml",
+    planHtml(p, "inventory.yaml") + (p.secrets ? planHtml(p.secrets, "secrets.yaml") : ""), async () => {
+    const r = await saveCall("/api/settings/device", {...body, base: p.base, ...(p.secrets ? {sbase: p.secrets.base} : {})});
     if (r.ok) { ST.dev = null; await devData(true); await setData(true); setNav("set/devices"); refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
     return r;
-  }, {blocked: (p.problems || []).length > 0, label: remove ? "Remove it" : "Save"});
+  }, {blocked: (p.problems || []).length > 0 || ((p.secrets || {}).problems || []).length > 0, label: remove ? "Remove it" : "Save"});
   return V;
 }
 async function migrateSheet() {
   const p = await post("/api/settings/migrate", {preview: true}).catch(() => ({ok: false}));
   if (!p.ok) { toast(p.error || "Nothing to move."); return; }
-  openSet("Move them into inventory.yaml", planHtml(p, "inventory.yaml") + `<p class="fine" style="margin:10px 4px 0">They keep being watched as they are; from the next restart they come from the file.</p>`, async pw => {
-    const r = await saveCall("/api/settings/migrate", {base: p.base}, pw);
+  openSet("Move them into inventory.yaml", planHtml(p, "inventory.yaml") + `<p class="fine" style="margin:10px 4px 0">They keep being watched as they are; from the next restart they come from the file.</p>`, async () => {
+    const r = await saveCall("/api/settings/migrate", {base: p.base});
     if (r.ok) { await devData(true); await setData(true); renderSet(); refresh(); toast("Moved into inventory.yaml."); }
     return r;
   }, {blocked: (p.problems || []).length > 0, label: "Move them"});
@@ -4201,116 +4487,300 @@ async function watchDevice(siteKey, mac, name) {
   const p = await post("/api/settings/device", {ip: null, device: dev, preview: true, how: "watch"}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "It cannot be watched."); return; }
   ST.data = ST.data || {recent: false};
-  openSet(`Watch ${dev.name}?`, `<p class="fine" style="margin:0 4px 10px">Pinged from now on, and written into inventory.yaml so it stays after a restart. Change it later in Settings → Devices.</p>` + planHtml(p, "inventory.yaml"), async pw => {
-    const r = await saveCall("/api/settings/device", {ip: null, device: dev, base: p.base, how: "watch"}, pw);
+  openSet(`Watch ${dev.name}?`, `<p class="fine" style="margin:0 4px 10px">Pinged from now on, and written into inventory.yaml so it stays after a restart. Change it later in Settings → Devices.</p>` + planHtml(p, "inventory.yaml"), async () => {
+    const r = await saveCall("/api/settings/device", {ip: null, device: dev, base: p.base, how: "watch"});
     if (r.ok) { refresh(); toast(`Watching ${dev.name}.`); }
     return r;
-  }, {blocked: (p.problems || []).length > 0, label: "Watch it"});
+  }, {blocked: (p.problems || []).length > 0, label: "Watch it", busy: "Watching…"});
 }
 
-// -- the first-run setup: the router, its DHCP list, your picks, inventory.yaml --
+// -- the first-run setup: the router, its DHCP list, your picks, Telegram, the three files --
+// Passwords and the bot's token typed here stay in this page until the last step writes them
+// into secrets.yaml; Try the router and Check the token only test them.
 function steps(n) {
-  return `<div class="ssteps">${["The router", "Your devices", "Write"].map((s, i) => `<span class="${i + 1 === n ? "on" : i + 1 < n ? "done" : ""}"><i>${i + 1}</i>${s}</span>`).join("")}</div>`;
+  return `<div class="ssteps">${["Welcome", "The router", "Your devices", "Telegram", "Write"].map((s, i) => `<span class="${i + 1 === n ? "on" : i + 1 < n ? "done" : ""}"><i>${i + 1 < n ? "✓" : i + 1}</i>${s}</span>`).join("")}</div>`;
 }
 async function setupData(force) { if (!ST.setup || force) ST.setup = await getJ("/api/setup"); return ST.setup; }
+const secretsWritable = U => !!(((U || {}).files || {}).secrets || {}).writable;
 async function setupRouter() {
   const U = await setupData(true);
-  if (!ST.router) ST.router = {dhcp_source: U.dhcp_source || "", credentials: U.credentials || "router-read", result: null};
-  const R = ST.router, res = R.result;
-  let h = back("set", "Settings") + steps(1) + setHead("Find your devices", "lanowl reads your router's DHCP list, you pick what to watch, and it writes inventory.yaml.");
+  if (!ST.router) ST.router = {dhcp_source: U.dhcp_source || "", credentials: U.credentials || "router-read", user: U.login_user || "", password: "", result: null};
+  const R = ST.router, res = R.result, W = secretsWritable(U);
+  let h = back("set", "Settings") + steps(2) + setHead("Your router", "lanowl reads its DHCP list to find your devices. A read-only user is enough.");
   if (U.needed) h += `<div class="pend"><div class="pt"><b>${U.needed === "example" ? "inventory.yaml still has the example's devices" : "inventory.yaml has no devices yet"}</b>${U.needed === "example" ? "The setup replaces them with yours; the file's comments stay." : "Pick them from your router's list."}</div><button class="sbtn" type="button" data-sact="later">Not now</button></div>`;
-  h += `<div class="list"><div class="fld"><div class="fh"><span class="lab">mikrotik.dhcp_source</span></div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="http://192.168.88.1" autocomplete="off" spellcheck="false"><div class="fhelp">the router's REST base: DHCP leases, routes, the log</div></div>
-    <div class="fld"><div class="fh"><span class="lab">mikrotik.credentials</span>${res && res.login === false ? `<span class="src miss">missing in secrets.yaml</span>` : res && res.login ? `<span class="src ok">set in secrets.yaml</span>` : U.login_set ? `<span class="src ok">set in secrets.yaml</span>` : `<span class="src miss">missing in secrets.yaml</span>`}</div>
-      <input class="fin" id="rcred" value="${esc(R.credentials)}" autocomplete="off" spellcheck="false"><div class="fhelp">its read-only user: a login of that name in secrets.yaml</div></div></div>`;
-  if (res && res.login === false) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>Checked at ${esc(R.at || "")}: ${esc(res.error)}.</span></div>`;
-  if ((res && res.login === false) || (!res && !U.login_set)) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml in lanowl's config folder (the one beside its compose file; lanowl reads it as ${esc((res && res.path) || U.secrets_path || "/config/secrets.yaml")}):<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">The router's own read-only user and its password: never typed on this page. lanowl reads the file again by itself, no restart: then Try the router again. No such user on the router yet? The docs say how to make a read-only one (docs/setup/mikrotik.md).</p></div>`;
+  const pwChip = R.password ? `<span class="src chg">typed</span>` : U.login_set ? `<span class="src ok">set in secrets.yaml</span>` : `<span class="src def">not set</span>`;
+  h += `<div class="list"><div class="fld"><div class="fh"><label class="lab plain" for="rsrc">Address</label></div><input class="fin" id="rsrc" value="${esc(R.dhcp_source)}" placeholder="http://192.168.88.1" autocomplete="off" spellcheck="false" autocapitalize="off"><div class="fhelp">its web address: lanowl reads RouterOS's REST API there</div></div>`;
+  if (W) h += `<div class="fld"><div class="fh"><label class="lab plain" for="ruser">User</label></div><input class="fin" id="ruser" value="${esc(R.user)}" autocomplete="off" spellcheck="false" autocapitalize="off"></div>
+    <div class="fld"><div class="fh"><label class="lab plain" for="rpw">Password</label>${pwChip}</div>
+      <div class="pwrow"><input class="fin" id="rpw" type="password" autocomplete="new-password" placeholder="${U.login_set ? "set: type a new one to replace it" : "the router user's password"}"><button class="sbtn" type="button" data-sact="eye" data-for="rpw">Show</button></div>
+      <div class="fhelp">Kept in secrets.yaml on lanowl's machine. Never shown again, here or anywhere.</div></div>`;
+  h += `</div><details class="sadv"${R.credentials !== "router-read" ? " open" : ""}><summary>${ic("chev")}Advanced</summary><div class="list"><div class="fld"><div class="fh"><label class="lab plain" for="rcred">Its name in secrets.yaml</label></div>
+    <input class="fin" id="rcred" value="${esc(R.credentials)}" autocomplete="off" spellcheck="false" autocapitalize="off"><div class="fhelp">mikrotik.credentials. Only matters if you also edit the file by hand.</div></div></div></details>`;
   if (res && res.ok) h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Logged in as <b>${esc(res.user)}</b>${res.version ? " · RouterOS " + esc(res.version) : ""} · ${res.leases} address${res.leases === 1 ? "" : "es"} on its DHCP list</span></div>`;
-  else if (res && res.error && res.login !== false) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(res.error)}</span></div>`;
+  else if (res && res.error) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(R.at || "")} · ${esc(res.error)}.</span></div>`;
+  if (!W && !U.login_set) h += `<div class="box2 miss"><b>Add the router's login</b> to secrets.yaml in lanowl's config folder (lanowl reads it as ${esc(U.secrets_path || "/config/secrets.yaml")}; it cannot write it: ${esc((((U.files || {}).secrets) || {}).why === "readonly" ? "the compose file mounts the folder read-only" : "the file is not writable")}):<pre>logins:\n  ${esc(R.credentials || "router-read")}: {user: lanowl, password: "…"}</pre><p class="fine" style="margin:8px 0 0">lanowl reads the file again by itself, no restart: then Try the router again.</p></div>`;
   h += `<button class="btn ghost" type="button" data-sact="rtry">${res && res.ok ? "Try again" : "Try the router"}</button>`;
   h += `<button class="btn" type="button" data-sact="rnext"${res && res.ok ? "" : " disabled"}>Next</button>`;
-  h += `<p class="fine" style="margin:16px 4px">Not a MikroTik? lanowl reads DHCP only from RouterOS. <button class="flnk" type="button" data-sact="sweep">Sweep the network instead</button>: every address of the main network gets one ping, and lanowl's machine says who answered (address, maker; no names).</p>`;
+  h += `<p class="fine" style="margin:16px 4px 4px">No read-only user on the router yet? The docs say how to make one: docs/setup/mikrotik.md.</p>`;
+  h += `<p class="fine" style="margin:0 4px 16px">Not a MikroTik? lanowl reads DHCP only from RouterOS. <button class="flnk" type="button" data-sact="sweep">Sweep the network instead</button>: every address of the main network gets one ping, and lanowl's machine says who answered (address, maker; no names).</p>`;
   put("set", `<div class="setw">${h}</div>`);
+  if ($("rpw") && R.password) $("rpw").value = R.password;
+}
+function routerBody() {
+  const R = ST.router || {};
+  return {dhcp_source: R.dhcp_source, credentials: R.credentials, ...(R.user && R.password ? {user: R.user, password: R.password} : {})};
 }
 async function routerTry() {
   const R = ST.router;
-  R.dhcp_source = $("rsrc").value.trim(); R.credentials = $("rcred").value.trim();
+  R.dhcp_source = $("rsrc").value.trim(); R.credentials = $("rcred").value.trim() || "router-read";
+  if ($("ruser")) { R.user = $("ruser").value.trim(); R.password = $("rpw").value; }
   R.result = {pending: true};
-  R.result = await post("/api/setup/router", {dhcp_source: R.dhcp_source, credentials: R.credentials}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  R.result = await post("/api/setup/router", routerBody()).catch(() => ({ok: false, error: "lanowl did not answer."}));
   R.at = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false});
   ST.rows = null;
   setupRouter();
 }
+// a device's login, in the setup and on its own page: its own (a user and a password, or
+// lanowl's key: typed right there), one that is there already, or none
+function lmodeOpts(cur, logins, hasKey, writable) {
+  const opt = (v, l) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
+  let h = "";
+  if (writable) h += opt("own-pw", "its own login: a user and a password") + (hasKey ? opt("own-key", "its own login: lanowl's ssh key") : "");
+  for (const l of logins || []) h += opt("use:" + l.name, `the login ${l.name} · ${l.user || "no user"}, ${l.how === "key" ? "lanowl's key" : "password"}`);
+  return h + opt("none", "no login: watched only");
+}
+function loginFields(where, id, L) {
+  // L: {lmode, user, set}; the password goes in after drawing, never into the page's HTML
+  if (!L.lmode || !L.lmode.startsWith("own")) return "";
+  const at = k => where === "pick" ? `data-pip="${esc(id)}" data-pk="${k}"` : `data-dk="${k === "user" ? "luser" : "lpw"}"`;
+  return `<input class="fin" ${at("user")} value="${esc(L.user || "")}" placeholder="user" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="User">` +
+    (L.lmode === "own-pw" ? `<input class="fin" type="password" ${at("password")} placeholder="${L.set ? "set: empty keeps it" : "password"}" autocomplete="new-password" aria-label="Password">`
+      : `<span class="fhelp wide" style="margin-top:0">On the device, as that user, add lanowl's key:</span><span class="wide">${keyCmd("key-" + String(id).replace(/[^A-Za-z0-9]/g, "_"))}</span>`);
+}
+function slugName(name, taken) {
+  const base = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "device";
+  let n = base, i = 2;
+  while (taken.has(n)) n = base + "-" + i++;
+  taken.add(n);
+  return n;
+}
+function defaultLmode(kind) {
+  if (!kind) return "none";
+  if (!secretsWritable(ST.setup)) return "none";
+  return kind === "linux" && (ST.setup || {}).public_key ? "own-key" : "own-pw";
+}
 async function setupPick() {
   if (!ST.router) { setNav("setup"); return; }
   if (!ST.rows) {
-    put("set", `<div class="setw">${back("setup", "The router")}${steps(2)}${setHead("Pick what to watch")}${SKEL}</div>`);
-    const r = await post("/api/setup/leases", {dhcp_source: ST.router.dhcp_source, credentials: ST.router.credentials}).catch(() => ({ok: false}));
+    put("set", `<div class="setw">${back("setup", "The router")}${steps(3)}${setHead("Pick what to watch")}${loading("Reading the router's DHCP list…")}</div>`);
+    const r = await post("/api/setup/leases", routerBody()).catch(() => ({ok: false}));
     if (!r.ok) { toast(r.error || "The router's list could not be read."); setNav("setup"); return; }
     ST.rows = r; ST.picked = {};
-    if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", fixed: true};
+    if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", lmode: defaultLmode("mikrotik"), fixed: true};
   }
   const R = ST.rows, rows = R.rows || [], F = ST.pf || "all";
   const shown = rows.filter(x => F === "all" || (F === "static" && x.static) || (F === "here" && x.here));
   const one = x => {
-    const P = ST.picked[x.ip], on = !!P, v = P || {name: x.name || (x.vendor ? x.vendor + " " + x.ip.split(".").pop() : x.ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || ""};
+    const P = ST.picked[x.ip], on = !!P, v = P || {name: x.name || (x.vendor ? x.vendor + " " + x.ip.split(".").pop() : x.ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || "", lmode: "none"};
     return `<div class="pk${on ? " on" : ""}"><button class="cb" type="button" data-sact="pick" data-pi="${esc(x.ip)}" aria-pressed="${on}" aria-label="Pick">${ic("check")}</button>
       <span class="rt"><span class="rn">${esc(x.name || x.vendor || x.ip)}</span><span class="meta"><span>${esc(x.ip)}</span>${x.vendor ? `·<span>${esc(x.vendor)}</span>` : ""}${R.router ? `·<span>${x.static ? "static" : "dynamic"}</span>` : ""}${x.here ? `·<span class="here">here now</span>` : x.last_seen ? `·<span>seen ${esc(x.last_seen)} ago</span>` : ""}</span>
       <span class="pkm"><input class="fin wide" data-pip="${esc(x.ip)}" data-pk="name" value="${esc(v.name)}" aria-label="Name">
-        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group" aria-label="Group">${["network", "servers", "cameras", "home", "iot", "media", "misc"].map(g => `<option${g === v.group ? " selected" : ""}>${g}</option>`).join("")}</select></span>
+        <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group" aria-label="Group">${groupList((ST.setup || {}).groups, v.group).map(g => `<option${g === v.group ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></span>
         <span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="criticality" aria-label="Criticality">${["critical", "high", "warning", "low", "info"].map(g => `<option${g === v.criticality ? " selected" : ""}>${g}</option>`).join("")}</select></span>
         <span class="fsw wide"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="kind" aria-label="Kind"><option value="">kind: none (watched only)</option>${GUESSABLE.map(g => `<option${g === v.kind ? " selected" : ""}>${g}</option>`).join("")}</select></span>
-        ${x.kind ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}</span></span></div>`;
+        ${x.kind ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}
+        ${v.kind ? loginBlock(x.ip, v) : `<span class="fhelp wide" style="margin-top:0">Choose its kind, and it can have a login: lanowl then checks its updates, backs it up, reboots it when you approve.</span>`}</span></span></div>`;
   };
-  const n = Object.keys(ST.picked).length;
-  let h = back("setup", "The router") + steps(2) + setHead("Pick what to watch", `${rows.length} on ${R.router ? "the router's DHCP list" : "the network (" + esc(R.swept || "") + ")"}. Each gets a ping check; add more checks, a kind and a login later, on its own page.`);
+  const n = Object.keys(ST.picked).length, nl = Object.values(ST.picked).filter(withLogin).length;
+  let h = back("setup", "The router") + steps(3) + setHead("Pick what to watch", `${rows.length} on ${R.router ? "the router's DHCP list" : "the network (" + esc(R.swept || "") + ")"}. Each gets a ping check. Give one a kind and a login, and lanowl can also check its updates, back it up, reboot it when you approve.`);
   h += `<div class="schips" style="margin-bottom:10px">${[["all", "All", rows.length], ["static", "Static", rows.filter(x => x.static).length], ["here", "Here now", rows.filter(x => x.here).length]].filter(c => R.router || c[0] !== "static").map(([k, l, c]) => `<button class="schip" type="button" data-sact="pf" data-v="${k}" aria-pressed="${F === k}">${l} ${c}</button>`).join("")}
     ${R.router ? `<button class="schip" type="button" data-sact="pickstatic">Pick every static one</button>` : ""}</div>`;
   h += `<div class="list">`;
-  if (R.router) h += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta">${esc(R.router)} · always watched, critical</span></span></div>`;
+  if (R.router) {
+    const P = ST.picked[R.router];
+    h += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta">${esc(R.router)} · always watched, critical, kind mikrotik</span>
+      <span class="pkm"><span class="fhelp wide" style="margin-top:0">A login that may do more than read (not the read-only one above) lets lanowl check its updates and back it up. Leave it empty to only read it.</span>${loginBlock(R.router, P)}</span></span></div>`;
+  }
   h += shown.filter(x => x.ip !== R.router).map(one).join("") + `</div>`;
-  h += `<div class="sbar"><span class="cnt"><b>${n} picked</b></span><button class="btn" type="button" data-sact="pnext"${n ? "" : " disabled"}>Next</button></div>`;
+  h += `<div class="sbar"><span class="cnt" id="pcnt">${pickCount()}</span><button class="btn" type="button" data-sact="pnext"${n ? "" : " disabled"}>Next</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
+  document.querySelectorAll("#set input[data-pip][data-pk=password]").forEach(i => { i.value = (ST.picked[i.dataset.pip] || {}).password || ""; });
+}
+const withLogin = P => P.kind && (((P.lmode || "").startsWith("own") && (P.user || "").trim()) || (P.lmode || "").startsWith("use:"));
+function pickCount() {
+  const ps = Object.values(ST.picked), nl = ps.filter(withLogin).length;
+  return `<b>${ps.length} picked</b>${nl ? ` · ${nl} with a login` : ""}`;
+}
+function loginBlock(ip, P) {
+  const U = ST.setup || {};
+  return `<span class="fsw wide"><select class="fsel" data-pip="${esc(ip)}" data-pk="lmode" aria-label="Login">${lmodeOpts(P.lmode || "none", U.logins, !!U.public_key, secretsWritable(U))}</select></span>` +
+    loginFields("pick", ip, P);
 }
 function onPick(el) {
-  const ip = el.dataset.pip, P = ST.picked[ip];
-  if (P) P[el.dataset.pk] = el.value;
+  const ip = el.dataset.pip, P = ST.picked[ip], k = el.dataset.pk;
+  if (!P) return;
+  P[k] = el.value;
+  if ((k === "user" || k === "password") && $("pcnt")) $("pcnt").innerHTML = pickCount();
+  if (k === "kind") { P.lmode = defaultLmode(el.value); setupPick(); }
+  if (k === "lmode") setupPick();
 }
+// the devices and the logins they bring: a device's own login is named after it (nvr,
+// home-server), and lands in secrets.yaml with the rest at the last step
 function pickedDevices() {
-  return Object.values(ST.picked).map(P => {
+  const U = ST.setup || {}, logins = {};
+  const taken = new Set([...(U.logins || []).map(l => l.name), (ST.router || {}).credentials || "router-read"]);
+  const devices = Object.values(ST.picked).map(P => {
     const x = ((ST.rows || {}).rows || []).find(r => r.ip === P.ip) || {};
+    let cred = "";
+    if (P.kind && (P.lmode || "").startsWith("use:")) cred = P.lmode.slice(4);
+    else if (P.kind && (P.lmode || "").startsWith("own") && (P.user || "").trim()) {
+      cred = slugName(P.name, taken);
+      logins[cred] = {user: P.user.trim(), how: P.lmode === "own-key" ? "key" : "password", ...(P.lmode === "own-pw" ? {password: P.password || ""} : {})};
+    }
     return {ip: P.ip, name: P.name, group: P.group, criticality: P.criticality, ...(P.kind ? {kind: P.kind} : {}),
-            ...(x.mac && !x.static ? {mac: x.mac} : {}), checks: [{type: "icmp"}]};
+            ...(cred ? {credentials: cred} : {}), ...(x.mac && !x.static ? {mac: x.mac} : {}), checks: [{type: "icmp"}]};
   });
+  return {devices, logins};
+}
+// a device's own login half typed: said before going on
+function pickProblem() {
+  for (const P of Object.values(ST.picked)) {
+    if (!P.kind || !(P.lmode || "").startsWith("own")) continue;
+    const u = (P.user || "").trim(), pw = P.password || "";
+    if (P.lmode === "own-pw" && u && !pw) return `${P.name}: type its password, or choose no login.`;
+    if (P.lmode === "own-pw" && pw && !u) return `${P.name}: type the user lanowl logs in as.`;
+  }
+  return "";
+}
+
+// -- Telegram: the token, then /start --
+async function setupTelegram() {
+  if (!ST.rows) { setNav("setup"); return; }
+  const U = await setupData();
+  const T = ST.tg || (ST.tg = {token: "", bot: null, chats: [], chat: null, offset: 0, listening: false, err: "", res: null});
+  let h = back("setup/pick", "Your devices") + steps(4) + setHead("Telegram", "Where lanowl writes: alerts, the morning digest, the Approve buttons, its answers. Optional: the dashboard works without it.");
+  const tg = U.telegram || {};
+  if (tg.token && tg.chat_id && !T.change) {
+    h += `<div class="chkok" style="margin-bottom:10px">${ic("check")}<span>Telegram is set up: the bot's token ${tg.where === "secrets.yaml" ? "is in secrets.yaml" : "comes from " + esc(tg.where)}, and lanowl writes to chat ${esc(tg.chat_id)}.</span></div>
+      <button class="btn" type="button" data-sgo="setup/write">Next</button>${tg.where === "secrets.yaml" && secretsWritable(U) ? `<button class="btn ghost" type="button" data-sact="tgchange">Use another bot or chat</button>` : ""}`;
+    put("set", `<div class="setw">${h}</div>`);
+    return;
+  }
+  if (!secretsWritable(U)) {
+    h += `<div class="swarn">secrets.yaml cannot be written by lanowl, so the bot's token cannot be set from here: Telegram's page in the docs says how to add it by hand.</div><button class="btn" type="button" data-sact="tgskip">Next</button>`;
+    put("set", `<div class="setw">${h}</div>`);
+    return;
+  }
+  h += `<div class="box2 tgc${T.bot ? " done" : ""}"><h4><i>${T.bot ? "✓" : "1"}</i>Your bot's token</h4><p>In Telegram, send <b>/newbot</b> to <b>@BotFather</b>. It answers with a token.</p>
+    <div class="pwrow"><input class="fin" id="tgtok" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="123456:ABC-DEF…" aria-label="Bot token"><button class="sbtn" type="button" data-sact="eye" data-for="tgtok">Show</button></div>
+    <button class="sbtn pri" type="button" data-sact="tgcheck">Check the token</button>
+    ${T.bot ? `<div class="chkok">${ic("check")}<span>Bot <b>@${esc(T.bot.user)}</b> · “${esc(T.bot.name)}”</span></div>` : T.res && T.res.error ? `<div class="chkno">${ic("warn")}<span>${esc(T.res.error)}.</span></div>` : ""}</div>`;
+  if (T.bot) {
+    h += `<div class="box2 tgc${T.chat ? " done" : ""}"><h4><i>${T.chat ? "✓" : "2"}</i>Send /start to @${esc(T.bot.user)}</h4><p>Open the bot in Telegram, from the phone you want the alerts on, and send <b>/start</b>. The chat appears here.</p>`;
+    if (T.chat) h += `<div class="chkok">${ic("check")}<span>lanowl writes to <b>${esc(T.chat.name)}</b>${T.chat.type === "private" ? "" : " (" + esc(T.chat.type) + ")"}. The bot said so in that chat.</span></div>`;
+    else {
+      h += T.chats.map(c => `<div class="chatrow"><span class="rt"><span class="rn">${esc(c.name)}</span><span class="rs">${c.type === "private" ? "a private chat" : esc(c.type)} · id ${esc(c.id)}${c.text ? " · sent " + esc(c.text) : ""}</span></span><button class="sbtn pri" type="button" data-sact="tguse" data-id="${esc(c.id)}">Use this chat</button></div>`).join("");
+      h += T.listening ? `<div class="twait"><span class="spin"></span><span>Waiting for a message, up to five minutes</span></div>`
+        : `${T.err ? `<div class="chkno">${ic("warn")}<span>${esc(T.err)}.</span></div>` : ""}<button class="sbtn" type="button" data-sact="tglisten">Listen again</button>`;
+    }
+    h += `</div>`;
+  }
+  h += `<button class="btn" type="button" data-sgo="setup/write"${T.chat ? "" : " disabled"}>Next</button>`;
+  h += `<p class="fine" style="text-align:center;margin:12px 4px 18px"><button class="flnk" type="button" data-sact="tgskip">Skip: no Telegram for now</button><br>Settings → Secrets sets it later.</p>`;
+  put("set", `<div class="setw">${h}</div>`);
+  if ($("tgtok") && T.token) $("tgtok").value = T.token;
+}
+async function tgCheck() {
+  const T = ST.tg;
+  T.token = $("tgtok").value.trim(); T.bot = null; T.chat = null; T.chats = []; T.err = ""; T.listening = false;
+  T.res = await post("/api/setup/telegram", {token: T.token}).catch(() => ({ok: false, error: "lanowl did not answer"}));
+  if (T.res.ok) { T.bot = {user: T.res.user, name: T.res.name}; T.offset = 0; setupTelegram(); tgListen(); }
+  else setupTelegram();
+}
+async function tgListen() {
+  const T = ST.tg;
+  if (!T || T.listening || !T.bot) return;
+  T.listening = true; T.err = "";
+  const until = Date.now() + 300000;
+  setupTelegram();
+  while (T.listening && !T.chat && Date.now() < until && S.setp === "setup/telegram" && ST.tg === T) {
+    const r = await post("/api/setup/telegram/chats", {token: T.token, offset: T.offset}).catch(() => ({ok: false, error: "lanowl did not answer"}));
+    if (!T.listening || ST.tg !== T) return;
+    if (r.ok) {
+      T.offset = r.offset || T.offset;
+      let fresh = false;
+      for (const c of r.chats || []) if (!T.chats.some(x => x.id === c.id)) { T.chats.push(c); fresh = true; }
+      if (fresh && S.setp === "setup/telegram") setupTelegram();
+    } else if (r.busy) await new Promise(res => setTimeout(res, 2000));
+    else { T.err = r.error || "Telegram did not answer"; break; }
+  }
+  T.listening = false;
+  if (S.setp === "setup/telegram" && ST.tg === T) setupTelegram();
+}
+async function tgUse(id) {
+  const T = ST.tg, c = T.chats.find(x => x.id === id);
+  if (!c) return;
+  const r = await post("/api/setup/telegram/hello", {token: T.token, chat_id: c.id}).catch(() => ({ok: false, error: "lanowl did not answer"}));
+  if (!r.ok) { toast(r.error || "The bot could not write there."); return; }
+  T.chat = c; T.listening = false;
+  setupTelegram();
+}
+
+// -- the last step: secrets.yaml, inventory.yaml, config.yaml --
+function writeBody() {
+  const T = ST.tg || {}, {devices, logins} = pickedDevices();
+  let tz = load("tz", "");
+  if (!tz) { try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {} }
+  return {devices, router: ST.rows && ST.rows.router ? routerBody() : null, logins,
+          telegram: T.chat && !T.skip ? {token: T.token, chat_id: T.chat.id} : null, timezone: tz};
 }
 async function setupWrite() {
   if (!ST.rows) { setNav("setup"); return; }
-  put("set", `<div class="setw">${back("setup/pick", "Your devices")}${steps(3)}${setHead("Write inventory.yaml")}${SKEL}</div>`);
-  const body = {devices: pickedDevices(), router: ST.rows.router ? {dhcp_source: ST.router.dhcp_source, credentials: ST.router.credentials} : null};
+  put("set", `<div class="setw">${back("setup/telegram", "Telegram")}${steps(5)}${setHead("Write your files")}${loading("Checking the three files with lanowl --check's rules…")}</div>`);
+  const body = writeBody();
   const p = await post("/api/setup/write", {...body, preview: true}).catch(() => ({ok: false}));
   const U = await setupData();
-  let h = back("setup/pick", "Your devices") + steps(3) + setHead("Write inventory.yaml", (U.needed === "example" ? "The example's devices go, its comments stay. " : "") + "Dynamic addresses get their MAC, so lanowl follows them when DHCP moves them.");
-  if (!p.ok) h += `<div class="chkno">${ic("warn")}<span>${esc(p.error || (p.inventory || {}).error || "It cannot be written.")}</span></div>`;
-  if (p.inventory) h += planHtml(p.inventory, "inventory.yaml");
-  if (p.config) h += planHtml(p.config, "config.yaml");
-  const blocked = !p.ok || ((p.inventory || {}).problems || []).length || ((p.config || {}).problems || []).length;
-  h += `<button class="btn" type="button" data-sact="wgo"${blocked ? " disabled" : ""}>Write it</button>`;
+  let h = back("setup/telegram", "Telegram") + steps(5) + setHead("Write your files", "One save, three files, in lanowl's config folder. Your comments and anything else in them stay." + (U.needed === "example" ? " The example's devices go." : ""));
+  if (!p.ok) h += `<div class="chkno" style="margin-bottom:10px">${ic("warn")}<span>${esc(p.error || ["secrets", "inventory", "config"].map(k => (p[k] || {}).error).filter(Boolean).join("; ") || "It cannot be written.")}</span></div>`;
+  for (const k of ["secrets", "inventory", "config"]) if (p[k] && p[k].ok) h += planHtml(p[k], FNAME[k]);
+  if (p.secrets) h += `<p class="fine" style="margin:10px 4px 0">Passwords and tokens are written, and never shown again.</p>`;
+  const blocked = !p.ok || ["secrets", "inventory", "config"].some(k => ((p[k] || {}).problems || []).length);
+  h += `<button class="btn" type="button" data-sact="wgo"${blocked ? " disabled" : ""}>Write and restart</button>`;
   put("set", `<div class="setw">${h}</div>`);
-  ST.wbody = body; ST.wbases = {inventory: (p.inventory || {}).base, config: (p.config || {}).base};
+  ST.wbody = body; ST.wbases = {secrets: (p.secrets || {}).base, inventory: (p.inventory || {}).base, config: (p.config || {}).base};
 }
 function writeSheet() {
-  openSet("Write inventory.yaml", `<p style="margin:0 2px;font-size:15px">${ST.wbody.devices.length} device${ST.wbody.devices.length === 1 ? "" : "s"}${ST.wbases.config ? ", and the router in config.yaml" : ""}. lanowl starts watching them at the restart.</p>`, async pw => {
-    const r = await saveCall("/api/setup/write", {...ST.wbody, bases: ST.wbases}, pw);
-    if (r.ok) { save("setupLater", 0); ST.rows = null; ST.picked = {}; ST.devs = null; await setData(true); setNav("setup/done"); refresh(); }
+  const n = ST.wbody.devices.length;
+  openSet("Write your files", `<p style="margin:0 2px;font-size:15px">${n} device${n === 1 ? "" : "s"}${ST.wbases.secrets ? ", their logins" : ""}${ST.wbody.telegram ? ", Telegram" : ""}. Then lanowl restarts and starts watching them.</p>`, async () => {
+    const r = await saveCall("/api/setup/write", {...ST.wbody, bases: ST.wbases});
+    if (r.ok) {
+      save("setupLater", 0); save("tz", "");
+      ST.rows = null; ST.picked = {}; ST.devs = null; ST.tg = null; ST.wbody = null;
+      if (ST.router) ST.router.password = "";
+      await setData(true);
+      setNav("setup/done");
+      const rr = await post("/api/restart", {}).catch(() => ({ok: false}));
+      if (rr.ok) waitBack((S.d || {}).sweep ? S.d.sweep.started : 0);
+      refresh();
+    }
     return r;
-  }, {label: "Write it"});
+  }, {label: "Write and restart", busy: "Writing…"});
 }
-
 async function setupDone() {
-  const D = await setData(true), waiting = !!(D.pending || {}).inventory;
-  put("set", `<div class="setw">${back("set", "Settings")}${steps(4)}` + (waiting
-    ? setHead("Written", "inventory.yaml has your devices. Restart lanowl and it watches them.") + `<button class="btn" type="button" data-sact="restart">Restart to apply</button>`
-    : setHead("Done", "lanowl is watching your devices. Each one can have more checks, a kind and a login: Settings → Devices.") +
-      `<button class="btn" type="button" data-sgo="home">See them on Now</button><button class="btn ghost" type="button" data-sgo="set/devices">Settings → Devices</button>`) + `</div>`);
+  const D = await setData(true), waiting = Object.keys(D.pending || {}).length > 0;
+  if (waiting || ST.restarting) {
+    put("set", `<div class="setw">${back("set", "Settings")}${steps(6)}` + (ST.restarting
+      ? setHead("Written", "Your files are written. lanowl is restarting to read them.") + `<div class="twait">${'<span class="spin"></span>'}<span>Restarting: back in a few seconds…</span></div>`
+      : setHead("Written", "Your files are written. Restart lanowl and it watches your devices.") + `<button class="btn" type="button" data-sact="restart">Restart to apply</button>`) + `</div>`);
+    return;
+  }
+  const V = await devData(true), n = (V.devices || []).length;
+  put("set", `<div class="setw">${back("set", "Settings")}${steps(6)}${setHead(`lanowl is watching ${n} device${n === 1 ? "" : "s"}`, "The first sweep is done within a minute.")}
+    <div class="sh">Next, in Settings</div><div class="list">
+      <button class="row" type="button" data-sgo="set/s/model"><span class="rico">${ic("owl")}</span><span class="rt"><span class="rn">The model</span><span class="rs">where Ollama runs, for the owl's answers</span></span>${ic("chev", "chev")}</button>
+      <button class="row" type="button" data-sgo="set"><span class="rico">${ic("shield")}</span><span class="rt"><span class="rn">What lanowl does</span><span class="rs">updates, backups, the router's log: each off until you switch it on</span></span>${ic("chev", "chev")}</button>
+      <button class="row" type="button" data-sgo="set/secrets"><span class="rico">${ic("key")}</span><span class="rt"><span class="rn">Secrets</span><span class="rs">logins and tokens, write-only</span></span>${ic("chev", "chev")}</button></div>
+    <button class="btn" type="button" data-sgo="home">See them on Now</button></div>`);
 }
 
 // -- events --
@@ -4322,12 +4792,12 @@ document.addEventListener("click", async e => {
   const a = t.dataset.sact;
   if (a === "gear") { setNav("set"); return; }
   if (a === "sclose") { closeSet(); return; }
-  if (a === "review") { reviewSection(); return; }
+  if (a === "review") { withSpin(t, "Checking…", reviewSection); return; }
   if (a === "discard") { ST.edits = {}; renderSet(); return; }
-  if (a === "restart") { await setData(true); restartSheet(); return; }
+  if (a === "restart") { withSpin(t, "One moment…", async () => { await setData(true); restartSheet(); }); return; }
   if (a === "password") { await setData(); passwordSheet(); return; }
-  if (a === "undo") { undoSheet(+t.dataset.id); return; }
-  if (a === "migrate") { migrateSheet(); return; }
+  if (a === "undo") { withSpin(t, "Checking…", () => undoSheet(+t.dataset.id)); return; }
+  if (a === "migrate") { withSpin(t, "Checking…", migrateSheet); return; }
   const S2 = ST.dev;
   if (a === "crit" && S2) { S2.d.criticality = t.dataset.v; setDevice(S2.key); return; }
   if (a === "eo" && S2) { if (t.dataset.v) S2.d.expect_offline = t.dataset.v; else delete S2.d.expect_offline; setDevice(S2.key); return; }
@@ -4339,41 +4809,62 @@ document.addEventListener("click", async e => {
     S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
   }
   if (a === "devreset") { ST.dev = null; renderSet(); return; }
-  if (a === "devreview") { devReview(false); return; }
-  if (a === "devdel") { devReview(true); return; }
+  if (a === "sitecrit" && ST.site) { ST.site.d.criticality = t.dataset.v; setSitePage(ST.site.id); return; }
+  if (a === "sitereset") { ST.site = null; renderSet(); return; }
+  if (a === "sitereview") { withSpin(t, "Checking…", () => siteReview(null)); return; }
+  if (a === "siterm") { withSpin(t, "Checking…", () => siteReview(t.dataset.k)); return; }
+  if (a === "devreview") { withSpin(t, "Checking…", () => devReview(false)); return; }
+  if (a === "devdel") { withSpin(t, "Checking…", () => devReview(true)); return; }
   if (a === "later") { save("setupLater", Date.now()); setNav("set"); return; }
-  if (a === "rtry") { routerTry(); return; }
+  if (a === "rtry") { withSpin(t, "Trying the router…", routerTry); return; }
   if (a === "rnext") { setNav("setup/pick"); return; }
   if (a === "sweep") {
-    toast("Sweeping the network: up to a minute.");
-    const r = await post("/api/setup/sweep", {}).catch(() => ({ok: false}));
+    const r = await withSpin(t, "Sweeping the network: up to a minute…", () => post("/api/setup/sweep", {}).catch(() => ({ok: false})));
+    if (!r) return;
     if (!r.ok) { toast(r.error || "The sweep did not run."); return; }
     ST.router = ST.router || {dhcp_source: "", credentials: ""}; ST.rows = r; ST.picked = {}; setNav("setup/pick"); if (S.setp === "setup/pick") setupPick(); return;
   }
   if (a === "pick") {
     const ip = t.dataset.pi, x = ((ST.rows || {}).rows || []).find(r => r.ip === ip) || {};
     if (ST.picked[ip]) delete ST.picked[ip];
-    else ST.picked[ip] = {ip, name: x.name || (x.vendor ? x.vendor + " " + ip.split(".").pop() : ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || ""};
+    else ST.picked[ip] = {ip, name: x.name || (x.vendor ? x.vendor + " " + ip.split(".").pop() : ip), group: x.kind === "mikrotik" ? "network" : "home", criticality: "low", kind: x.kind || "", lmode: defaultLmode(x.kind)};
     setupPick(); return;
   }
-  if (a === "pickstatic") { ((ST.rows || {}).rows || []).filter(x => x.static && !ST.picked[x.ip]).forEach(x => { ST.picked[x.ip] = {ip: x.ip, name: x.name || x.vendor || x.ip, group: "home", criticality: "low", kind: x.kind || ""}; }); setupPick(); return; }
+  if (a === "pickstatic") { ((ST.rows || {}).rows || []).filter(x => x.static && !ST.picked[x.ip]).forEach(x => { ST.picked[x.ip] = {ip: x.ip, name: x.name || x.vendor || x.ip, group: "home", criticality: "low", kind: x.kind || "", lmode: defaultLmode(x.kind)}; }); setupPick(); return; }
   if (a === "pf") { ST.pf = t.dataset.v; setupPick(); return; }
-  if (a === "pnext") { setNav("setup/write"); return; }
-  if (a === "wgo") { await setupData(true); writeSheet(); return; }
+  if (a === "pnext") { const why = pickProblem(); if (why) { toast(why); return; } setNav("setup/telegram"); return; }
+  if (a === "wgo") { withSpin(t, "One moment…", async () => { await setupData(true); writeSheet(); }); return; }
+  if (a === "eye") { const i = $(t.dataset.for); if (i) { const show = i.type === "password"; i.type = show ? "text" : "password"; t.textContent = show ? "Hide" : "Show"; } return; }
+  if (a === "copy") {
+    const el = $(t.dataset.for);
+    if (el) copyText(el.textContent).then(() => toast("Copied."), () => { const r = document.createRange(); r.selectNodeContents(el); const g = getSelection(); g.removeAllRanges(); g.addRange(r); toast("Selected: copy it with your keyboard."); });
+    return;
+  }
+  if (a === "how") { const seg = $(t.dataset.seg); seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === t))); paintHow(t.dataset.seg); return; }
+  if (a === "secset") { withSpin(t, "…", async () => { await setData(); secretSheet(t.dataset.k, t.dataset.n); }); return; }
+  if (a === "secrm") { removeSheet(t.dataset.n); return; }
+  if (a === "pubkey") { pubkeySheet(); return; }
+  if (a === "tgcheck") { withSpin(t, "Asking Telegram…", tgCheck); return; }
+  if (a === "tglisten") { tgListen(); return; }
+  if (a === "tguse") { withSpin(t, "Saying hello…", () => tgUse(t.dataset.id)); return; }
+  if (a === "tgskip") { if (ST.tg) { ST.tg.listening = false; ST.tg.skip = true; } else ST.tg = {skip: true, chats: []}; setNav("setup/write"); return; }
+  if (a === "tgchange") { ST.tg = {token: "", bot: null, chats: [], chat: null, offset: 0, listening: false, err: "", change: true}; setupTelegram(); return; }
 });
 document.addEventListener("input", e => {
   const el = e.target;
   if (S.tab !== "set") return;
   if (el.dataset.k && el.dataset.t !== "bool" && el.dataset.t !== "choice") onField(el);
   else if (el.dataset.dk && el.tagName === "INPUT") onDevField(el);
-  else if (el.dataset.pip) onPick(el);
+  else if (el.dataset.pip && el.tagName === "INPUT") onPick(el);
+  else if (el.dataset.sf && el.tagName === "INPUT") onSiteField(el, false);
 });
 document.addEventListener("change", e => {
   const el = e.target;
   if (S.tab !== "set") return;
   if (el.dataset.k && (el.dataset.t === "bool" || el.dataset.t === "choice")) onField(el);
   else if (el.dataset.dk && el.tagName === "SELECT") onDevField(el);
-  else if (el.dataset.pip) onPick(el);
+  else if (el.dataset.pip && el.tagName === "SELECT") onPick(el);
+  else if (el.dataset.sf && el.tagName === "SELECT") onSiteField(el, true);
 });
 // the first run: a new install opens on the setup, once (Not now puts it off for a day)
 (async () => {

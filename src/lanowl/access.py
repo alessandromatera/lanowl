@@ -45,6 +45,7 @@ exchange, so those are ALLOWED as extras (+), never preferred over modern ones.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import stat
@@ -135,6 +136,43 @@ class SecretsFile:
 
 
 _FILES: dict = {}
+
+
+class _Planned(SecretsFile):
+    """A secrets.yaml text that is not a file yet: what `--check`'s rules read while Settings
+    weighs a save (overlay)."""
+
+    def __init__(self, path: str, text: str):
+        super().__init__(path)
+        try:
+            self._data = parse(text)
+        except Exception as e:
+            self._data, self.error = _empty(), f"not valid YAML: {type(e).__name__}"
+
+    def data(self) -> dict:
+        return self._data
+
+
+@contextlib.contextmanager
+def overlay(cfg: dict, text: str):
+    """`cfg` reads `text` as its secrets.yaml for the duration (cfg is a copy the caller made)."""
+    real = secrets_path(cfg)
+    fake = real + "#planned"
+    _FILES[fake] = _Planned(fake, text)
+    ac = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+    cfg["access"] = {**ac, "secrets_file": fake}
+    try:
+        yield
+    finally:
+        _FILES.pop(fake, None)
+        cfg["access"] = {**ac, "secrets_file": real}
+
+
+def reread(cfg: dict):
+    """secrets.yaml was just written: read it again at the next use, whatever its mtime says."""
+    f = _FILES.get(secrets_path(cfg))
+    if f is not None:
+        f._mtime = None
 
 
 def secrets_path(cfg: dict) -> str:

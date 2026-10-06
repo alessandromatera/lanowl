@@ -46,26 +46,26 @@ machine. [The prompt to copy](docs/getting-started/with-an-ai.md).
 
 ## Quick start (Docker)
 
-The files under `config/` can be written by an AI assistant from a description of your
-network: [Set it up with an AI assistant](docs/getting-started/with-an-ai.md). By hand:
+No file to copy or edit:
 
 ```bash
 git clone https://github.com/alessandromatera/lanowl && cd lanowl
-mkdir config
-cp config.example.yaml config/config.yaml        # then edit: network, Telegram, the router
-cp inventory.example.yaml config/inventory.yaml  # the devices to watch
-cp secrets.example.yaml config/secrets.yaml && chmod 600 config/secrets.yaml
-ssh-keygen -t ed25519 -N '' -C lanowl -f config/id_ed25519   # lanowl's key, for logins by key
-cp docker/env.example docker/.env                # this host's address, the model's URL, TZ
 docker compose -f docker/compose.yaml up -d
+docker exec lanowl lanowl --setup-code
 ```
 
-Then open `http://<this host>/`. It asks for a setup code (`docker exec lanowl lanowl
---setup-code` prints it) and a password, then opens on a setup that reads your router's DHCP
-list and writes `inventory.yaml` with the devices you pick. Everything else in `config.yaml`
-can be changed from the gear, too. On Linux, allow
-unprivileged ping first
-(`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
+At its first start lanowl writes its own `config.yaml`, `inventory.yaml`, `secrets.yaml` and
+ssh key into the empty `config/` folder. Open `http://<this host>:8088/`: it asks for the
+setup code the last command printed and a password, then opens on a setup that reads your
+router's DHCP list (its address, user and password typed there), lets you pick the devices
+and give each a login, finds your Telegram chat from `/start`, and writes the three files.
+Everything else in `config.yaml`, every login and every token can be changed from the gear,
+too; a password or a token goes in and is never shown again. On Linux, allow unprivileged
+ping first (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
+
+Rather write the files yourself, or have an AI assistant write them from a description of your
+network? Copy the examples into `config/` instead: [Quick start](docs/getting-started/quick-start.md),
+[Set it up with an AI assistant](docs/getting-started/with-an-ai.md).
 
 What lanowl will do with each device, and why not:
 
@@ -81,13 +81,14 @@ docker compose -f docker/compose.yaml run --rm lanowl python -m lanowl.main --on
 
 ## Configure
 
-Three files, all under `config/`:
+Three files, all under `config/`, written by lanowl at its first start and changed from the
+dashboard's gear (or by hand):
 
 | file | what | shared? |
 |---|---|---|
 | `config.yaml` | everything lanowl does, with every optional feature off | yes |
 | `inventory.yaml` | the devices: how each is watched, and what lanowl does with it | yes |
-| `secrets.yaml` | every secret: device logins, tokens, lanowl's ssh key; mode 600, read-only | **never** |
+| `secrets.yaml` | every secret: device logins, tokens, lanowl's ssh key; mode 600, write-only from the dashboard | **never** |
 | `profiles/` | device kinds of your own (optional) | yes |
 
 Two settings shape how the owl thinks:
@@ -122,9 +123,10 @@ to look into something; leave them out and it simply cannot. lanowl watches its 
 a change to it that grants more than `mikrotik.lanowl_policy` is reported like any other
 configuration change.
 
-Then in `config.yaml`, `mikrotik.dhcp_source: "http://192.168.88.1"` and
-`mikrotik.credentials: router-read`, and in `secrets.yaml` that login:
-`router-read: {user: lanowl, password: "a long one"}`.
+Then type its address, the user and the password in the first-run setup (or Settings → Add
+from the router's list). By hand instead: in `config.yaml`, `mikrotik.dhcp_source:
+"http://192.168.88.1"` and `mikrotik.credentials: router-read`, and in `secrets.yaml` that
+login: `router-read: {user: lanowl, password: "a long one"}`.
 
 **One kept connection instead of polling** (recommended): the API over TLS. RouterOS will
 not self-sign a server certificate ("CA not found"), so a small local CA signs it:

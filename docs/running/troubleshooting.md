@@ -78,12 +78,14 @@ device that sleeps by design wants `expect_offline`. One you switched off wants 
 The owl's shell is offered only while its walls are proven. The log and the Ask tab's "The
 model's shell" say which test failed: the LAN handshake to `shell.canary_lan` (pick a service
 that always answers, such as a server's ssh port), or something the sandbox reached that it
-must not. Is the sandbox running? `docker compose -f docker/compose.yaml --profile shell up -d`.
+must not. Is the sandbox running? Settings → The model's shell gives the command that starts
+it, with lanowl's address in it.
 
 ## Times are wrong
 
-Set `TZ` in `docker/.env`. Sunrise and sunset, the morning jobs, the weekly review and the
-router's log timestamps all read local time.
+Set the time zone: `timezone` in Settings (the first-run setup takes it from your browser),
+or `TZ` in `docker/.env`, which wins. Sunrise and sunset, the morning jobs, the weekly review
+and the router's log timestamps all read local time.
 
 ## Still stuck
 

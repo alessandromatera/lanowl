@@ -1,28 +1,41 @@
 """The dashboard's Settings, devices and first-run setup: the routes (settings.py does the work).
 
 Every route here is behind the login (web.py), except `/api/setup/claim`: the first page of a
-new install, which takes the setup code and the password. A route that writes a file asks for
-the password again when this browser has not typed it in the last ten minutes (login.py
-`recent`); a 403 with {"auth": "needed"} tells the page to ask. Never a 401 — that is the page's
-"logged out, reload".
+new install, which takes the setup code and the password. A logged-in browser may write: the
+login is the guard, and nothing asks the password again.
 
   GET  /api/settings              the forms with their values and sources, the files, the
                                   history, what waits for a restart, the secrets by name
   POST /api/settings/plan         {file, ops} -> the diff, the changes, --check's new ✗
-  POST /api/settings/save         {file, ops, base, password?}
-  POST /api/settings/restore      {id, preview | base, password?}
-  POST /api/settings/password     {new, password?} -> a new dashboard password (everyone out)
+  POST /api/settings/save         {file, ops, base}
+  POST /api/settings/restore      {id, preview | base}
+  POST /api/settings/password     {new} -> a new dashboard password (everyone out)
   POST /api/restart               Restart to apply
   GET  /api/settings/devices      inventory.yaml's devices, the kinds and what each can do,
                                   the logins by name, the devices watched in lanowl's state
-  POST /api/settings/device       {ip | null, device | null, preview | base, password?, how}
+  POST /api/settings/device       {ip | null, device | null, login?, preview | base + sbase,
+                                  how}: a device, and its own login (secrets.yaml)
   POST /api/settings/migrate      the devices watched in lanowl's state, into inventory.yaml
+  POST /api/settings/secret       {op: login | token | remove, name, user?, how?, value?,
+                                  preview | base}: secrets.yaml, write-only
+  POST /api/settings/site         {key | null, site: {name, nets, router, criticality} | null,
+                                  preview | base}: a site of `sites.list`, added, changed or
+                                  removed (config.yaml)
   GET  /api/setup                 does the first-run setup apply (no devices, or the example's)
-  POST /api/setup/router          {dhcp_source, credentials} -> logged in? how many leases?
+  POST /api/setup/router          {dhcp_source, credentials, user?, password?} -> logged in?
+                                  how many leases? (a typed login is tried, not written)
   POST /api/setup/leases          the same router: its DHCP list, for picking
   POST /api/setup/sweep           no MikroTik: who answers a ping on the main network
-  POST /api/setup/write           {devices, router?, preview | bases, password?}
+  POST /api/setup/telegram        {token} -> the bot's name (getMe)
+  POST /api/setup/telegram/chats  {token, offset} -> the chats that wrote to it (getUpdates)
+  POST /api/setup/telegram/hello  {token, chat_id} -> one line to that chat
+  POST /api/setup/write           {devices, router?, logins?, telegram?, timezone?,
+                                   preview | bases}: secrets.yaml, inventory.yaml,
+                                  config.yaml, in that order
   POST /api/setup/claim           {code, password}: the first password, from the setup code
+
+A secret the page sends is checked, written, and never sent back: no route answers with one,
+and nothing here logs one.
 """
 from __future__ import annotations
 
@@ -49,6 +62,9 @@ CRITS = ("critical", "high", "warning", "low", "info")
 CHECKS = ("icmp", "tcp", "http", "snmp", "arp", "link", "lease")
 _IP = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 _NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+_LOGIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")      # a login's name in secrets.yaml
+_TG_TOKEN = re.compile(r"^\d{3,15}:[A-Za-z0-9_-]{20,64}$")
+SECRET_MAX = 1024
 # a kind guessed from a maker's name (oui.py), for the first-run list: a guess, marked as one
 GUESS = (("mikrotik", "mikrotik"), ("routerboard", "mikrotik"), ("shelly", "shelly"),
          ("allterco", "shelly"), ("reolink", "reolink"), ("ubiquiti", "unifi"),
@@ -131,6 +147,7 @@ class SettingsRoutes:
         self.d = dashboard
         self.a = dashboard.a
         self._router_try = 0.0
+        self._tg_busy = False
 
     @property
     def s(self):
@@ -147,10 +164,15 @@ class SettingsRoutes:
         r.add_get("/api/settings/devices", self.devices)
         r.add_post("/api/settings/device", self.device)
         r.add_post("/api/settings/migrate", self.migrate)
+        r.add_post("/api/settings/secret", self.secret)
+        r.add_post("/api/settings/site", self.site)
         r.add_get("/api/setup", self.setup)
         r.add_post("/api/setup/router", self.router)
         r.add_post("/api/setup/leases", self.leases)
         r.add_post("/api/setup/sweep", self.sweep)
+        r.add_post("/api/setup/telegram", self.tg_check)
+        r.add_post("/api/setup/telegram/chats", self.tg_chats)
+        r.add_post("/api/setup/telegram/hello", self.tg_hello)
         r.add_post("/api/setup/write", self.write)
         r.add_post("/api/setup/claim", self.claim)
 
@@ -159,39 +181,18 @@ class SettingsRoutes:
     def _j(body, status=200):
         return web.json_response(body, status=status)
 
-    async def _authed(self, request, body: dict):
-        """None when this browser may write; else the 403 that tells the page what to ask."""
-        lg = self.d.login
-        if lg is None or not lg.on:
-            return None
-        tok = request.cookies.get(COOKIE, "")
-        if lg.recent(tok):
-            return None
-        pw = str(body.get("password") or "")
-        if not pw:
-            return self._j({"ok": False, "auth": "needed"}, 403)
-        async with self.d._login_lock:
-            until = lg.locked()
-            if until:
-                return self._j({"ok": False, "auth": "locked", "until": until}, 403)
-            ok = await asyncio.get_running_loop().run_in_executor(None, verify, pw[:1024], lg.hash)
-            r = lg.reauth(tok, ok, request.remote or "")
-        if r.get("ok"):
-            return None
-        return self._j({"ok": False, "auth": r.get("why"), "left": r.get("left"), "until": r.get("until")}, 403)
-
-    def _recent(self, request) -> bool:
-        lg = self.d.login
-        return lg is None or lg.recent(request.cookies.get(COOKIE, ""))
-
     # --- Settings ---------------------------------------------------------------------------
     async def get(self, request):
         s = self.s
-        out = {"ok": True, **s.view(), **s.values(), "recent": self._recent(request),
-               "secrets": secrets_view(self.a.cfg, self.a.inv),
-               "restart": {"waiting": self.a.restart_blockers(), "since": self.a._started},
+        out = {"ok": True, **s.view(), **s.values(),
+               "secrets": {**secrets_view(self.a.cfg, self.a.inv), "file": s.files["secrets"].status(),
+                           "base": digest(s.files["secrets"].read())},
+               "restart": {"waiting": self.a.restart_blockers(), "since": self.a._started,
+                           "answering": int(getattr(getattr(self.a, "chat", None), "answering", 0) or 0)},
                "login": {"on": bool(self.d.login and self.d.login.on),
-                         "source": self.d.login.source if self.d.login else ""}}
+                         "source": self.d.login.source if self.d.login else ""},
+               "sites": sites_view(load(s.files["config"].read()) or {},
+                                   load(s.files["inventory"].read()) or {})}
         return self._j(out)
 
     async def plan(self, request):
@@ -216,9 +217,6 @@ class SettingsRoutes:
             return self._j({"ok": False, "error": err}, 400)
         if any(tuple(o["path"][:2]) in schema.HASHES for o in ops):
             return self._j({"ok": False, "error": "the password has a button of its own"}, 400)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         r = self.s.save(name, ops, str(body.get("base") or ""), request.remote or "")
         return self._j(r, 200 if r["ok"] else 409)
 
@@ -229,10 +227,8 @@ class SettingsRoutes:
             p = self.s.restore_plan(sid)
             p.pop("text", None)
             return self._j(p, 200 if p.get("ok") else 409)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         r = self.s.restore(sid, str(body.get("base") or ""), request.remote or "")
+        r.pop("text", None)
         return self._j(r, 200 if r["ok"] else 409)
 
     async def password(self, request):
@@ -245,9 +241,6 @@ class SettingsRoutes:
         new = str(body.get("new") or "")
         if not MIN_LEN <= len(new) <= MAX_LEN:
             return self._j({"ok": False, "error": f"a password has {MIN_LEN} characters or more"}, 400)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         hashed = await asyncio.get_running_loop().run_in_executor(None, hash_password, new)
         r = self._write_hash(hashed, request.remote or "", "save")
         if not r["ok"]:
@@ -273,6 +266,29 @@ class SettingsRoutes:
         r = self.a.request_restart(request.remote or "the dashboard")
         return self._j(r, 200 if r["ok"] else 409)
 
+    # --- sites ----------------------------------------------------------------------------
+    async def site(self, request):
+        """A site of `sites.list`, from Settings → Sites or a router's page ("Make it a site"):
+        checked here (site_list), then saved like any change of config.yaml."""
+        body = await self.d._body(request) or {}
+        if body.get("site") is not None and not isinstance(body.get("site"), dict):
+            return self._j({"ok": False, "error": "bad request"}, 400)
+        text = self.s.files["config"].read()
+        raw = load(text) or {}
+        new, err = site_list(raw, load(self.s.files["inventory"].read()) or {},
+                             str(body.get("key") or "") or None, body.get("site"))
+        if err:
+            return self._j({"ok": False, "error": err}, 400)
+        ops = [{"op": "set", "path": ["sites", "list"], "value": new}] if new else \
+            [{"op": "del", "path": ["sites", "list"]}]
+        if body.get("preview"):
+            p = self.s.plan("config", ops, text)
+            p.pop("text", None)
+            return self._j(p, 200 if p["ok"] else 409)
+        r = self.s.save("config", ops, str(body.get("base") or ""), request.remote or "")
+        r.pop("text", None)
+        return self._j(r, 200 if r["ok"] else 409)
+
     # --- devices --------------------------------------------------------------------------
     def _kinds(self) -> dict:
         """kind -> the features it can do (kinds.py), the owner's profiles included."""
@@ -288,6 +304,10 @@ class SettingsRoutes:
         text = self.s.files["inventory"].read()
         raw = load(text) or {}
         logins = access.shared(self.a.cfg).data()["logins"]
+        used = {}
+        for dev in raw.get("devices") or []:
+            if isinstance(dev, dict) and dev.get("credentials"):
+                used.setdefault(str(dev["credentials"]), []).append(str(dev.get("name") or dev.get("ip")))
         sites = getattr(self.a, "sites", None)
         watched = []
         if sites is not None:
@@ -296,14 +316,17 @@ class SettingsRoutes:
                 watched.append({"ip": ip, "name": dev.name if dev else w.get("name"), "mac": w.get("mac"),
                                 "site": w.get("site")})
         return self._j({"ok": True, "base": digest(text), "devices": raw.get("devices") or [],
-                        "groups": list((raw.get("groups") or {}).keys()), "kinds": self._kinds(),
+                        "groups": inv_groups(raw), "kinds": self._kinds(),
                         "features": FEATURES,
                         "switches": {f: bool((self.a.cfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
                         "logins": [{"name": n, "type": ("key + password" if lg.key and lg.password else
-                                                        "key" if lg.key else "password")}
+                                                        "key" if lg.key else "password"),
+                                    "how": "key" if lg.key else "password", "user": lg.user,
+                                    "used": used.get(n, [])}
                                    for n, lg in sorted(logins.items())],
-                        "watched": watched, "status": self.s.files["inventory"].status(),
-                        "recent": self._recent(request)})
+                        "secrets": {"writable": self.s.files["secrets"].status()["writable"],
+                                    "public_key": public_key(self.a.cfg)},
+                        "watched": watched, "status": self.s.files["inventory"].status()})
 
     def _device_ops(self, body: dict, raw: dict) -> tuple:
         devs = raw.get("devices") or []
@@ -326,31 +349,74 @@ class SettingsRoutes:
         kept = {k: v for k, v in devs[idx].items() if k not in _FORM_KEYS}
         return [{"op": "set", "path": ["devices", idx], "value": {**_ordered(dev, kept)}}], ""
 
+    def _device_login(self, body: dict) -> tuple:
+        """(secrets ops, error) of the device form's own login: {name, user, how, password}.
+        The device then names it (`credentials:`). A login as it already is: no op."""
+        lg = body.get("login")
+        if not isinstance(lg, dict) or not isinstance(body.get("device"), dict):
+            return [], ""
+        name = str(lg.get("name") or "").strip()
+        if not _LOGIN.match(name):
+            return None, "a login's name is letters, digits, - . and _"
+        if not self.s.files["secrets"].status()["writable"]:
+            return None, "secrets.yaml cannot be written by lanowl: " + \
+                self.s.files["secrets"].status()["why"]
+        raw = load(self.s.files["secrets"].read()) or {}
+        have = raw.get("logins") if isinstance(raw.get("logins"), dict) else {}
+        ops, err = login_op(name, {"user": lg.get("user"), "how": lg.get("how"), "value": lg.get("password")},
+                            have.get(name))
+        if err.startswith("nothing to save"):
+            ops, err = [], ""
+        if err:
+            return None, f"its login: {err}"
+        body["device"]["credentials"] = name
+        return ops, ""
+
     async def device(self, request):
         body = await self.d._body(request) or {}
+        sops, err = self._device_login(body)
+        if err:
+            return self._j({"ok": False, "error": err}, 400)
         text = self.s.files["inventory"].read()
         ops, err = self._device_ops(body, load(text) or {})
         if err:
             return self._j({"ok": False, "error": err}, 400)
         if body.get("preview"):
-            p = self.s.plan("inventory", ops, text)
+            sp = self.s.plan("secrets", sops) if sops else None
+            p = self.s.plan("inventory", ops, text, secrets_text=sp["text"] if sp and sp.get("ok") else None)
             p.pop("text", None)
+            if sp:
+                sp.pop("text", None)
+                p["secrets"] = sp
+                p["ok"] = p["ok"] and sp["ok"]
+                if not sp["ok"]:
+                    p["error"] = sp.get("error")
             return self._j(p, 200 if p["ok"] else 409)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         how = "watch" if body.get("how") == "watch" else "save"
+        if sops:
+            rs = self.s.save("secrets", sops, str(body.get("sbase") or ""), request.remote or "")
+            rs.pop("text", None)
+            if not rs["ok"]:
+                return self._j(rs, 409)
         r = self.s.save("inventory", ops, str(body.get("base") or ""), request.remote or "", how=how)
         if r["ok"] and how == "watch" and body.get("device"):
-            self._watch_now(body["device"])
+            await self._watch_now(body["device"])
         return self._j(r, 200 if r["ok"] else 409)
 
-    def _watch_now(self, dev: dict):
-        """Watch: written to inventory.yaml, and pinged from now on, as before — no restart."""
+    async def _watch_now(self, dev: dict):
+        """Watch: written to inventory.yaml, and pinged from now on, as before — no restart.
+        Probed at once, so the page shows it now and not at the next sweep."""
         from .model import inventory_from
         d, _ = clean_device(dev, self._kinds())
         if d and self.a.inv.get(d["ip"]) is None:
             self.a.inv.add(inventory_from({"devices": [d]}, "").devices[0])
+            probe = getattr(self.a, "probe_now", None)
+            if callable(probe):
+                try:
+                    await probe(d["ip"])
+                    return
+                except Exception:
+                    log.warning("settings: the first probe of %s failed", d["ip"], exc_info=True)
             refresh = getattr(self.a, "refresh_report", None)
             if callable(refresh):
                 refresh()
@@ -385,15 +451,58 @@ class SettingsRoutes:
                                                                "base": digest(text)}
             p.pop("text", None)
             return self._j(p, 200 if p["ok"] else 409)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         r = self.s.save("inventory", ops, str(body.get("base") or ""), request.remote or "") if ops else \
             {"ok": True, "changes": []}
         if r["ok"]:
             for d in rows:
                 sites.rec["watch"].pop(d["ip"], None)
             sites._save()
+        return self._j(r, 200 if r["ok"] else 409)
+
+    # --- secrets.yaml, write-only ---------------------------------------------------------
+    def _secret_ops(self, body: dict, raw: dict) -> tuple:
+        """(ops, error) of one Secrets save: a login set or replaced, a token set or replaced,
+        a login taken out (not while something still names it)."""
+        op, name = str(body.get("op") or ""), str(body.get("name") or "").strip()
+        logins = raw.get("logins") if isinstance(raw.get("logins"), dict) else {}
+        value = body.get("value")
+        value = "" if value is None else str(value)
+        if len(value) > SECRET_MAX or "\x00" in value:
+            return None, "that value is too long"
+        if op == "token":
+            if name not in access.TOKENS:
+                return None, f"no token {name!r}: one of {', '.join(access.TOKENS)}"
+            if not value.strip():
+                return None, "paste the token"
+            if name == "telegram" and not _TG_TOKEN.match(value.strip()):
+                return None, "a bot's token looks like 123456:ABC-DEF…: a number, a colon, then letters"
+            return [{"op": "set", "path": ["tokens", name], "value": value.strip()}], ""
+        if not _LOGIN.match(name):
+            return None, "a login's name is letters, digits, - . and _"
+        if op == "remove":
+            if name not in logins:
+                return None, f"secrets.yaml has no login {name!r}"
+            users = login_users(self.a.cfg, self.a.inv, raw).get(name)
+            if users:
+                return None, f"{name} is used by {', '.join(users[:5])}: give {'it' if len(users) == 1 else 'them'} another login first"
+            return [{"op": "del", "path": ["logins", name]}], ""
+        if op != "login":
+            return None, "bad request"
+        return login_op(name, body, logins.get(name))
+
+    async def secret(self, request):
+        body = await self.d._body(request) or {}
+        f = self.s.files["secrets"]
+        text = f.read()
+        ops, err = self._secret_ops(body, load(text) or {})
+        if err:
+            return self._j({"ok": False, "error": err}, 400)
+        if body.get("preview"):
+            p = self.s.plan("secrets", ops, text)
+            p.pop("text", None)
+            return self._j(p, 200 if p["ok"] else 409)
+        r = self.s.save("secrets", ops, str(body.get("base") or ""), request.remote or "")
+        r.pop("text", None)
         return self._j(r, 200 if r["ok"] else 409)
 
     # --- the first-run setup ------------------------------------------------------------
@@ -412,15 +521,25 @@ class SettingsRoutes:
         return "example" if exd and sorted(str(d.get("ip")) for d in devs) == sorted(exd) else ""
 
     async def setup(self, request):
+        from .firstrun import env_tz
         mk = self.a.cfg.get("mikrotik") or {}
         name = access.service_login_name(self.a.cfg, "mikrotik")
         lg = access.service_login(self.a.cfg, "mikrotik")
+        d = access.shared(self.a.cfg).data()
+        tok, where = access.token_from(self.a.cfg, "telegram")
         return self._j({"ok": True, "needed": self._needed(), "dhcp_source": mk.get("dhcp_source") or "",
                         "credentials": name, "login_set": bool(lg.user and lg.password),
+                        "login_user": lg.user or "",
                         "secrets_path": access.secrets_path(self.a.cfg),
+                        "logins": [{"name": n, "user": x.user, "how": "key" if x.key else "password"}
+                                   for n, x in sorted(d["logins"].items())],
+                        "groups": inv_groups(load(self.s.files["inventory"].read()) or {}),
+                        "telegram": {"token": bool(tok), "where": where,
+                                     "chat_id": str((self.a.cfg.get("telegram") or {}).get("chat_id") or "")},
+                        "timezone": str(self.a.cfg.get("timezone") or ""), "tz_env": env_tz(),
+                        "public_key": public_key(self.a.cfg),
                         "files": {k: f.status() for k, f in self.s.files.items()},
-                        "bases": {k: digest(f.read()) for k, f in self.s.files.items()},
-                        "recent": self._recent(request)})
+                        "bases": {k: digest(f.read()) for k, f in self.s.files.items()}})
 
     def _router_cfg(self, body: dict) -> tuple:
         """A copy of the config with the router the setup page typed: (cfg, error)."""
@@ -434,9 +553,18 @@ class SettingsRoutes:
         cfg["mikrotik"] = {**(cfg.get("mikrotik") or {}), "dhcp_source": src, "credentials": name}
         return cfg, ""
 
-    async def _rest(self, cfg: dict, path: str):
+    @staticmethod
+    def _typed(body: dict):
+        """The router's login as the page typed it, or None: tried, never kept here."""
+        u, p = str(body.get("user") or "").strip(), body.get("password")
+        p = "" if p is None else str(p)
+        if u and p and len(u) <= 128 and len(p) <= SECRET_MAX:
+            return access.Login(u, p)
+        return None
+
+    async def _rest(self, cfg: dict, path: str, lg=None):
         from . import probes
-        lg = access.service_login(cfg, "mikrotik")
+        lg = lg or access.service_login(cfg, "mikrotik")
         mk = cfg["mikrotik"]
         return await probes.mikrotik_rest(mk["dhcp_source"], path, lg.user, lg.password,
                                           bool(mk.get("verify_tls", False)), 8000)
@@ -447,11 +575,13 @@ class SettingsRoutes:
         if err:
             return self._j({"ok": False, "error": err}, 400)
         name = cfg["mikrotik"]["credentials"]
-        lg = access.service_login(cfg, "mikrotik")
+        typed = self._typed(body)
+        lg = typed or access.service_login(cfg, "mikrotik")
         if not (lg.user and lg.password):
             path = access.secrets_path(cfg)
             sf = access.shared(cfg)
             why = (f"{path} could not be read: {sf.error}" if sf.error else
+                   "type the router user's name and password" if self.s.files["secrets"].status()["writable"] else
                    f"{path} has no login {name!r} with a user and a password yet" if os.path.exists(path) else
                    f"there is no {path}")
             return self._j({"ok": False, "login": False, "name": name, "path": path, "error": why})
@@ -461,15 +591,16 @@ class SettingsRoutes:
         if now - self._router_try < 3:     # one try at a time: each refused one is a line in the router's log
             return self._j({"ok": False, "login": True, "error": "a moment: the last try was just now"}, 429)
         self._router_try = now
-        r = await self._rest(cfg, "system/resource")
+        r = await self._rest(cfg, "system/resource", lg)
         if not r.ok:
-            why = ("the router refused the login (HTTP 401): check its password in secrets.yaml, and on "
-                   "the router that this user may log in from lanowl's address" if r.detail == "mikrotik http 401"
+            where = "the user and the password" if typed else "its password in secrets.yaml"
+            why = (f"the router refused the login (HTTP 401): check {where}, and on the router that "
+                   "this user may log in from lanowl's address" if r.detail == "mikrotik http 401"
                    else f"the router did not answer as a MikroTik: {r.detail}")
             return self._j({"ok": False, "login": True, "user": lg.user, "error": why})
         res = r.data.get("json") or {}
         res = res[0] if isinstance(res, list) and res else res
-        leases = await self._rest(cfg, "ip/dhcp-server/lease")
+        leases = await self._rest(cfg, "ip/dhcp-server/lease", lg)
         n = len(leases.data.get("json") or []) if leases.ok else 0
         return self._j({"ok": True, "login": True, "user": lg.user, "version": (res or {}).get("version", ""),
                         "board": (res or {}).get("board-name", ""), "leases": n})
@@ -480,7 +611,7 @@ class SettingsRoutes:
         cfg, err = self._router_cfg(body)
         if err:
             return self._j({"ok": False, "error": err}, 400)
-        r = await self._rest(cfg, "ip/dhcp-server/lease")
+        r = await self._rest(cfg, "ip/dhcp-server/lease", self._typed(body))
         if not r.ok:
             return self._j({"ok": False, "error": f"the router's DHCP list could not be read: {r.detail}"}, 409)
         rows = []
@@ -539,9 +670,100 @@ class SettingsRoutes:
         rows.sort(key=lambda r: tuple(int(o) for o in r["ip"].split(".")))
         return self._j({"ok": True, "router": "", "rows": rows, "swept": nets[0]})
 
+    # --- Telegram, from the setup: the token, then /start -----------------------------------
+    async def _tg(self, token: str, method: str, params: dict = None, timeout: float = 15) -> dict:
+        """One Bot API call: its JSON answer, or {"ok": False, "description": why}. The token is
+        in the URL Telegram asks for, and nowhere else: not in a log line, not in an answer."""
+        import aiohttp
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as sess:
+                async with sess.post(f"https://api.telegram.org/bot{token}/{method}", json=params or {}) as r:
+                    j = await r.json(content_type=None)
+                    return j if isinstance(j, dict) else {"ok": False, "description": f"HTTP {r.status}"}
+        except asyncio.TimeoutError:
+            return {"ok": False, "description": "Telegram did not answer in time"}
+        except Exception as e:
+            return {"ok": False, "description": f"Telegram could not be reached: {type(e).__name__}"}
+
+    @staticmethod
+    def _tg_token(body: dict) -> str:
+        t = str(body.get("token") or "").strip()
+        return t if _TG_TOKEN.match(t) else ""
+
+    def _tg_mine(self, token: str) -> bool:
+        """lanowl itself already reads this bot's messages (a second reader gets 409)."""
+        return bool(token) and token == access.token(self.a.cfg, "telegram") and \
+            bool(getattr(getattr(self.a, "poller", None), "enabled", False))
+
+    async def tg_check(self, request):
+        body = await self.d._body(request) or {}
+        token = self._tg_token(body)
+        if not token:
+            return self._j({"ok": False, "error": "a bot's token looks like 123456:ABC-DEF…: a number, a colon, "
+                                                  "then letters. @BotFather gives it"}, 400)
+        j = await self._tg(token, "getMe")
+        if not j.get("ok"):
+            return self._j({"ok": False, "error": f"Telegram answered: {str(j.get('description') or '?')[:200]}"})
+        me = j.get("result") or {}
+        return self._j({"ok": True, "user": str(me.get("username") or ""), "name": str(me.get("first_name") or ""),
+                        "mine": self._tg_mine(token)})
+
+    async def tg_chats(self, request):
+        """Who wrote to the bot: a long poll of its updates (20 s), the chats in them. The
+        page calls it again until the owner picks one, for up to five minutes."""
+        body = await self.d._body(request) or {}
+        token = self._tg_token(body)
+        if not token:
+            return self._j({"ok": False, "error": "no token"}, 400)
+        if self._tg_mine(token):
+            return self._j({"ok": False, "error": "lanowl already reads this bot's messages: its chat is "
+                                                  "telegram.chat_id in Settings"}, 409)
+        if self._tg_busy:
+            return self._j({"ok": False, "busy": True, "error": "already listening"}, 429)
+        self._tg_busy = True
+        try:
+            params = {"timeout": 20, "allowed_updates": ["message"]}
+            try:
+                if body.get("offset"):
+                    params["offset"] = int(body["offset"])
+            except (TypeError, ValueError):
+                pass
+            j = await self._tg(token, "getUpdates", params, timeout=30)
+        finally:
+            self._tg_busy = False
+        if not j.get("ok"):
+            return self._j({"ok": False, "error": f"Telegram answered: {str(j.get('description') or '?')[:200]}"})
+        chats, offset = {}, int(body.get("offset") or 0) if str(body.get("offset") or "").isdigit() else 0
+        for u in j.get("result") or []:
+            offset = max(offset, int(u.get("update_id") or 0) + 1)
+            m = u.get("message") or {}
+            c = m.get("chat") or {}
+            if "id" not in c:
+                continue
+            who = c.get("title") or " ".join(x for x in (c.get("first_name"), c.get("last_name")) if x) or \
+                c.get("username") or str(c["id"])
+            chats[str(c["id"])] = {"id": str(c["id"]), "type": str(c.get("type") or ""), "name": str(who)[:80],
+                                   "username": str(c.get("username") or ""), "text": str(m.get("text") or "")[:40],
+                                   "at": int(m.get("date") or 0)}
+        return self._j({"ok": True, "chats": list(chats.values()), "offset": offset})
+
+    async def tg_hello(self, request):
+        body = await self.d._body(request) or {}
+        token, chat = self._tg_token(body), str(body.get("chat_id") or "").strip()
+        if not token or not re.fullmatch(r"-?\d{1,20}", chat):
+            return self._j({"ok": False, "error": "bad request"}, 400)
+        j = await self._tg(token, "sendMessage", {"chat_id": chat, "text": "🦉 lanowl found this chat. Finish the "
+                                                  "setup on the dashboard: alerts and answers come here."})
+        if not j.get("ok"):
+            return self._j({"ok": False, "error": f"Telegram answered: {str(j.get('description') or '?')[:200]}"})
+        return self._j({"ok": True})
+
     async def write(self, request):
-        """The setup's last step: the picked devices into inventory.yaml (the example's devices
-        out), and the router into config.yaml when the page changed it."""
+        """The setup's last step: the logins and the bot's token into secrets.yaml, the picked
+        devices into inventory.yaml (the example's devices out), the router, the chat and the
+        time zone into config.yaml. In that order: each file is checked with the ones before it
+        as they will be."""
+        from .firstrun import env_tz, valid_tz
         body = await self.d._body(request) or {}
         kinds = self._kinds()
         devs = []
@@ -552,6 +774,39 @@ class SettingsRoutes:
             devs.append(dev)
         if len({d["ip"] for d in devs}) != len(devs):
             return self._j({"ok": False, "error": "the same address twice"}, 400)
+        # secrets.yaml: the router's login as typed, the new logins the devices use, the token
+        stext = self.s.files["secrets"].read()
+        sraw = load(stext) or {}
+        have = sraw.get("logins") if isinstance(sraw.get("logins"), dict) else {}
+        router = body.get("router") or {}
+        sops = []
+        rname = str(router.get("credentials") or "").strip() or "router-read"
+        if self._typed(router):
+            if not _LOGIN.match(rname):
+                return self._j({"ok": False, "error": "the router login's name is letters, digits, - . and _"}, 400)
+            o, err = login_op(rname, {"user": router.get("user"), "how": "password", "value": router.get("password")},
+                              have.get(rname))
+            if err:
+                return self._j({"ok": False, "error": f"the router's login: {err}"}, 400)
+            sops += o
+        used = {str(d.get("credentials")) for d in devs if d.get("credentials")}
+        for name, lg in (body.get("logins") or {}).items() if isinstance(body.get("logins"), dict) else ():
+            if name not in used or name == rname and self._typed(router):
+                continue
+            if not _LOGIN.match(str(name)):
+                return self._j({"ok": False, "error": f"{name}: a login's name is letters, digits, - . and _"}, 400)
+            lg = lg if isinstance(lg, dict) else {}
+            o, err = login_op(str(name), {"user": lg.get("user"), "how": lg.get("how"), "value": lg.get("password")},
+                              have.get(name))
+            if err:
+                return self._j({"ok": False, "error": f"login {name}: {err}"}, 400)
+            sops += o
+        tg = body.get("telegram") if isinstance(body.get("telegram"), dict) else {}
+        token = self._tg_token(tg)
+        if tg.get("token") and not token:
+            return self._j({"ok": False, "error": "the bot's token does not look like one"}, 400)
+        if token and token != access.token(self.a.cfg, "telegram"):
+            sops.append({"op": "set", "path": ["tokens", "telegram"], "value": token})
         itext = self.s.files["inventory"].read()
         raw = load(itext) or {}
         have = [x for x in raw.get("devices") or [] if isinstance(x, dict)]
@@ -560,34 +815,41 @@ class SettingsRoutes:
         keep = set() if replace else {str(x.get("ip")) for x in have}
         iops += [{"op": "insert", "path": ["devices"], "value": d} for d in devs if d["ip"] not in keep]
         cops = []
-        router = body.get("router") or {}
         mk = self.a.cfg.get("mikrotik") or {}
         for k in ("dhcp_source", "credentials"):
             v = str(router.get(k) or "").strip().rstrip("/") if k in router else None
             if v is not None and v != str(mk.get(k) or ""):
                 cops.append({"op": "set", "path": ["mikrotik", k], "value": v})
+        chat = str(tg.get("chat_id") or "").strip()
+        if chat:
+            if not re.fullmatch(r"-?\d{1,20}", chat):
+                return self._j({"ok": False, "error": "a chat id is a number"}, 400)
+            if chat != str((self.a.cfg.get("telegram") or {}).get("chat_id") or ""):
+                cops.append({"op": "set", "path": ["telegram", "chat_id"], "value": chat})
+        tz = str(body.get("timezone") or "").strip()
+        if tz and valid_tz(tz) and not env_tz() and not str(self.a.cfg.get("timezone") or "").strip():
+            cops.append({"op": "set", "path": ["timezone"], "value": tz})
         if body.get("preview"):
-            out = {"ok": True, "inventory": self.s.plan("inventory", iops, itext) if iops else None,
-                   "config": self.s.plan("config", cops) if cops else None}
-            for k in ("inventory", "config"):
+            sp = self.s.plan("secrets", sops, stext) if sops else None
+            after = sp["text"] if sp and sp.get("ok") else None
+            out = {"ok": True, "secrets": sp,
+                   "inventory": self.s.plan("inventory", iops, itext, secrets_text=after) if iops else None,
+                   "config": self.s.plan("config", cops, secrets_text=after) if cops else None}
+            for k in ("secrets", "inventory", "config"):
                 if out[k]:
                     out[k].pop("text", None)
                     out["ok"] = out["ok"] and out[k]["ok"]
             return self._j(out, 200 if out["ok"] else 409)
-        denied = await self._authed(request, body)
-        if denied is not None:
-            return denied
         bases = body.get("bases") or {}
         ip = request.remote or ""
         r = {"ok": True}
-        if iops:
-            r["inventory"] = self.s.save("inventory", iops, str(bases.get("inventory") or ""), ip, how="setup")
-            if not r["inventory"]["ok"]:
-                return self._j({"ok": False, **r["inventory"]}, 409)
-        if cops:
-            r["config"] = self.s.save("config", cops, str(bases.get("config") or ""), ip, how="setup")
-            if not r["config"]["ok"]:
-                return self._j({"ok": False, **r["config"]}, 409)
+        for name, ops in (("secrets", sops), ("inventory", iops), ("config", cops)):
+            if not ops:
+                continue
+            r[name] = self.s.save(name, ops, str(bases.get(name) or ""), ip, how="setup")
+            r[name].pop("text", None)
+            if not r[name]["ok"]:
+                return self._j({"ok": False, **r[name], "done": [k for k in r if k not in ("ok", name)]}, 409)
         return self._j(r)
 
     async def claim(self, request):
@@ -649,6 +911,223 @@ def _ops(raw) -> tuple:
     return out, ""
 
 
+# --- sites: sites.list in config.yaml (sites.py reads it at start) ----------------------------
+HOME = "home"
+SITE_ROUTERS = {"mikrotik": "routeros", "openwrt": "openwrt"}    # a device's kind -> its site's
+SITE_KEYS = ("key", "name", "nets", "router", "kind", "criticality")
+
+
+def _site_nets(s) -> list:
+    out = []
+    for n in (s.get("nets") or []) if isinstance(s, dict) else []:
+        try:
+            out.append(ipaddress.ip_network(str(n), strict=False))
+        except ValueError:
+            pass
+    return out
+
+
+def sites_view(raw_cfg: dict, raw_inv: dict) -> dict:
+    """What Settings → Sites and a router's page show, from the files as they are now (a save
+    waits for a restart): every site, the main one first even when the file does not name it,
+    and the inventory's routers — which site each is the router of, if any."""
+    from .model import main_lans, on_main_side, router_host
+    raw_cfg = raw_cfg if isinstance(raw_cfg, dict) else {}
+    lst = [s for s in ((raw_cfg.get("sites") or {}).get("list") or []) if isinstance(s, dict)]
+    out = []
+    for s in lst:
+        k = str(s.get("key") or "")
+        out.append({"key": k, "name": str(s.get("name") or k), "nets": [str(n) for n in s.get("nets") or []],
+                    "router": str(s.get("router") or ""), "kind": str(s.get("kind") or ""),
+                    "criticality": str(s.get("criticality") or ("low" if k == HOME else "info")),
+                    "home": k == HOME, "in_file": True})
+    if not any(x["home"] for x in out):
+        out.insert(0, {"key": HOME, "name": "Home", "nets": [], "router": "", "kind": "", "criticality": "low",
+                       "home": True, "in_file": False})
+    out.sort(key=lambda x: not x["home"])
+    home = next(x for x in out if x["home"])
+    main = router_host(raw_cfg)
+    routers = []
+    for d in (raw_inv or {}).get("devices") or [] if isinstance(raw_inv, dict) else []:
+        if isinstance(d, dict) and str(d.get("kind") or "") in SITE_ROUTERS:
+            ip = str(d.get("ip") or "")
+            routers.append({"ip": ip, "name": str(d.get("name") or ip), "group": str(d.get("group") or ""),
+                            "kind": str(d.get("kind")), "login": bool(d.get("credentials")),
+                            "main": ip == main, "main_side": on_main_side(raw_cfg, ip),
+                            "site": next((x["key"] for x in out if x["router"] == ip), "")})
+    # the main site's networks when the file names none: what main_lans falls back to
+    return {"list": out, "routers": routers, "main_router": main,
+            "home_default": [] if home["nets"] else [str(n) for n in main_lans(raw_cfg)]}
+
+
+def _ipv4(s: str) -> bool:
+    try:
+        return _IP.match(s) is not None and ipaddress.ip_address(s).version == 4
+    except ValueError:
+        return False
+
+
+def _site_key(name: str, taken: set) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:28] or "site"
+    if base == HOME:
+        base = "home-2"
+    k, i = base, 2
+    while k in taken:
+        k, i = f"{base}-{i}", i + 1
+    return k
+
+
+def site_list(raw_cfg: dict, raw_inv: dict, key, site) -> tuple:
+    """(the new `sites.list`, error): the site `key` (None: a new one) set to `site`
+    {name, nets, router, criticality}, or removed (`site` None). The main site ("home") is
+    kept: its name and networks change, it has no router of its own (that is
+    mikrotik.dhcp_source) and is never removed. A key never changes: lanowl's state names
+    sites by it. The keys a file's entry has beyond the form's stay as they are."""
+    from .model import router_host
+    raw_cfg = raw_cfg if isinstance(raw_cfg, dict) else {}
+    cur = [dict(s) for s in ((raw_cfg.get("sites") or {}).get("list") or []) if isinstance(s, dict)]
+    idx = next((i for i, s in enumerate(cur) if str(s.get("key")) == key), None) if key else None
+    home = key == HOME
+    main = router_host(raw_cfg)
+    if key and idx is None and not home:
+        return None, f"there is no site {key} in config.yaml"
+    if site is None:
+        if home:
+            return None, "the main site stays: change its name or its networks instead"
+        return cur[:idx] + cur[idx + 1:], ""
+    was = cur[idx] if idx is not None else {}
+    others = [s for i, s in enumerate(cur) if i != idx]
+    name = re.sub(r"\s+", " ", str(site.get("name") or "")).strip()
+    if not name or len(name) > 40:
+        return None, "Give the site a name, up to 40 characters"
+    nets = []
+    raw_nets = site.get("nets") or []
+    if isinstance(raw_nets, str):
+        raw_nets = re.split(r"[,\s]+", raw_nets)
+    for n in raw_nets:
+        n = str(n).strip()
+        if not n:
+            continue
+        try:
+            net = ipaddress.ip_network(n if "/" in n else n + "/32", strict=False)
+        except ValueError:
+            return None, f"{n} is not a network: write it like 192.168.0.0/24"
+        if net.version != 4:
+            return None, f"{n}: IPv4 networks only"
+        if str(net) not in nets:
+            nets.append(str(net))
+    if not nets and not home:
+        return None, "A site needs its network: the addresses on its side, like 192.168.0.0/24"
+    for s in others:
+        for n in _site_nets(s):
+            if str(n) in nets:
+                return None, f"{n} is {s.get('name') or s.get('key')}'s already"
+    router = str(site.get("router") or "").strip()
+    kind = ""
+    if router and not _ipv4(router):
+        return None, f"{router} is not an address: the router's, like 192.168.0.1"
+    if router and home:
+        return None, "the main site's router is the one lanowl reads the DHCP list from (mikrotik.dhcp_source)"
+    if router and router == str(was.get("router") or "") and was.get("kind"):
+        kind = str(was["kind"])            # as the file has it: written by hand, perhaps
+    elif router:
+        dev = next((d for d in (raw_inv or {}).get("devices") or []
+                    if isinstance(d, dict) and str(d.get("ip")) == router), None)
+        if dev is None:
+            return None, (f"{router} is not in inventory.yaml: add it in Settings → Devices first, "
+                          "as a mikrotik or an openwrt, with its login")
+        kind = SITE_ROUTERS.get(str(dev.get("kind") or ""), "")
+        if not kind:
+            return None, (f"{dev.get('name') or router} is {'a ' + str(dev['kind']) if dev.get('kind') else 'a device with no kind'}: "
+                          "lanowl reads a site's DHCP list from a mikrotik or an openwrt")
+        if router == main:
+            return None, f"{router} is the main router: its networks are the main site's"
+        s = next((s for s in others if str(s.get("router") or "") == router), None)
+        if s is not None:
+            return None, f"{router} is {s.get('name') or s.get('key')}'s router already"
+    if main and not home and _ipv4(main):
+        n = next((n for n in nets if ipaddress.ip_address(main) in ipaddress.ip_network(n)), None)
+        if n:
+            return None, f"{n} holds the main router, {main}: those are the main site's addresses"
+    if router and not any(ipaddress.ip_address(router) in ipaddress.ip_network(n) for n in nets):
+        return None, f"{router} is not on {', '.join(nets)}: add the address lanowl reaches it at, {router}/32"
+    crit = str(site.get("criticality") or ("low" if home else "info"))
+    if crit not in CRITS:
+        return None, f"criticality is one of {', '.join(CRITS)}"
+    k = HOME if home else str(was.get("key") or "") or _site_key(name, {str(s.get("key")) for s in cur} | {HOME})
+    entry = {"key": k, "name": name, **({"nets": nets} if nets else {}),
+             **({"router": router, "kind": kind} if router else {}),
+             **({"criticality": crit} if not home or crit != "low" else {})}
+    entry.update({f: v for f, v in was.items() if f not in SITE_KEYS})
+    if idx is not None:
+        cur[idx] = entry
+    elif home:
+        cur.insert(0, entry)
+    else:
+        cur.append(entry)
+    return cur, ""
+
+
+def inv_groups(raw: dict) -> list:
+    """Every group inventory.yaml knows: its `groups:` section, then each one a device uses (a
+    group made on a device's page lives only there)."""
+    raw = raw if isinstance(raw, dict) else {}
+    named = list((raw.get("groups") or {}).keys()) if isinstance(raw.get("groups"), dict) else []
+    used = [str(d.get("group")) for d in raw.get("devices") or [] if isinstance(d, dict) and d.get("group")]
+    return list(dict.fromkeys(str(g) for g in named + used))
+
+
+def login_op(name: str, body: dict, old) -> tuple:
+    """(ops, error): a login set as the page sent it — {user, how: password | key, value}.
+    A password left empty keeps the one the file has. With lanowl's key, a password the login
+    already had (for sudo) is kept."""
+    user = str(body.get("user") or "").strip()
+    how = str(body.get("how") or "password")
+    value = body.get("value")
+    value = "" if value is None else str(value)
+    old = old if isinstance(old, dict) else {}
+    if not user or len(user) > 128 or any(c in user for c in "\r\n\x00"):
+        return None, "type the user lanowl logs in as"
+    if len(value) > SECRET_MAX or "\x00" in value:
+        return None, "that password is too long"
+    if how == "key":
+        new = {"user": user, "key": old.get("key") if isinstance(old.get("key"), str) and old.get("key") else True}
+        pw = value or (str(old.get("password")) if old.get("key") and old.get("password") else "")
+        if pw:
+            new["password"] = pw
+    elif how == "password":
+        pw = value or str(old.get("password") or "")
+        if not pw:
+            return None, "type its password"
+        new = {"user": user, "password": pw}
+    else:
+        return None, "a login is a password or lanowl's key"
+    if new == old:
+        return None, "nothing to save: type a new password, or change the user"
+    return [{"op": "set", "path": ["logins", name], "value": new}], ""
+
+
+def login_users(cfg: dict, inv, raw: dict) -> dict:
+    """login name -> what names it: devices (by name), the `devices:` map, the router, MQTT."""
+    used: dict = {}
+    for dev in (inv.devices if inv is not None else []):
+        n = str(dev.attrs.get("credentials") or "")
+        if n:
+            used.setdefault(n, []).append(dev.name)
+    for ip, n in ((raw or {}).get("devices") or {}).items() if isinstance((raw or {}).get("devices"), dict) else ():
+        used.setdefault(str(n), []).append(str(ip))
+    if (cfg.get("mikrotik") or {}).get("dhcp_source"):
+        used.setdefault(access.service_login_name(cfg, "mikrotik"), []).append("the router's read-only user")
+    if (cfg.get("mqtt") or {}).get("host"):
+        used.setdefault(access.service_login_name(cfg, "mqtt"), []).append("the MQTT broker")
+    return used
+
+
+def public_key(cfg: dict) -> str:
+    key = access.ssh_key(cfg)
+    return access._public_key(key) if key and os.path.exists(key) else ""
+
+
 def secrets_view(cfg: dict, inv) -> dict:
     """secrets.yaml by name: what is set, what is missing, what uses it. Never a value."""
     f = access.shared(cfg)
@@ -668,7 +1147,8 @@ def secrets_view(cfg: dict, inv) -> dict:
         used.setdefault(access.service_login_name(cfg, sec), []).append(
             "the router's read-only user" if sec == "mikrotik" else "the MQTT broker")
     logins = [{"name": n, "set": True, "type": "key + password" if lg.key and lg.password else
-               "key" if lg.key else "password", "used_by": used.get(n, [])} for n, lg in sorted(d["logins"].items())]
+               "key" if lg.key else "password", "how": "key" if lg.key else "password", "user": lg.user,
+               "used_by": used.get(n, [])} for n, lg in sorted(d["logins"].items())]
     missing = [{"name": n, "set": False, "used_by": u} for n, u in sorted(used.items()) if n not in d["logins"]]
     tokens = []
     for name, need in (("telegram", (cfg.get("telegram") or {}).get("chat_id")),
@@ -677,4 +1157,5 @@ def secrets_view(cfg: dict, inv) -> dict:
         tokens.append({"name": name, "set": bool(where), "where": where, "needed": bool(need)})
     key = access.ssh_key(cfg)
     return {"path": f.path, "error": f.error, "exists": os.path.exists(f.path), "logins": logins + missing,
-            "tokens": tokens, "ssh_key": {"path": key, "exists": bool(key) and os.path.exists(key)}}
+            "tokens": tokens, "ssh_key": {"path": key, "exists": bool(key) and os.path.exists(key),
+                                          "public": public_key(cfg)}}

@@ -92,6 +92,7 @@ class Chat:
     def __init__(self, auditor):
         self.a = auditor
         self.cfg = auditor.cfg
+        self.answering = 0          # answers being written now (a restart stops them: Settings says so)
         q = (self.cfg.get("telegram", {}) or {}).get("chat") or {}
         self.max_wall_s = float(q.get("answer_max_wall_s", 420))
         # a question's agent loop; None = model.max_tool_iters, the audit's
@@ -453,6 +454,16 @@ class Chat:
     async def answer(self, question: str, on_wait=None, history: Optional[list] = None,
                      on_event=None, source: Optional[dict] = None,
                      session: Optional[dict] = None) -> Optional[str]:
+        """_answer, counted while it runs (`answering`)."""
+        self.answering += 1
+        try:
+            return await self._answer(question, on_wait, history, on_event, source, session)
+        finally:
+            self.answering -= 1
+
+    async def _answer(self, question: str, on_wait=None, history: Optional[list] = None,
+                      on_event=None, source: Optional[dict] = None,
+                      session: Optional[dict] = None) -> Optional[str]:
         """The model's answer, or None. Waits its turn for the model.
 
         `history` — the dashboard's conversation so far, as user/assistant messages — makes

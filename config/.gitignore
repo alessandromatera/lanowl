@@ -1,0 +1,4 @@
+# Your install's own files (config.yaml, inventory.yaml, secrets.yaml, the ssh key):
+# lanowl writes them here at its first start. Never committed.
+*
+!.gitignore

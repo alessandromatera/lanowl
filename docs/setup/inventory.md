@@ -167,8 +167,10 @@ A reboot through a Home Assistant button works for any device, but it still need
 ## Devices you add from the dashboard
 
 Once lanowl reads a router's DHCP, the dashboard lists the devices on each site's network
-that nobody watches. **Watch** starts pinging one; it is kept in lanowl's own state, not in
-this file, and follows its MAC. **Known** marks one as belonging there.
+that nobody watches. **Watch** writes one into this file, with its MAC so lanowl follows it
+when DHCP moves it, and pings it at once. **Known** marks one as belonging there. Settings →
+Devices adds any device by hand, and asks for its login right there: a user and a password,
+or lanowl's ssh key.
 
 ## Checking it
 

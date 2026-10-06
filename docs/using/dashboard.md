@@ -44,8 +44,8 @@ Every watched device, grouped, with its state now, its latency over 24 hours and
 of answers. Filter by site, by what is down, by what went down this week, by what is asleep,
 or sort the least stable first. Under the list: each site's DHCP devices that nobody watches,
 with **Watch** and **Known**, and every named service. **Watch** writes the device into
-`inventory.yaml` (after a sheet that shows the change) and pings it from then on; **Known**
-only stops it counting as unknown.
+`inventory.yaml` (after a sheet that names the change) and pings it at once: it is on the page
+when the sheet closes, no restart needed. **Known** only stops it counting as unknown.
 
 Tap a device for its sheet:
 
@@ -167,6 +167,4 @@ PIN: the page is behind its login.
 
 Only a browser logged in with the password. Keep it on your LAN all the same. It accepts only
 JSON requests and IP-address host names, which stops another web page from driving it through
-your browser. Pausing a device is told on Telegram; every save in Settings is told on
-Telegram too, and asks for the password again when this browser has not typed it in the last
-ten minutes.
+your browser. Pausing a device is told on Telegram, and so is every save in Settings.

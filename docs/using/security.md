@@ -136,3 +136,17 @@ actions, conversations, dismissals, pauses), its secrets, and the config it runs
 
 One message when a monthly run had a failure, or when a machine has had no good backup for two
 months. **Back up everything now** on the Security tab, `/backups` on Telegram.
+
+### Setting it up from the dashboard
+
+Backups start switched off, like every optional feature: until then a device's page shows
+`backup` with "switched off in config.yaml", and `lanowl --check` says
+`○ backup … off: backups.enabled in config.yaml`. Three steps:
+
+1. **The store.** In Settings → Devices, open the Linux machine with the disk (or add it):
+   kind `linux`, its login "its own login: lanowl's ssh key", and the user. Run the line the
+   page gives on that machine, as that user.
+2. **Settings → Backups**: switch it on, `store.host` that machine's address, `store.path` a
+   folder on it that only you can read.
+3. **Restart** (the banner offers it). Each machine with `backup` ticked on its page is then
+   backed up monthly, and **Back up everything now** is on the Security tab.

@@ -127,8 +127,10 @@ def state_payload(a, now: float = 0.0) -> dict:
                 "fresh": fresh, "also": extra,
                 "running": auditing or asked, "queued": asked and not auditing,
                 "busy": bool(a._llm_busy)},
-        # each device with its site (sites.py), and the sites themselves
-        "devices": [{**x, "site": a.sites.of(x.get("ip")), **_listed(a, x.get("ip"))}
+        # each device with its site (sites.py), and the sites themselves; a router that could
+        # be a site of its own says so (its page offers "Make it a site")
+        "devices": [{**x, "site": a.sites.of(x.get("ip")), **_listed(a, x.get("ip")),
+                     **({"can_site": True} if a.sites.offer(x.get("ip")) else {})}
                     for x in rep.get("devices") or []],
         "sites": a.sites.view(rep)["sites"],
         "paused": rep.get("paused") or [],

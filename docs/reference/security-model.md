@@ -32,10 +32,15 @@ The owl is useful, and treated as if anything it reads could steer it.
 
 ## Secrets
 
-- One file, `secrets.yaml`, mode 600, mounted read-only. `config.yaml` and `inventory.yaml`
-  hold none and can be shared. Settings on the dashboard writes those two (each mounted
-  read-write on its own); it never reads or writes a secret, and shows only whether each one
-  is set.
+- One file, `secrets.yaml`, mode 600. `config.yaml` and `inventory.yaml` hold none and can be
+  shared. The config folder is mounted read-write, so lanowl can write its own files at a
+  first start and the dashboard can set what is in them.
+- Secrets are write-only from the dashboard: a password or a token goes in, behind the login,
+  and no page, answer, diff, log line or Telegram
+  message carries one out. A save says which login changed, on Telegram too. The versions kept
+  for undo are mode 600, in lanowl's state.
+- A typed password crosses the network once, from the browser to lanowl: plain HTTP unless an
+  HTTPS proxy sits in front of lanowl, as the dashboard password does.
 - `lanowl --check` reports where each secret comes from, never its value, and refuses a file
   or a key that others can read.
 - The router is read with a user whose group can only read; lanowl reports any change to that
@@ -59,8 +64,8 @@ The dashboard is closed until you log in, and it relies on these:
   defeats DNS rebinding.
 - It cannot be framed by another site.
 - Approving anything is a second step: a sheet that names what runs, where, and the risk.
-- A save in Settings asks for the password again when the browser has not typed it in the
-  last ten minutes, shows its diff first, keeps the file as it was, and is announced on
+- A save in Settings, from a logged-in browser, says what it changes first, keeps the file as
+  it was, and is announced on
   Telegram (to the chat lanowl runs with, so moving the alerts elsewhere is still heard).
   `lanowl --check`'s rules run on the new file, and a new problem stops the save. Values the
   environment sets cannot be changed from the page.

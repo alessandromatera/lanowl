@@ -5,6 +5,8 @@ part you add gives it more to work with.
 
 ## The machine
 
+Docker with Compose 2.24 or later (January 2024: `docker compose version` says).
+
 **Linux with Docker is the recommended setup.** The container runs with host networking, so
 lanowl sees the network exactly as the host does: `mtr` and `traceroute` see every hop, and
 ARP and packet captures see the real wire. A small always-on box is enough: a mini PC, a NUC,
@@ -12,7 +14,10 @@ a home server, a VM on your hypervisor.
 
 **Docker Desktop on a Mac or Windows works too**, behind Docker's own NAT. Watching devices,
 alerts and the dashboard work the same; the model's per-hop diagnostics then see only the
-target, not the hops in between.
+target, not the hops in between. Two things look different there: every browser reaches lanowl
+from Docker's own address (192.168.65.1 on a Mac), so History and Telegram's lines name that
+instead of the browser's; and the address lanowl finds for itself is Docker's internal one, so
+set this machine's real one in Settings (`observer.host_ip`).
 
 Give the machine a **fixed address** on your LAN (a DHCP reservation is fine). lanowl uses it
 to tell its own outage from the network's: if this machine drops off the network, you get one

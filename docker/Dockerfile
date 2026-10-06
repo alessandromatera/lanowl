@@ -29,7 +29,8 @@ RUN pip install --no-cache-dir .
 # the test suite rides along: `docker run --rm lanowl python /app/tests/run_all.py` gates a deploy
 COPY tests/ ./tests/
 
-# /config  config.yaml, inventory.yaml, secrets.yaml (mount it read-only)
+# /config  config.yaml, inventory.yaml, secrets.yaml, lanowl's ssh key: mounted read-write, and
+#          written by lanowl itself when empty (firstrun.py)
 # /state   everything lanowl writes — every relative path in config.yaml lands here
 VOLUME ["/state"]
 WORKDIR /state

@@ -1,9 +1,14 @@
 # lanowl — docker compose. From the repository root:
 #
-#   cp config.example.yaml config/config.yaml        # and inventory.example.yaml, secrets.example.yaml
-#   cp docker/env.example docker/.env                 # your host's address, the model's URL, TZ
 #   docker compose -f docker/compose.yaml up -d
-#   docker compose -f docker/compose.yaml --profile shell up -d    # with the model's sandboxed shells
+#   docker exec lanowl lanowl --setup-code            # then open http://<this machine>:8088/
+#
+# The config folder starts empty: at its first start lanowl writes config.yaml, inventory.yaml,
+# secrets.yaml and its ssh key there, and the dashboard fills them (Settings, the first-run
+# setup). They stay plain files you can edit by hand. docker/.env is optional (env.example).
+#
+# The model's sandboxed shells, once shell.enabled is on (Settings shows this line filled in):
+#   LANOWL_HOST_IP=<this machine's address> docker compose -f docker/compose.yaml --profile shell up -d
 #
 # Host networking: on Linux, lanowl sees the network as the host does — mtr and traceroute see
 # every hop, ARP and packet captures see the real wire. (Docker Desktop on a Mac or Windows
@@ -21,13 +26,10 @@ services:
     container_name: lanowl
     restart: unless-stopped
     network_mode: host
-    env_file: .env
+    env_file: [{path: .env, required: false}]    # optional: docker/env.example says what it can set
     volumes:
-      - ../config:/config:ro                    # config.yaml, inventory.yaml, secrets.yaml, profiles, ssh key
-      # ...and the two files Settings on the dashboard writes, read-write, each on its own
-      # (secrets.yaml and the rest stay read-only). Both must exist before the first start.
-      - {type: bind, source: ../config/config.yaml, target: /config/config.yaml, bind: {create_host_path: false}}
-      - {type: bind, source: ../config/inventory.yaml, target: /config/inventory.yaml, bind: {create_host_path: false}}
+      - ../config:/config                       # config.yaml, inventory.yaml, secrets.yaml, the ssh key,
+                                                # profiles: read-write, lanowl and its dashboard write them
       - lanowl-state:/state                     # the database, the log, the outbox
       - lanowl-ssh:/root/.ssh                   # known_hosts for the host-log watcher
       - sandbox-sock:/run/sandbox:ro
@@ -53,7 +55,9 @@ services:
     mem_limit: 512m
     cpus: 1.0
     pids_limit: 128
-    env_file: .env
+    env_file: [{path: .env, required: false}]
+    environment:
+      LANOWL_HOST_IP: ${LANOWL_HOST_IP:-}       # the host it walls off: docker/.env, or the command line
     volumes:
       - sandbox-sock:/run/sandbox
 
@@ -75,8 +79,9 @@ services:
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 64
-    env_file: .env
+    env_file: [{path: .env, required: false}]
     environment:
+      LANOWL_HOST_IP: ${LANOWL_HOST_IP:-}
       SANDBOX_OFFLINE: "1"
     volumes:
       - sandbox-offline-sock:/run/sandbox

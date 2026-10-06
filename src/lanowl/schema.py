@@ -37,9 +37,10 @@ CHOICES = {
 }
 UNITS = (("_ms", "ms"), ("_s", "seconds"), ("_min", "minutes"), ("_h", "hours"),
          ("_days", "days"), ("_pct", "%"))
-# the environment wins over the file for these (model.py _env_override): locked on the page
+# the environment wins over the file for these (model.py _env_override, firstrun.py's time
+# zone): locked on the page
 ENV = {("model", "url"): "LANOWL_MODEL_URL", ("observer", "host_ip"): "LANOWL_HOST_IP",
-       ("web", "port"): "LANOWL_WEB_PORT"}
+       ("web", "port"): "LANOWL_WEB_PORT", ("timezone",): "TZ"}
 # never shown: set or not, with a button of its own
 HASHES = {("web", "password_hash")}
 # paths inside the container and other plumbing: under "Advanced" in their section
@@ -47,7 +48,7 @@ ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file
             ("access", "known_hosts"), ("hostlog", "ssh"), ("shell", "socket"),
             ("shell", "audit", "socket"), ("telegram", "chat", "poll_timeout_s"),
             ("probes", "concurrency"), ("mikrotik", "lanowl_group"), ("mikrotik", "lanowl_policy")}
-TITLES = {"network": "Your network", "model": "The model", "telegram": "Telegram",
+TITLES = {"network": "Your network", "timezone": "Time zone", "model": "The model", "telegram": "Telegram",
           "web": "The dashboard", "cadence": "Cadence", "alerts": "Alerts", "probes": "Probes",
           "wan": "The internet", "mikrotik": "The router", "discovery": "New devices",
           "sites": "Sites", "site": "Sunrise and sunset", "observer": "lanowl's own host",
@@ -56,6 +57,15 @@ TITLES = {"network": "Your network", "model": "The model", "telegram": "Telegram
           "cves": "Vulnerabilities", "exposure": "Exposure", "drift": "Drift",
           "configwatch": "Config watch", "fixes": "Fixes", "scorecard": "Scorecard",
           "backups": "Backups", "shell": "The model's shell"}
+
+
+def env(var: str) -> str:
+    """A variable of ENV as the environment set it. TZ that lanowl set itself from config.yaml
+    (firstrun.py) is not the environment's."""
+    if var == "TZ":
+        from .firstrun import env_tz
+        return env_tz()
+    return os.environ.get(var, "")
 
 
 def example_path(name: str) -> str:

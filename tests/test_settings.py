@@ -9,10 +9,10 @@ Pinned down here:
   2. what stops a save: a file changed since the page read it, a value the environment sets,
      a read-only file, a file replaced on the host, a ✗ that --check did not give before;
      the password's hash never shows, in the diff or on Telegram;
-  3. the login: its lock survives a restart; a save asks the password again after ten
-     minutes, and wrong ones count toward the lock; the setup code is made once, kept, and
-     opens the first password, which goes into config.yaml;
-  4. the routes: the forms and their sources, a save that needs the password again, a device
+  3. the login: its lock survives a restart; a logged-in browser saves with nothing asked
+     again; the setup code is made once, kept, and opens the first password, which goes
+     into config.yaml;
+  4. the routes: the forms and their sources, a save, a device
      added from the form, the first password from the setup code, Restart to apply.
 """
 from __future__ import annotations
@@ -71,6 +71,7 @@ class _A:
         self.kinds = _Kinds()
         self.sites = None
         self.restarts = []
+        self.probed = []
         self._started = time.time()
         self.settings = ST.Settings(self, self.cfg["_path"], self.inv.path)
 
@@ -83,6 +84,9 @@ class _A:
     def request_restart(self, by):
         self.restarts.append(by)
         return {"ok": True}
+
+    async def probe_now(self, ip):
+        self.probed.append(ip)
 
 
 def _base(a, name):
@@ -193,12 +197,7 @@ def test_login():
         lg._locked_until, lg._fails = 0.0, []
         lg._save()
         tok = lg.attempt(True)["token"]
-        now = time.time()
-        check(lg.recent(tok, now) and not lg.recent(tok, now + L.REAUTH_S + 1), "the password again after ten minutes")
-        r = lg.reauth(tok, False, "192.168.88.47", now + 700)
-        check(r == {"ok": False, "why": "wrong", "left": 4}, "a wrong one there counts toward the lock")
-        lg.reauth(tok, True, "", now + 700)
-        check(lg.recent(tok, now + 750), "the right one: ten minutes more")
+        check(lg.check(tok) and lg.check(tok, time.time() + 3600), "logged in: it stays in, nothing asks again")
     with tempfile.TemporaryDirectory() as d:
         _files(d, password=False)
         a = _A(d)
@@ -247,15 +246,9 @@ def test_routes():
                     await s.post(base + "/api/login", json={"password": PW})
                     async with s.get(base + "/api/settings") as r:
                         out["get"] = (r.status, await r.json())
-                    for t in a.login.sessions.values():
-                        t["authed"] = 0                       # typed long ago
                     body = {"file": "config", "ops": [{"op": "set", "path": ["model", "think"], "value": False}],
                             "base": _base(a, "config")}
                     async with s.post(base + "/api/settings/save", json=body) as r:
-                        out["needed"] = (r.status, await r.json())
-                    async with s.post(base + "/api/settings/save", json={**body, "password": "wrong one"}) as r:
-                        out["wrong"] = (r.status, await r.json())
-                    async with s.post(base + "/api/settings/save", json={**body, "password": PW}) as r:
                         out["saved"] = (r.status, await r.json())
                     dev = {"ip": "192.168.88.44", "name": "ESP 3A1F2C", "group": "iot", "criticality": "low",
                            "checks": [{"type": "icmp"}]}
@@ -268,6 +261,10 @@ def test_routes():
                                       json={"ip": None, "device": {**dev, "kind": "shelly", "manage": ["logs"]},
                                             "preview": True}) as r:
                         out["dev_bad"] = (r.status, await r.json())
+                    wdev = {**dev, "ip": "192.168.88.45", "name": "Kettle"}
+                    async with s.post(base + "/api/settings/device",
+                                      json={"ip": None, "device": wdev, "how": "watch", "base": _base(a, "inventory")}) as r:
+                        out["watch"] = (r.status, list(a.probed), a.inv.get("192.168.88.45") is not None)
                     async with s.post(base + "/api/setup/claim", json={"code": "x", "password": PW}) as r:
                         out["claim_taken"] = r.status
                     async with s.post(base + "/api/setup/router",
@@ -327,18 +324,20 @@ def test_routes():
     check(st == 200 and name["source"] == "file" and name["value"] == "qwen3:30b" and name["help"]
           and body["files"]["config"]["writable"], "the forms: a value, where it comes from, the example's help")
     check(pwf["value"] is True and "scrypt" not in str(body), "the password: set, never its hash")
-    check(out["needed"] == (403, {"ok": False, "auth": "needed"}), "a save after ten minutes: the password again")
-    check(out["wrong"][0] == 403 and out["wrong"][1]["auth"] == "wrong", "a wrong one: refused")
-    check(out["saved"][0] == 200 and out["saved"][1]["ok"], "the right one: saved")
+    check(out["saved"][0] == 200 and out["saved"][1]["ok"], "a logged-in browser saves: no password asked again")
     check(out["dev_plan"][0] == 200 and any("192.168.88.44" in ln for ln in out["dev_plan"][1]["diff"]),
           "a device from the form: its diff")
     check(out["dev_save"][0] == 200 and "ip: 192.168.88.44" in out["inv"] and 'name: "ESP 3A1F2C"' in out["inv"],
           "...written into inventory.yaml")
     check(out["dev_bad"][0] == 400 and "cannot logs" in out["dev_bad"][1]["error"], "only what its kind can do")
+    check(out["watch"] == (200, ["192.168.88.45"], True), "Watch: written, watched, and probed at once (on the page now)")
+    from lanowl.settingsweb import inv_groups
+    check(inv_groups({"groups": {"network": {}}, "devices": [{"ip": "1", "group": "office"}, {"ip": "2", "group": "network"}]})
+          == ["network", "office"], "the groups offered: the groups: section, then one made on a device's page")
     check(out["claim_taken"] == 409, "with a password, the setup code opens nothing")
     rm = out["router_missing"][1]
-    check(rm["login"] is False and "secrets.yaml" in rm["path"] and rm["path"] in rm["error"] and "'nobody'" in rm["error"],
-          "Try the router with no login yet: says which file it read, and the name it looked for")
+    check(rm["login"] is False and "secrets.yaml" in rm["path"] and "type the router user's name and password" in rm["error"],
+          "Try the router with no login typed and none in secrets.yaml: asks for the user and the password")
     check(out["mig_plan"][0] == 200 and len(out["mig_plan"][1]["changes"]) == 2, "the devices kept in the state: their diff")
     inv = load(out["inv_after_mig"])
     kettle = next(d for d in inv["devices"] if d["ip"] == "192.168.88.71")
@@ -354,6 +353,248 @@ def test_routes():
           "the right one with a password: logged in")
     check('password_hash: "scrypt$' in out["cfg"] and any("first-run setup" in t for t in out["told"])
           and all("scrypt" not in t for t in out["told"]), "the hash in config.yaml; Telegram told, without it")
+
+
+SECRET = 'h"un:ter, 2}#2'          # quotes, a colon, a comma, a brace, a hash: YAML's worst
+
+
+def test_secrets():
+    print("\n-- secrets.yaml: write-only --")
+    with tempfile.TemporaryDirectory() as d:
+        _files(d)
+        a = _A(d)
+        s = a.settings
+        from lanowl import access
+        from lanowl.settingsweb import login_op
+        path = s.files["secrets"].path
+        ino = os.stat(path).st_ino
+        ops, err = login_op("router-read", {"user": "lanowl", "how": "password", "value": SECRET},
+                            (load(open(path).read()) or {})["logins"].get("router-read"))
+        p = s.plan("secrets", ops)
+        shown = repr(p["diff"]) + repr(p["changes"])
+        check(p["ok"] and SECRET not in shown and "change-me" not in shown and any("(new)" in ln for ln in p["diff"])
+              and p["changes"] == ["login router-read: password replaced"], "the plan: dots, \"(new)\", no value")
+        r = s.save("secrets", ops, _base(a, "secrets"), "192.168.88.47")
+        check(r["ok"] and access.shared(a.cfg).data()["logins"]["router-read"].password == SECRET,
+              "saved, and in use at once: no restart")
+        check(os.stat(path).st_ino == ino and stat.S_IMODE(os.stat(path).st_mode) == 0o600, "in place, still mode 600")
+        check(len(a.told) == 1 and a.told[0].startswith("🔑") and "router-read" in a.told[0]
+              and SECRET not in a.told[0], "Telegram: the login named, never the value")
+        check("secrets" not in s.pending() and SECRET not in repr(s.history()), "nothing waits for a restart; no value in the history")
+        vers = [v for v in os.listdir(s.dir) if v.startswith("secrets-")]
+        check(len(vers) == 1 and stat.S_IMODE(os.stat(os.path.join(s.dir, vers[0])).st_mode) == 0o600,
+              "the file as it was is kept, mode 600")
+        rp = s.restore_plan(r["id"])
+        check(rp["ok"] and SECRET not in repr(rp["diff"]) and rp["changes"] == ["login router-read: password replaced"],
+              "undo shows dots too")
+        o, e = login_op("router-read", {"user": "lanowl", "how": "password", "value": ""}, {"user": "lanowl", "password": SECRET})
+        check(o is None and "nothing to save" in e, "the same user and no new password: nothing to save")
+        o, e = login_op("router-read", {"user": "other", "how": "password", "value": ""}, {"user": "lanowl", "password": SECRET})
+        check(o[0]["value"] == {"user": "other", "password": SECRET}, "a new user, the password left empty: the one there is kept")
+        o, e = login_op("nas", {"user": "admin", "how": "key"}, {"user": "admin", "key": True, "password": "sudo-pw"})
+        check(o is None, "lanowl's key with its sudo password, unchanged: nothing to save")
+        o, e = login_op("srv", {"user": "root", "how": "key"}, None)
+        check(o[0]["value"] == {"user": "root", "key": True}, "lanowl's key: no password asked")
+        # a device that names a login the same save adds: --check reads them together
+        dev_ops = [{"op": "insert", "path": ["devices"], "value": {"ip": "192.168.88.60", "name": "TV", "kind": "linux",
+                                                                    "credentials": "tv", "checks": [{"type": "icmp"}]}}]
+        alone = s.plan("inventory", dev_ops)
+        sp = s.plan("secrets", login_op("tv", {"user": "root", "how": "key"}, None)[0])
+        together = s.plan("inventory", dev_ops, secrets_text=sp["text"])
+        check(any("'tv'" in x for x in alone["problems"]) and not together["problems"],
+              "a device naming a new login: a ✗ alone, none with the login written first")
+
+    print("\n-- masking: whatever the layout, no value comes out --")
+    lay = ('logins:\n  a: {user: x, password: "p,1}2"}\n  b:\n    user: y\n    password: |\n      long secret one\n'
+           '  c: {user: z, password: plainPW123}   # was plainPW123\n'
+           'tokens: {telegram: "123:ABCSECRETTOKEN", homeassistant: hatok123}\n')
+    m = ST.mask(lay)
+    check(all(v not in m for v in ("p,1}2", "long secret one", "plainPW123", "123:ABCSECRETTOKEN", "hatok123")),
+          "flow maps, block scalars, a value in a comment, tokens on one line")
+
+
+def test_setup_and_secret_routes():
+    print("\n-- the routes: Secrets, the setup with logins, Telegram from /start --")
+    out = {}
+    tg_calls = []
+
+    async def fake_tg(self, token, method, params=None, timeout=15):
+        tg_calls.append((method, dict(params or {})))
+        if token.endswith("BAD" * 7):
+            return {"ok": False, "error_code": 401, "description": "Unauthorized"}
+        if method == "getMe":
+            return {"ok": True, "result": {"username": "house_owl_bot", "first_name": "House owl"}}
+        if method == "getUpdates":
+            return {"ok": True, "result": [{"update_id": 41, "message": {"text": "/start", "date": 1,
+                    "chat": {"id": 100000001, "type": "private", "first_name": "Alex"}}}]}
+        if method == "sendMessage":
+            return {"ok": True, "result": {}}
+        return {"ok": False, "description": "?"}
+
+    class _Rest:
+        def __init__(self, ok, data=None, detail=""):
+            self.ok, self.data, self.detail = ok, data or {}, detail
+
+    async def fake_mk(src, path, user, password, verify, timeout):
+        out.setdefault("mk", []).append((path, user, password == SECRET))
+        if password != SECRET:
+            return _Rest(False, detail="mikrotik http 401")
+        if path == "system/resource":
+            return _Rest(True, {"json": {"version": "7.16", "board-name": "hAP"}})
+        return _Rest(True, {"json": [{"address": "192.168.88.20", "mac-address": "aa:bb:cc:00:11:22", "host-name": "nvr",
+                                      "dynamic": "false", "status": "bound"}]})
+
+    async def go(d):
+        from aiohttp import ClientSession, CookieJar, web
+        import lanowl.web as W
+        from lanowl import probes
+        from lanowl.settingsweb import SettingsRoutes
+        SettingsRoutes._tg = fake_tg
+        probes.mikrotik_rest = fake_mk
+        a = _A(d)
+        a.login = L.Login(a)
+        dash = W.Dashboard.__new__(W.Dashboard)
+        dash.a, dash.login, dash.allowed_hosts, dash._login_lock = a, a.login, set(), asyncio.Lock()
+
+        @web.middleware
+        async def guard(request, handler):
+            return await dash._guard(request, handler)
+        app = web.Application(middlewares=[guard])
+        app.router.add_post("/api/login", dash.api_login)
+        SettingsRoutes(dash).routes(app)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        base = f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}"
+        tok = "123456:" + "A" * 35
+        try:
+            async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as s:
+                await s.post(base + "/api/login", json={"password": PW})
+                async with s.get(base + "/api/settings") as r:
+                    out["get"] = await r.text()
+                sec = {"op": "login", "name": "routers", "user": "admin", "how": "password", "value": SECRET}
+                async with s.post(base + "/api/settings/secret", json={**sec, "preview": True}) as r:
+                    out["sec_plan"] = (r.status, await r.text())
+                async with s.post(base + "/api/settings/secret", json={**sec, "base": _base(a, "secrets")}) as r:
+                    out["sec_saved"] = (r.status, await r.text())
+                async with s.post(base + "/api/settings/secret",
+                                  json={"op": "remove", "name": "routers", "base": _base(a, "secrets")}) as r:
+                    out["sec_rm_used"] = (r.status, await r.json())
+                async with s.post(base + "/api/settings/secret",
+                                  json={"op": "token", "name": "telegram", "value": "nope"}) as r:
+                    out["sec_badtok"] = (r.status, await r.json())
+                # the setup: the router as typed
+                rb = {"dhcp_source": "http://192.168.88.1", "credentials": "router-read", "user": "lanowl"}
+                async with s.post(base + "/api/setup/router", json={**rb, "password": "wrong"}) as r:
+                    out["r_wrong"] = await r.json()
+                await asyncio.sleep(3.1)                       # one try every three seconds
+                async with s.post(base + "/api/setup/router", json={**rb, "password": SECRET}) as r:
+                    out["r_ok"] = (r.status, await r.text())
+                async with s.post(base + "/api/setup/leases", json={**rb, "password": SECRET}) as r:
+                    out["leases"] = await r.json()
+                # Telegram: the token, then /start, then one line to the chat
+                async with s.post(base + "/api/setup/telegram", json={"token": "12:x"}) as r:
+                    out["tg_shape"] = (r.status, await r.json())
+                async with s.post(base + "/api/setup/telegram", json={"token": "123456:" + "BAD" * 7}) as r:
+                    out["tg_bad"] = await r.json()
+                async with s.post(base + "/api/setup/telegram", json={"token": tok}) as r:
+                    out["tg_me"] = await r.json()
+                async with s.post(base + "/api/setup/telegram/chats", json={"token": tok, "offset": 0}) as r:
+                    out["tg_chats"] = await r.json()
+                async with s.post(base + "/api/setup/telegram/hello", json={"token": tok, "chat_id": "100000001"}) as r:
+                    out["tg_hello"] = await r.json()
+                # the setup's write: the router's login, a new login on a device, the token, the chat, the zone
+                body = {"devices": [{"ip": "192.168.88.20", "name": "NVR", "group": "cameras", "criticality": "high",
+                                     "kind": "linux", "credentials": "cams", "checks": [{"type": "icmp"}]}],
+                        "router": {**rb, "password": SECRET},
+                        "logins": {"cams": {"user": "root", "how": "key"}, "unused": {"user": "x", "how": "password",
+                                                                                     "password": "zzz"}},
+                        "telegram": {"token": tok, "chat_id": "100000001"}, "timezone": "Europe/Berlin"}
+                async with s.post(base + "/api/setup/write", json={**body, "preview": True}) as r:
+                    out["w_plan"] = (r.status, await r.text())
+                pj = json.loads(out["w_plan"][1])
+                bases = {k: (pj.get(k) or {}).get("base") for k in ("secrets", "inventory", "config")}
+                async with s.post(base + "/api/setup/write", json={**body, "bases": bases}) as r:
+                    out["w"] = (r.status, await r.text())
+                out["files"] = {k: open(a.settings.files[k].path).read() for k in ("secrets", "inventory", "config")}
+                out["told"] = list(a.told)
+                # a device added with its own login, typed on its page
+                dv = {"ip": "192.168.88.61", "name": "Office NAS", "group": "servers", "criticality": "high",
+                      "kind": "linux", "checks": [{"type": "icmp"}]}
+                lg = {"name": "office-nas", "user": "admin", "how": "password", "password": SECRET}
+                async with s.post(base + "/api/settings/device", json={"ip": None, "device": dv, "login": lg, "preview": True}) as r:
+                    out["dl_plan"] = (r.status, await r.text())
+                dp = json.loads(out["dl_plan"][1])
+                async with s.post(base + "/api/settings/device", json={"ip": None, "device": dv, "login": lg,
+                                                                       "base": dp.get("base"), "sbase": (dp.get("secrets") or {}).get("base")}) as r:
+                    out["dl_saved"] = (r.status, await r.text())
+                out["dl_files"] = (open(a.settings.files["inventory"].path).read(), open(a.settings.files["secrets"].path).read())
+        finally:
+            await runner.cleanup()
+
+    import json
+    with tempfile.TemporaryDirectory() as d:
+        _files(d)
+        cfg = open(os.path.join(d, "config.yaml")).read().replace('timezone: "Europe/Berlin"', 'timezone: ""')
+        open(os.path.join(d, "config.yaml"), "w").write(cfg)
+        saved_tz = {k: os.environ.pop(k, None) for k in ("TZ", "LANOWL_TZ_FROM")}
+        try:
+            asyncio.run(go(d))
+        finally:
+            for k, v in saved_tz.items():
+                if v is not None:
+                    os.environ[k] = v
+    check(SECRET not in out["get"] and '"user": "lanowl"' in out["get"], "Settings: the logins' users, never a value")
+    check(out["sec_plan"][0] == 200 and SECRET not in out["sec_plan"][1] and "(new)" in out["sec_plan"][1],
+          "a Secrets save, planned: dots")
+    check(out["sec_saved"][0] == 200 and SECRET not in out["sec_saved"][1], "a Secrets save from a logged-in browser: saved; the answer has no value")
+    rm = out["sec_rm_used"]
+    check(rm[0] == 400 and "Router" in rm[1]["error"] and "another login" in rm[1]["error"],
+          "a login a device uses: not removed, and says which")
+    check(out["sec_badtok"][0] == 400 and "@BotFather" not in out["sec_badtok"][1]["error"], "a token that is not one: refused")
+    dlp = json.loads(out["dl_plan"][1])
+    check(out["dl_plan"][0] == 200 and SECRET not in out["dl_plan"][1] and dlp["secrets"]["changes"] == ["login office-nas added (admin, a password)"]
+          and any("credentials: office-nas" in ln for ln in dlp["diff"]) and not dlp["problems"],
+          "a device with its own login: two diffs (inventory.yaml naming it, secrets.yaml adding it), no value")
+    inv_t, sec_t = out["dl_files"]
+    devn = next(x for x in load(inv_t)["devices"] if x["ip"] == "192.168.88.61")
+    check(out["dl_saved"][0] == 200 and SECRET not in out["dl_saved"][1] and devn.get("credentials") == "office-nas"
+          and load(sec_t)["logins"]["office-nas"] == {"user": "admin", "password": SECRET}, "...saved: the device and its login")
+    check(out["r_wrong"]["login"] is True and "check the user and the password" in out["r_wrong"]["error"],
+          "the router refuses a typed login: says so, about what was typed")
+    check(out["r_ok"][0] == 200 and '"ok": true' in out["r_ok"][1] and SECRET not in out["r_ok"][1]
+          and any(m[0] == "ip/dhcp-server/lease" and m[2] for m in out["mk"]), "the typed login works: tried, not written")
+    check(out["leases"]["ok"] and out["leases"]["rows"][0]["ip"] == "192.168.88.20", "its DHCP list, with the typed login")
+    check(out["tg_shape"][0] == 400 and "tg_shape" and not any(c[0] == "getMe" and False for c in tg_calls),
+          "a token of the wrong shape never reaches Telegram")
+    check(out["tg_bad"]["ok"] is False and out["tg_bad"]["error"] == "Telegram answered: Unauthorized",
+          "a wrong token: Telegram's own word for it")
+    check(out["tg_me"] == {"ok": True, "user": "house_owl_bot", "name": "House owl", "mine": False}, "the bot's name")
+    ch = out["tg_chats"]
+    check(ch["ok"] and ch["offset"] == 42 and ch["chats"][0]["id"] == "100000001" and ch["chats"][0]["name"] == "Alex",
+          "/start: the chat that wrote, and where to go on from")
+    check(out["tg_hello"]["ok"] and any(c[0] == "sendMessage" and c[1]["chat_id"] == "100000001" for c in tg_calls),
+          "one line to that chat")
+    wp = out["w_plan"]
+    check(wp[0] == 200 and SECRET not in wp[1] and "zzz" not in wp[1] and "AAAAAAAAAA" not in wp[1],
+          "the setup's write, planned: three diffs, no value in them")
+    pj = json.loads(wp[1])
+    check(pj["secrets"]["changes"] == ["login router-read: password replaced", "login cams added (root, lanowl's key)",
+                                       "token telegram set"] and not pj["inventory"]["problems"] and not pj["config"]["problems"],
+          "secrets.yaml: the router's login, the new one a device uses (not the unused one), the token; nothing for --check")
+    f = out["files"]
+    sec = load(f["secrets"])
+    check(out["w"][0] == 200 and sec["logins"]["router-read"] == {"user": "lanowl", "password": SECRET}
+          and sec["logins"]["cams"] == {"user": "root", "key": True} and "unused" not in sec["logins"]
+          and sec["tokens"]["telegram"] == "123456:" + "A" * 35, "written: secrets.yaml")
+    cfgw = load(f["config"])
+    check(cfgw["telegram"]["chat_id"] == "100000001" and cfgw["timezone"] == "Europe/Berlin"
+          and cfgw["mikrotik"]["credentials"] == "router-read", "config.yaml: the chat and the time zone")
+    check(any(dv["ip"] == "192.168.88.20" and dv.get("credentials") == "cams" for dv in load(f["inventory"])["devices"]),
+          "inventory.yaml: the device with its login")
+    check(all(SECRET not in t and "AAAAAAAAAA" not in t for t in out["told"]) and any(t.startswith("🔑") for t in out["told"]),
+          "Telegram: told, never a value")
 
 
 def test_follow():
@@ -378,8 +619,161 @@ def test_follow():
     check(far.ip == "10.8.0.34", "its own site's DHCP moves it")
 
 
+def test_sites():
+    print("\n-- sites: a router made a site, Settings → Sites, the most specific network wins --")
+    from lanowl.model import best_site, on_main_lan, on_main_side, site_of
+    from lanowl.settingsweb import site_list, sites_view
+    from lanowl.sites import Sites
+    import ipaddress
+    office = {"ip": "10.8.0.9", "name": "Office router", "group": "office", "kind": "mikrotik", "credentials": "office"}
+    inv = {"devices": [{"ip": "192.168.88.1", "name": "Router", "kind": "mikrotik"},
+                       {"ip": "192.168.88.2", "name": "AP", "kind": "openwrt"},
+                       {"ip": "192.168.88.10", "name": "NAS", "kind": "linux"}, office]}
+    bare = {"mikrotik": {"dhcp_source": "http://192.168.88.1"}}          # a new install: no sites
+    cfg = {**bare, "sites": {"list": [{"key": "home", "name": "Home", "nets": ["192.168.88.0/24"]}]}}
+
+    v = sites_view(bare, inv)
+    r = {x["ip"]: x for x in v["routers"]}
+    check([s["key"] for s in v["list"]] == ["home"] and not v["list"][0]["in_file"] and v["home_default"] == ["192.168.0.0/16"],
+          "no sites in the file: the main site is listed anyway, with the networks it has by default")
+    check(r["192.168.88.1"]["main"] and r["192.168.88.2"]["main_side"] and not r["10.8.0.9"]["main_side"]
+          and "192.168.88.10" not in r, "the routers: the main one, one on the main network, one elsewhere; no linux")
+
+    new, err = site_list(bare, inv, None, {"name": "Office", "nets": "192.168.0.0/24, 10.8.0.9",
+                                           "router": "10.8.0.9", "criticality": "info"})
+    check(not err and new == [{"key": "office", "name": "Office", "nets": ["192.168.0.0/24", "10.8.0.9/32"],
+                               "router": "10.8.0.9", "kind": "routeros", "criticality": "info"}],
+          f"Make it a site: the entry, its kind from the router's ({err or new})")
+    bad = [({"name": "", "nets": ["192.168.0.0/24"]}, "a name"),
+           ({"name": "X", "nets": []}, "its network"),
+           ({"name": "X", "nets": ["192.168.0.300/24"]}, "not a network"),
+           ({"name": "X", "nets": ["192.168.88.0/24"]}, "Home's already"),
+           ({"name": "X", "nets": ["192.168.88.0/25"]}, "holds the main router"),
+           ({"name": "X", "nets": ["192.168.0.0/24"], "router": "192.168.0.1"}, "not in inventory.yaml"),
+           ({"name": "X", "nets": ["192.168.88.10/32"], "router": "192.168.88.10"}, "a linux"),
+           ({"name": "X", "nets": ["192.168.0.0/24"], "router": "10.8.0.9"}, "not on 192.168.0.0/24"),
+           ({"name": "X", "nets": ["192.168.0.0/24"], "criticality": "loud"}, "criticality is one of")]
+    for body, why in bad:
+        _, err = site_list(cfg, inv, None, body)
+        check(why in err, f"refused: {why} ({err})")
+    _, err = site_list(cfg, inv, "home", None)
+    check("stays" in err, "the main site is never removed")
+
+    two, _ = site_list(cfg, inv, None, {"name": "Office", "nets": ["10.8.0.9/32", "192.168.0.0/24"], "router": "10.8.0.9"})
+    _, err = site_list({**cfg, "sites": {"list": two}}, inv, None, {"name": "Shop", "nets": ["10.9.0.0/24"], "router": "10.8.0.9"})
+    check("Office's router already" in err, "a router is the router of one site")
+    two[1]["dhcp"] = "keep me"                                   # a key the form does not know
+    ed, err = site_list({**cfg, "sites": {"list": two}}, inv, "office",
+                        {"name": "Main office", "nets": ["10.8.0.9/32", "192.168.0.0/24"], "router": "10.8.0.9", "criticality": "warning"})
+    check(not err and ed[1]["key"] == "office" and ed[1]["name"] == "Main office" and ed[1]["criticality"] == "warning"
+          and ed[1]["dhcp"] == "keep me", "an edit keeps the key and what the form does not edit")
+    gone, _ = site_list({**cfg, "sites": {"list": two}}, inv, "office", None)
+    check([s["key"] for s in gone] == ["home"], "Remove: out of the list")
+    h, err = site_list(bare, inv, "home", {"name": "Casa", "nets": "192.168.88.0/24"})
+    check(not err and h == [{"key": "home", "name": "Casa", "nets": ["192.168.88.0/24"]}], "the main site, named in the file for the first time")
+    k, _ = site_list({"sites": {"list": [{"key": "office", "name": "Office", "nets": ["10.20.0.0/24"]}]}}, inv, None,
+                     {"name": "Office", "nets": ["10.21.0.0/24"]})
+    check(k[1]["key"] == "office-2", "a new key never takes one in use")
+
+    words = ST.describe("config", bare, {**bare, "sites": {"list": new}})
+    check(words == ["site Office added: 192.168.0.0/24, 10.8.0.9/32, its router 10.8.0.9"], f"in words: {words}")
+    words = ST.describe("config", {"sites": {"list": two}}, {"sites": {"list": ed}})
+    check("site Main office: name Office → Main office" in words and "site Main office: criticality info → warning" in words
+          and not any(w.startswith("sites.list") for w in words), f"an edit, in words: {words}")
+    check(ST.describe("config", {"sites": {"list": two}}, {"sites": {"list": gone}}) == ["site Office removed"], "a removal, in words")
+
+    # the most specific network wins: a site inside the main one's default 192.168.0.0/16
+    shp = {**bare, "sites": {"list": [{"key": "shop", "name": "Shop", "nets": ["192.168.0.0/24"], "router": "192.168.0.1"}]}}
+    check(site_of(shp, "192.168.0.5") == "shop" and site_of(shp, "192.168.88.5") == "home",
+          "a site's /24 inside the default /16: its addresses are the site's")
+    check(not on_main_lan(shp, "192.168.0.5") and on_main_lan(shp, "192.168.88.5") and on_main_lan(bare, "192.168.0.5"),
+          "the main LAN (updates, reboots, the scan) leaves a site's addresses out")
+    wide = {"sites": {"list": [{"key": "home", "nets": ["192.168.0.0/16"]}, {"key": "shop", "nets": ["192.168.0.0/24"]}]}}
+    check(site_of(wide, "192.168.0.5") == "shop" and site_of(wide, "192.168.7.5") == "home",
+          "listed after a main site that holds it: the site still wins")
+    check(on_main_side(bare, "192.168.88.2") and not on_main_side(bare, "10.8.0.9"), "the main router's /24 is the main site's")
+    n = lambda x: ipaddress.ip_network(x)    # noqa: E731
+    check(best_site(ipaddress.ip_address("10.8.0.16"), [("vpn", n("10.8.0.0/24")), ("cabin", n("10.8.0.16/32"))]) == "cabin",
+          "a /32 wins over the /24 holding it")
+    st = Sites.__new__(Sites)
+    st.sites = [{"key": "home", "nets": [n("192.168.0.0/16")]}, {"key": "shop", "nets": [n("192.168.0.0/24")]}]
+    check(st.of("192.168.0.9") == "shop" and st.of("192.168.5.9") == "home" and st.of("x") == "home", "sites.py places them the same way")
+
+    # the route: plan, save, and a save on a file changed since
+    d = tempfile.mkdtemp(prefix="lanowl-sites-")
+    try:
+        _files(d)
+        from lanowl.yamledit import apply
+        ip = os.path.join(d, "inventory.yaml")
+        open(ip, "w").write(apply(open(ip).read(), [{"op": "insert", "path": ["devices"], "value": office}]))
+        out = {}
+
+        async def go():
+            from aiohttp import ClientSession, CookieJar, web
+            import lanowl.web as W
+            from lanowl.settingsweb import SettingsRoutes
+            a = _A(d)
+            a.login = L.Login(a)
+            dash = W.Dashboard.__new__(W.Dashboard)
+            dash.a, dash.login, dash.allowed_hosts, dash._login_lock = a, a.login, set(), asyncio.Lock()
+
+            @web.middleware
+            async def guard(request, handler):
+                return await dash._guard(request, handler)
+            app = web.Application(middlewares=[guard])
+            app.router.add_post("/api/login", dash.api_login)
+            SettingsRoutes(dash).routes(app)
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, "127.0.0.1", 0)
+            await site.start()
+            base = f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}"
+            body = {"key": None, "site": {"name": "Office", "nets": ["10.8.0.9/32", "192.168.0.0/24"], "router": "10.8.0.9",
+                                          "criticality": "info"}}
+            try:
+                async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as s:
+                    async with s.post(base + "/api/settings/site", json={**body, "preview": True}) as r:
+                        out["anon"] = r.status
+                    await s.post(base + "/api/login", json={"password": PW})
+                    async with s.get(base + "/api/settings") as r:
+                        out["get"] = (await r.json())["sites"]
+                    async with s.post(base + "/api/settings/site", json={**body, "preview": True}) as r:
+                        out["plan"] = (r.status, await r.json())
+                    old = _base(a, "config")
+                    async with s.post(base + "/api/settings/site", json={**body, "base": old}) as r:
+                        out["save"] = (r.status, await r.json())
+                    async with s.post(base + "/api/settings/site", json={"key": "home", "base": old,
+                                                                         "site": {"name": "Casa", "nets": ["192.168.88.0/24"]}}) as r:
+                        out["stale"] = (r.status, await r.json())
+                    async with s.post(base + "/api/settings/site", json={"key": "home", "site": None, "preview": True}) as r:
+                        out["home"] = (r.status, await r.json())
+                    out["told"] = list(a.told)
+                    out["pending"] = a.settings.view().get("pending") or {}
+            finally:
+                await runner.cleanup()
+        asyncio.run(go())
+        check(out["anon"] == 401, "logged out: no site is written")
+        g = out["get"]
+        check([x["key"] for x in g["list"]] == ["home"] and any(x["ip"] == "10.8.0.9" and not x["site"] for x in g["routers"]),
+              "GET /api/settings: the sites and the routers")
+        st_, p = out["plan"]
+        check(st_ == 200 and p["changes"] == ["site Office added: 10.8.0.9/32, 192.168.0.0/24, its router 10.8.0.9"]
+              and not p["problems"] and "text" not in p, f"the plan, in words ({p.get('changes') or p})")
+        st_, r = out["save"]
+        lst = load(open(os.path.join(d, "config.yaml")).read())["sites"]["list"]
+        check(st_ == 200 and r["ok"] and [x["key"] for x in lst] == ["home", "office"] and lst[1]["kind"] == "routeros",
+              "saved into config.yaml, after the main site")
+        check(any("site Office added" in x for x in out["told"]) and "config" in out["pending"],
+              "Telegram told in one line; it waits for a restart")
+        check(out["stale"][0] == 409 and "changed since" in out["stale"][1]["error"], "a page that read the file before is refused")
+        check(out["home"][0] == 400, "the main site cannot be removed from the page")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
-    for fn in [test_save_and_undo, test_guards, test_login, test_routes, test_follow]:
+    for fn in [test_save_and_undo, test_guards, test_login, test_routes, test_secrets, test_setup_and_secret_routes,
+               test_follow, test_sites]:
         fn()
     print()
     if _fails:

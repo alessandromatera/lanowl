@@ -24,10 +24,6 @@ hears it once, with the address the last try came from. /password lifts the lock
 kept in the record, so a restart does not lift it. A good login, a log out and a session that
 runs out send nothing.
 
-A save in Settings asks the password again when this browser has not typed it in the last
-REAUTH_S (`recent`, `reauth`): a browser stays logged in for a month, and whoever holds it
-may not be the owner. Those tries count toward the same lock.
-
 The hash is scrypt from Python's standard library: `scrypt$n$r$p$salt$hash`, base64.
 """
 from __future__ import annotations
@@ -53,7 +49,6 @@ MAX_FAILS = 5
 LOCK_S = 15 * 60
 MAX_SESSIONS = 50          # browsers remembered at once; the oldest goes first
 SEEN_SAVE_S = 3600         # a visit renews a login; written down at most once an hour
-REAUTH_S = 600             # a Settings save asks the password again after this
 _CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # no 0/O, 1/I/L: read off a terminal
 WAIT_S = 300               # after /password, the next message is the password
 N, R, P = 2 ** 15, 8, 1    # ~40-100 ms per try, 32 MB
@@ -178,7 +173,7 @@ class Login:
 
     def _session(self, now: float) -> str:
         token = secrets.token_urlsafe(32)
-        self.sessions[_tok(token)] = {"made": now, "seen": now, "authed": now}
+        self.sessions[_tok(token)] = {"made": now, "seen": now}
         self._save()
         return token
 
@@ -199,35 +194,6 @@ class Login:
             return {"ok": False, "why": "locked", "until": self._locked_until}
         self._save()
         return {"ok": False, "why": "wrong", "left": MAX_FAILS - len(self._fails)}
-
-    # --- the password again, for a Settings save ---------------------------------------
-    def recent(self, token: str, now: Optional[float] = None) -> bool:
-        """This browser typed the password in the last REAUTH_S. With the login off (a login
-        of the owner's own in front), that login is the guard: always recent."""
-        if not self.on:
-            return True
-        now = now or time.time()
-        s = self.sessions.get(_tok(token or ""))
-        if s is None:
-            return False
-        at = s.get("authed")
-        return now - float(s.get("made") or 0 if at is None else at) < REAUTH_S
-
-    def reauth(self, token: str, ok: bool, ip: str = "", now: Optional[float] = None) -> dict:
-        """The password typed again on a Settings save, once `verify` has said whether it
-        matched. {"ok"} or {"ok": False, "why": "wrong"|"locked", ...}."""
-        now = now or time.time()
-        s = self.sessions.get(_tok(token or ""))
-        if s is None:
-            return {"ok": False, "why": "out"}
-        if self.locked(now):
-            return {"ok": False, "why": "locked", "until": self._locked_until}
-        if not ok:
-            return self._fail(ip, now, "password")
-        self._fails = []
-        s["authed"] = now
-        self._save()
-        return {"ok": True}
 
     # --- the first-run setup ---------------------------------------------------------
     def ensure_code(self) -> str:

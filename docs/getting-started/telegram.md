@@ -6,26 +6,24 @@ only talks to your chat.
 
 ## Make the bot
 
-1. In Telegram, open a chat with **@BotFather**, send `/newbot`, and follow its two
-   questions (a display name, then a username ending in `bot`).
-2. BotFather answers with a token like `123456:ABC-DEF…`. Put it in `config/secrets.yaml`:
+In Telegram, open a chat with **@BotFather**, send `/newbot`, and follow its two questions (a
+display name, then a username ending in `bot`). BotFather answers with a token like
+`123456:ABC-DEF…`.
 
-   ```yaml
-   tokens:
-     telegram: "123456:ABC-DEF..."
-   ```
+## Give it to lanowl
 
-   Or give it in the environment as `LANOWL_TG_TOKEN` (or `LANOWL_TG_TOKEN_FILE`, a file
-   holding it, which is how Docker secrets arrive).
+On the dashboard, in the first-run setup's **Telegram** step. Later, the same step is in
+Settings → Add from the router's list (**Use another bot or chat**); Settings → Secrets
+replaces the token alone, and keeps the chat.
 
-## Find your chat id
+1. Paste the token and **Check the token**: lanowl asks Telegram which bot it is and shows its
+   name.
+2. From the phone you want the alerts on, send `/start` to your bot. The page lists the chat
+   that wrote, within seconds (it listens for five minutes).
+3. **Use this chat**: the bot says hello there, and the setup's last step writes the token into
+   `secrets.yaml` (never shown again) and the chat into `config.yaml` (`telegram.chat_id`).
 
-lanowl writes to one chat, and listens to it only. To find its id:
-
-1. Open your new bot in Telegram and send it `/start`.
-2. Before lanowl is running, open this address in a browser, with your token in it:
-   `https://api.telegram.org/bot<token>/getUpdates`
-3. In the answer, find `"chat":{"id":…`. That number is your chat id.
+The settings that go with it, in `config.yaml` (Settings → Telegram):
 
 ```yaml
 telegram:
@@ -35,8 +33,20 @@ telegram:
     allowed_chat_ids: []          # empty: only chat_id
 ```
 
-Do step 2 before starting lanowl: once it runs, it reads the bot's updates itself, and a
-second reader gets an error instead (lanowl logs it as "another client is polling this bot").
+### By hand
+
+The token goes in `config/secrets.yaml`:
+
+```yaml
+tokens:
+  telegram: "123456:ABC-DEF..."
+```
+
+or in the environment as `LANOWL_TG_TOKEN` (or `LANOWL_TG_TOKEN_FILE`, a file holding it,
+which is how Docker secrets arrive). For the chat id, before lanowl runs: send `/start` to the
+bot, open `https://api.telegram.org/bot<token>/getUpdates` in a browser, and find
+`"chat":{"id":…`. Once lanowl runs, it reads the bot's updates itself, and a second reader
+gets an error instead (lanowl logs it as "another client is polling this bot").
 
 ## Who is listened to
 

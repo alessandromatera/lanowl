@@ -27,7 +27,9 @@ look into something, and let `arp` checks work; leave them out and it simply can
 lanowl watches its own group: a change to it that grants more than `mikrotik.lanowl_policy`
 is reported like any other configuration change.
 
-Then in `config.yaml`:
+Then give lanowl the router's address, that user and its password: in the first-run setup's
+router step (or Settings → Add from the router's list), where **Try the router** checks them.
+The setup writes them into the files. By hand instead, in `config.yaml`:
 
 ```yaml
 mikrotik:

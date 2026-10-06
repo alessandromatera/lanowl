@@ -25,8 +25,9 @@ The assistant needs three things: the example files, the documentation, and your
 
 **No secret, ever.** Not a password, not the Telegram token, not a key, not your real
 `secrets.yaml`. The assistant never needs one: the inventory names each login
-(`credentials: routers`) and you write the login itself into `secrets.yaml` on your own
-machine. Ask the assistant for the list of logins to create, and fill them in yourself.
+(`credentials: routers`), and you set the login itself on the dashboard (Settings → Secrets,
+Add a login) or in `secrets.yaml` on your own machine. Ask the assistant for the list of
+logins to create, and fill them in yourself.
 
 Addresses, device names and MAC addresses are your call: they say a lot about your home to
 whoever runs the assistant. A local model on your own Ollama is an option for this too.

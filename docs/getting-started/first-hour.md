@@ -18,9 +18,9 @@ What happens after `docker compose up -d`, and what is worth tuning in the first
 - **The router's DHCP** is read every five minutes (`mikrotik.discovery_interval_s`). The
   first read is a baseline: what is already on your network is not announced as new.
 - Under each site, the dashboard lists the devices on its DHCP that nobody watches, with two
-  buttons. **Watch** starts pinging one (kept in lanowl's own state, not your inventory
-  file); **Known** marks it as belonging there, so it no longer counts as unknown. The
-  family's phones are Known; the printer is worth a Watch.
+  buttons. **Watch** writes one into `inventory.yaml` and pings it at once; **Known** marks
+  it as belonging there, so it no longer counts as unknown. The family's phones are Known;
+  the printer is worth a Watch.
 
 ## In the morning
 
@@ -33,7 +33,8 @@ The weekly review arrives on Sundays at 10:00 (`weekly`).
 
 ## Tuning in the first days
 
-The first days show what is noise on your network. Most of it is settled in the inventory:
+The first days show what is noise on your network. Most of it is settled on the device's page
+(Settings → Devices), or in `inventory.yaml` by hand:
 
 | You see | Change |
 |---|---|

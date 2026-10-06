@@ -52,6 +52,10 @@ h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spa
   background:var(--blue);color:#fff;font-size:16px;font-weight:650;margin-top:6px}
 .btn:active{filter:brightness(.92)}
 .btn:disabled{background:var(--fill);color:var(--ink2);cursor:default}
+.btn.busy:disabled{background:var(--blue);color:#fff;opacity:.85;cursor:progress}
+.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
 .help{margin:18px 0 0;text-align:center;font-size:13.5px;color:var(--ink2)}
 .help b{color:var(--ink);font-weight:600}
 .state{border-radius:var(--r);padding:14px 16px;font-size:15px;background:color-mix(in srgb,var(--red) 11%,var(--card));color:var(--red-t)}
@@ -65,6 +69,9 @@ h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spa
 .cmd code{background:none;padding:0;font-size:12px;flex:1;min-width:0}
 .copy{border:1px solid var(--sep);background:var(--card);border-radius:7px;font-size:12.5px;font-weight:600;padding:4px 9px;flex:none}
 .lab{font-size:12.5px;font-weight:650;letter-spacing:.03em;text-transform:uppercase;color:var(--ink2);margin:14px 4px 6px}
+.selw{position:relative}
+.selw::after{content:"";position:absolute;right:15px;top:50%;width:8px;height:8px;margin-top:-7px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(45deg);pointer-events:none}
+select.field{-webkit-appearance:none;appearance:none;padding-right:38px;color:var(--ink)}
 .lab:first-child{margin-top:0}
 .lnk{border:0;background:none;padding:0;color:var(--blue);font-weight:600;font-size:inherit}
 [hidden]{display:none!important}
@@ -94,6 +101,9 @@ h1{margin:16px 0 2px;text-align:center;font-size:25px;font-weight:750;letter-spa
     <input type="text" name="username" value="lanowl" autocomplete="username" hidden>
     <input class="field" id="npw" type="password" autocomplete="new-password" placeholder="8 characters or more" aria-label="Password">
     <input class="field" id="npw2" type="password" autocomplete="new-password" placeholder="The same again" aria-label="Password again" style="margin-top:8px">
+    <div class="lab">Time zone</div>
+    <div class="selw"><select class="field" id="tz" aria-label="Time zone"></select></div>
+    <p class="help" style="margin:6px 4px 0;text-align:left">From this browser. Sunrise, sunset and the router's log times are read in it.</p>
     <div class="err" id="serr" role="alert"></div>
     <button class="btn" id="sgo" type="submit">Continue</button>
     <p class="help" style="margin-top:12px">Only its hash is kept, in config.yaml. The code works once.</p>
@@ -152,16 +162,16 @@ $("f").addEventListener("submit", async e => {
   e.preventDefault();
   const pw = $("pw").value;
   if (!pw) { $("err").textContent = "Type the password."; return; }
-  $("go").disabled = true; $("err").textContent = "";
+  busy($("go"), "Logging in…"); $("err").textContent = "";
   let r, j = {};
   try {
     r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({password: pw})});
     j = await r.json();
   } catch (_) {
-    $("go").disabled = false; $("err").textContent = "lanowl did not answer. Is it running?"; return;
+    idle($("go")); $("err").textContent = "lanowl did not answer. Is it running?"; return;
   }
-  $("go").disabled = false;
-  if (j.ok) { location.reload(); return; }
+  if (j.ok) { location.reload(); return; }      // the spinner stays until the page comes
+  idle($("go"));
   $("pw").value = "";
   if (j.why === "locked") { render({state: "locked", until: j.until}); return; }
   if (j.why === "none") { render({state: "none"}); return; }
@@ -181,6 +191,19 @@ function copier(b, el) {
 $("copy").addEventListener("click", () => copier($("copy"), $("hashcmd")));
 document.querySelector("[data-copy=codecmd]").addEventListener("click", e => copier(e.currentTarget, $("codecmd")));
 $("other").addEventListener("click", () => render({other: true}));
+// a button waiting for lanowl: a spinner and what it is doing
+function busy(b, label) { b.dataset.label = b.dataset.label || b.textContent; b.disabled = true; b.classList.add("busy"); b.innerHTML = '<span class="spin"></span>' + label; }
+function idle(b) { b.disabled = false; b.classList.remove("busy"); if (b.dataset.label) b.textContent = b.dataset.label; }
+// the time zone: this browser's, for the setup's last step to write into config.yaml
+(() => {
+  let mine = "UTC";
+  try { mine = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (_) {}
+  let all = [];
+  try { all = Intl.supportedValuesOf("timeZone"); } catch (_) {}
+  if (!all.includes(mine)) all = [mine, ...all];
+  if (!all.includes("UTC")) all.push("UTC");
+  $("tz").innerHTML = all.map(z => `<option${z === mine ? " selected" : ""}>${z.replace(/[<&"]/g, "")}</option>`).join("");
+})();
 
 $("setup").addEventListener("submit", async e => {
   e.preventDefault();
@@ -188,14 +211,17 @@ $("setup").addEventListener("submit", async e => {
   if (!code) { $("serr").textContent = "Type the setup code."; return; }
   if (pw.length < 8) { $("serr").textContent = "The password needs 8 characters or more."; return; }
   if (pw !== pw2) { $("serr").textContent = "The two passwords are not the same."; return; }
-  $("sgo").disabled = true; $("serr").textContent = "";
+  busy($("sgo"), "Checking the code…"); $("serr").textContent = "";
   let j = {};
   try {
     const r = await fetch("/api/setup/claim", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, password: pw})});
     j = await r.json();
   } catch (_) { j = {why: "down"}; }
-  $("sgo").disabled = false;
-  if (j.ok) { location.assign("/?welcome=1#setup"); return; }    // a page load, not a hash change
+  if (!j.ok) idle($("sgo"));
+  if (j.ok) {
+    try { localStorage.setItem("lanowl.tz", JSON.stringify($("tz").value)); } catch (_) {}
+    location.assign("/?welcome=1#setup"); return;    // a page load, not a hash change
+  }
   if (j.why === "locked") { render({state: "locked", until: j.until}); return; }
   if (j.why === "none") { location.reload(); return; }
   $("serr").textContent = j.why === "down" ? "lanowl did not answer. Is it running?"

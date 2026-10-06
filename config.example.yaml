@@ -1,4 +1,6 @@
-# lanowl — configuration. Copy to config.yaml and edit.
+# lanowl — configuration: every key, with what it does. A new install needs no copy of it:
+# lanowl writes its own short config.yaml at its first start, and Settings on the dashboard
+# adds keys from here, with these comments. Or copy it to config/config.yaml and edit.
 #
 # The essentials come first; everything optional is switched off and says what it needs.
 # Secrets never go in this file: every one of them (device logins, tokens, the router's and
@@ -13,6 +15,9 @@ network:
   description: |
     A home LAN 192.168.88.0/24 behind a MikroTik router (192.168.88.1), one fibre line to the
     internet. IoT devices share the main LAN on purpose. Guests use their own Wi-Fi.
+
+# Sunrise, sunset and the router's log times are read in it. TZ in the environment wins.
+timezone: "Europe/Berlin"           # empty: UTC. The first-run setup fills it from your browser
 
 # --- the model (optional: everything works without it) -----------------------------------
 model:
@@ -29,7 +34,7 @@ model:
 
 # --- Telegram: alerts out, questions in ---------------------------------------------------
 telegram:
-  chat_id: ""                       # your chat with the bot (send it /start, then read getUpdates)
+  chat_id: ""                       # your chat with the bot: the first-run setup finds it from /start
                                     # the bot's token: secrets.yaml `tokens.telegram`, or LANOWL_TG_TOKEN
   outbox_file: "tg_outbox.json"     # what could not be sent during an outage, sent when it is back
   chat:
@@ -43,7 +48,7 @@ telegram:
 web:
   enabled: true
   host: "0.0.0.0"
-  port: 80                          # or LANOWL_WEB_PORT
+  port: 80                          # or LANOWL_WEB_PORT. Not set: 8088
   allowed_hosts: []                 # host names allowed besides IP addresses (DNS-rebinding guard)
   password_hash: ""                 # lanowl --hash-password makes it. Empty: set it with
                                     # /password on Telegram. No password at all: the
@@ -162,7 +167,7 @@ site:
 
 observer:                           # lanowl's own host, so its own outage is not "everything is down"
   enabled: true
-  host_ip: ""                       # or LANOWL_HOST_IP
+  host_ip: ""                       # or LANOWL_HOST_IP. Empty: the address it reaches the internet from
   gateway_ip: ""                    # default: the router in mikrotik.dhcp_source
   min_down_pct: 60
   min_groups: 3

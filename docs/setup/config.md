@@ -1,17 +1,18 @@
 # config.yaml
 
-One file says everything lanowl does. Copy `config.example.yaml` to `config/config.yaml`
-and edit it: the essentials come first, and every optional feature starts switched off. Or
-change it from the dashboard's gear: [Settings](../using/settings.md) shows every section as a
-form and keeps the file's comments.
+One file says everything lanowl does. A new install has a short one, written by lanowl at its
+first start, and the dashboard's gear changes it: [Settings](../using/settings.md) shows every
+section as a form, from `config.example.yaml`, and keeps the file's comments. Or copy
+`config.example.yaml` to `config/config.yaml` and edit it: the essentials come first, and
+every optional feature starts switched off.
 
 - **No secrets here.** Logins, tokens and lanowl's ssh key live in
   [`secrets.yaml`](secrets.md), so this file can be shared or kept in git.
 - **Relative paths** (the database, the log, the outbox) land in `/state`, the container's
   volume.
-- **Three settings can come from the environment** instead, so one file serves several
-  machines: `LANOWL_MODEL_URL` (`model.url`), `LANOWL_HOST_IP` (`observer.host_ip`) and
-  `LANOWL_WEB_PORT` (`web.port`). The environment wins.
+- **Four settings can come from the environment** instead, so one file serves several
+  machines: `LANOWL_MODEL_URL` (`model.url`), `LANOWL_HOST_IP` (`observer.host_ip`),
+  `LANOWL_WEB_PORT` (`web.port`) and `TZ` (`timezone`). The environment wins.
 - **Changes need a restart** (`docker compose restart lanowl`), except `secrets.yaml`, which
   is read again when it changes.
 - `lanowl --check` reads this file the way a start does, and says what is wrong.
@@ -31,6 +32,15 @@ network:
 A few sentences about your network, in your own words. Every prompt the model reads includes
 them, marked as context, not instructions. Say what no inventory says: the links, the sites,
 what runs where, what matters, and what you chose on purpose (so the owl does not report it).
+
+## timezone
+
+```yaml
+timezone: "Europe/Berlin"
+```
+
+Sunrise and sunset, the morning jobs and the router's log timestamps are read in it. The
+first-run setup writes it from your browser. `TZ` in the environment wins; neither set, UTC.
 
 ## model
 
@@ -217,7 +227,7 @@ counts as down. Without `lat` and `lon`, `expect_offline` does nothing.
 ```yaml
 observer:
   enabled: true
-  host_ip: ""                     # or LANOWL_HOST_IP
+  host_ip: ""                     # or LANOWL_HOST_IP; empty: the address it reaches the internet from
   gateway_ip: ""                  # default: the router in mikrotik.dhcp_source
   min_down_pct: 60
   min_groups: 3

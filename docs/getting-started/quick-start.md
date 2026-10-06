@@ -1,191 +1,130 @@
 # Quick start
 
-From nothing to a dashboard of your own network in about ten minutes: three files to fill
-in, one command to check what lanowl will do, one to start it.
+From nothing to a dashboard of your own network in about ten minutes, without opening a file:
+three commands, then the page.
 
-Rather not write YAML? An AI assistant (Claude, ChatGPT, Gemini) can write the files from a
-description of your network: [Set it up with an AI assistant](with-an-ai.md).
-
-## 1. Get lanowl and copy the three files
-
-Everything lanowl reads lives in one `config` folder, mounted read-only into the container;
-`config.yaml` and `inventory.yaml` are mounted read-write as well, so
-[Settings](../using/settings.md) on the dashboard can change them. Both must exist before the
-first start.
+## 1. Start it
 
 ```bash
 git clone https://github.com/alessandromatera/lanowl && cd lanowl
-mkdir config
-cp config.example.yaml config/config.yaml
-cp inventory.example.yaml config/inventory.yaml      # the setup on the dashboard can fill it for you
-cp secrets.example.yaml config/secrets.yaml && chmod 600 config/secrets.yaml
-ssh-keygen -t ed25519 -N '' -C lanowl -f config/id_ed25519
-cp docker/env.example docker/.env
-```
-
-| File | What goes in it | Share it? |
-|---|---|---|
-| `config/config.yaml` | Everything lanowl does. Every optional feature starts switched off. | Yes |
-| `config/inventory.yaml` | The devices: how each is watched, and what lanowl may do with it. | Yes |
-| `config/secrets.yaml` | Every secret: device logins, the Telegram token, lanowl's ssh key. | Never |
-| `config/id_ed25519` | lanowl's own ssh key, for the machines it logs in to by key. | Never |
-
-## 2. Describe your network
-
-Open `config/config.yaml` and start with `network.description`: a few sentences in your own
-words. Every prompt the model reads begins with them, so say what no inventory can: the
-links, the sites, what runs where, what you chose on purpose.
-
-```yaml
-network:
-  description: |
-    A family home: LAN 192.168.88.0/24 behind a MikroTik router (192.168.88.1).
-    Fibre is the main link; an LTE router takes over when it fails.
-    The cameras hang off a PoE switch.
-```
-
-Then the Telegram chat lanowl writes to (how to find its id: [Telegram](telegram.md)):
-
-```yaml
-telegram:
-  chat_id: "100000001"
-```
-
-The bot's token is a secret, so it goes in `config/secrets.yaml`:
-
-```yaml
-tokens:
-  telegram: "123456:ABC..."
-```
-
-## 3. List a few devices
-
-Start small in `config/inventory.yaml`: the router, a server, whatever you would want to hear
-about at night. You can add the rest later; once lanowl reads your router's DHCP, the
-dashboard lists every device nobody watches, with a **Watch** button.
-
-```yaml
-groups:
-  network: {majority_down_critical: true}
-  home:    {majority_down_critical: false}
-
-devices:
-  - ip: 192.168.88.1
-    name: "Router"
-    group: network
-    criticality: critical        # pages at once
-    checks: [{type: icmp}, {type: http, port: 80}]
-
-  - ip: 192.168.88.50
-    name: "Solar inverter"
-    group: home
-    criticality: warning
-    expect_offline: sun          # dark at night by design: never an alert
-    checks: [{type: icmp}]
-```
-
-What each field means, and every kind of check: [Devices](../setup/inventory.md).
-
-## 4. Tell Docker where it runs
-
-`docker/.env` holds what differs between machines:
-
-```bash
-LANOWL_HOST_IP=192.168.88.5                  # this machine's address on the LAN
-LANOWL_MODEL_URL=http://192.168.88.6:11434   # where Ollama runs (leave it without a model)
-LANOWL_WEB_PORT=80                           # the dashboard
-TZ=Europe/Berlin                             # sunrise, sunset and the router's log
-```
-
-On a Linux host, allow unprivileged ping first, or every device reads DOWN:
-`sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"` ([why](requirements.md)).
-
-## 5. Check the plan
-
-Before anything runs, ask lanowl what it will do with each device, and why not. Nothing is
-probed and nothing is sent.
-
-```bash
-docker compose -f docker/compose.yaml run --rm lanowl lanowl --check
-```
-
-The first run builds the image, which takes a few minutes. The demo house answers:
-
-```text
-27 device(s) watched, 15 managed, 0 problem(s). Profiles: macos. ✓ on · ○ switched off in config.yaml · ✗ cannot
-
-Router (192.168.88.1) · mikrotik · login: password
-  ✓ updates   checks its updates every morning
-  ✓ upgrade   may propose installing them
-  ✓ reboot    may propose a reboot
-  ✓ config    tells what changed in its configuration
-  ✓ security  reviews what it exposes, every day
-  ✓ backup    backs it up, monthly and before updates
-
-Home server (192.168.88.10) · linux · login: key
-  ○ logs      reads its auth log for security events — off: hostlog.enabled in config.yaml
-  ✓ updates   checks its updates every morning
-  ✓ upgrade   may propose installing them
-  ✓ reboot    may propose a reboot
-  ✓ restart   may propose restarting a listed service
-  ✓ config    tells what changed in its configuration
-  ✓ security  reviews what it exposes, every day
-  ✓ backup    backs it up, monthly and before updates
-  …
-
-Secrets: /config/secrets.yaml · 9 login(s), 2 token(s), mode 600
-  ✓ Telegram token  from secrets.yaml
-  ✓ Home Assistant  from secrets.yaml
-  ✓ router login    lanowl, from secrets.yaml login router-read
-  ○ MQTT login      not used: no mqtt.host
-  ✓ ssh key         id_ed25519, from secrets.yaml
-
-Model: ollama · qwen3:30b at http://192.168.88.6:11434
-
-Shell: off
-
-Actions: on · live
-
-Dashboard: on
-  ✓ login           password from config.yaml
-```
-
-A **✗** says what is wrong and how to fix it, for example:
-
-```text
-  ✗ ssh key         others can read id_ed25519, and ssh refuses such a key: chmod 600 id_ed25519
-```
-
-`--check` exits with 1 when anything is wrong, so a script can stop a deploy on it.
-
-## 6. A dry run
-
-One sweep, printed, with nothing sent anywhere:
-
-```bash
-docker compose -f docker/compose.yaml run --rm lanowl \
-  python -m lanowl.main --once --no-llm --no-mqtt --no-telegram
-```
-
-Every device is listed as `UP`, `DOWN`, `ZZZ` (asleep on schedule) or `PAUS` (paused), with
-its latency and any check that failed.
-
-## 7. Start it
-
-```bash
 docker compose -f docker/compose.yaml up -d
-```
-
-Open `http://<this machine>/`. It asks for a setup code first, which this prints:
-
-```bash
 docker exec lanowl lanowl --setup-code
 ```
 
-Type it, choose the dashboard's password, and the dashboard opens on the first-run setup: your
-router's DHCP list, the devices you pick, `inventory.yaml` written for you
-([more](../using/settings.md#the-first-run-setup)). Rather use Telegram? `/password` to your bot
-sets the password too ([more](../using/dashboard.md#logging-in)). The first sweep is done
-within a minute. Send `/start` to your bot: it answers with what it can do.
+The first start builds the image, which takes a few minutes. Then lanowl finds the `config`
+folder empty and writes what it needs there:
+
+| File | What goes in it | Share it? |
+|---|---|---|
+| `config/config.yaml` | Everything lanowl does: at first, the dashboard, the internet watch, Telegram's questions and the week in review. Every optional feature starts switched off. | Yes |
+| `config/inventory.yaml` | The devices: how each is watched, and what lanowl may do with it. Empty until the setup. | Yes |
+| `config/secrets.yaml` | Every secret: device logins, the Telegram token. Empty until the setup. | Never |
+| `config/id_ed25519` | lanowl's own ssh key, for the machines it logs in to by key. | Never |
+
+Each one is mode 600 and belongs to you (the owner of the folder), with no example address
+in it. The dashboard fills them; you can still edit them by hand.
+
+On a Linux host, allow unprivileged ping, or every device reads DOWN:
+`sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"` ([why](requirements.md)).
+
+## 2. Open the dashboard
+
+Open `http://<this machine>:8088/`. Until it has a password, anyone on your network could
+open it, so it first asks for the code the third command printed. Then choose the dashboard's
+password, and check the time zone: it comes from your browser, and sunrise, sunset and the
+router's log times are read in it.
+
+## 3. Your router
+
+lanowl reads your router's DHCP list to find your devices. Type its address
+(`http://192.168.88.1`), and the user and password lanowl logs in with: a read-only user is
+enough ([making one on a MikroTik](../setup/mikrotik.md)). **Try the router** logs in and
+counts the addresses on its DHCP list. Nothing is written yet.
+
+The password goes into `secrets.yaml` at the last step and is never shown again, on this page
+or any other. It crosses your network once, in plain HTTP unless lanowl sits behind an HTTPS
+proxy, as the dashboard password does.
+
+Not a MikroTik? lanowl reads DHCP only from RouterOS. **Sweep the network instead** pings every
+address of the main network once and lists who answered.
+
+## 4. Your devices
+
+Pick what to watch from the list. Each gets a name, a group, a criticality and a ping check.
+A kind guessed from the maker (a MikroTik, a Shelly, a Reolink) is marked as a guess.
+
+With a kind, a device asks for its login right there: the user and the password lanowl logs
+in with, and then lanowl can check its updates, back it up and reboot it when you approve.
+Leave them empty and it is only watched. Instead of a password, a Linux machine can use
+lanowl's own ssh key: the page gives the one line to run on it, ready to copy. Or pick a login
+that is there already, to share one between devices.
+
+## 5. Telegram
+
+Telegram is where lanowl writes: alerts, the morning digest, the Approve buttons, its answers.
+In Telegram, send `/newbot` to **@BotFather**: it answers with a token. Paste it and **Check
+the token**: lanowl asks Telegram which bot it is and shows its name. Then send `/start` to
+your bot from the phone you want the alerts on; the chat appears on the page within seconds.
+**Use this chat** sets it, and the bot says hello there.
+
+Optional: **Skip** it and the dashboard works alone. Settings → Secrets sets the token later
+([Telegram](telegram.md)).
+
+## 6. Write
+
+The last step lists what it will write into each file, in words and never a password or a
+token, and checks the new files with `lanowl --check`'s rules: anything wrong is said there. **Write and restart** writes all
+three and restarts lanowl, which starts watching. The first sweep is done within a minute.
+Send `/start` to your bot: it answers with what it can do.
+
+Next, in Settings (the gear): **The model**, where Ollama runs for the owl's answers
+([The model](../setup/model.md)), and the features you want, each off until you switch it on.
+
+## Check the plan
+
+What lanowl does with each device, and why not, from the same files a start reads. Nothing is
+probed and nothing is sent:
+
+```bash
+docker exec lanowl lanowl --check
+```
+
+```text
+3 device(s) watched, 2 managed, 0 problem(s). ✓ on · ○ switched off in config.yaml · ✗ cannot
+
+Router (192.168.88.1) · mikrotik · login: password
+  ✓ updates   checks its updates every morning
+  ○ backup    backs it up, monthly and before updates — off: backups.enabled in config.yaml
+  …
+
+Secrets: /config/secrets.yaml · 3 login(s), 1 token(s), mode 600
+  ✓ Telegram token  from secrets.yaml
+  ✓ router login    lanowl, from secrets.yaml login router-read
+  ✓ ssh key         /config/id_ed25519, from secrets.yaml
+```
+
+A **✗** says what is wrong and how to fix it. `--check` exits with 1 when anything is wrong,
+so a script can stop a deploy on it.
+
+## Rather write the files yourself
+
+Everything above can be a file you write instead, or one an AI assistant writes from a
+description of your network ([Set it up with an AI assistant](with-an-ai.md)). Copy the
+examples into `config/` before the first start, and lanowl writes nothing of its own:
+
+```bash
+cp config.example.yaml config/config.yaml        # every key, with what it does
+cp inventory.example.yaml config/inventory.yaml  # the devices
+cp secrets.example.yaml config/secrets.yaml && chmod 600 config/secrets.yaml
+ssh-keygen -t ed25519 -N '' -C lanowl -f config/id_ed25519
+```
+
+The examples are a demo house on 192.168.88.0/24: replace their addresses and their
+`change-me` passwords before the first start. What each file holds: [config.yaml](../setup/config.md),
+[Devices](../setup/inventory.md), [Secrets](../setup/secrets.md).
+
+`docker/.env` is optional: it sets the few things that win over `config.yaml` (this host's
+address, the model's URL, the dashboard's port, `TZ`), and Settings then shows them locked
+([The environment](../reference/environment.md)).
 
 Next: [Telegram](telegram.md), then [The first hour](first-hour.md).

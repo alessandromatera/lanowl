@@ -25,18 +25,26 @@ The test suite rides in the image too:
 docker compose -f docker/compose.yaml run --rm lanowl python /app/tests/run_all.py
 ```
 
-## Settings on the dashboard
+## The config folder, read-write
 
-[Settings](../using/settings.md) writes `config.yaml` and `inventory.yaml`, so the compose
-file now mounts those two read-write, each on its own, over the read-only config folder. If
-you keep a compose file of your own, add the two lines under `volumes:` (paths as in yours):
+lanowl writes its own files into an empty config folder at a first start, and the dashboard
+sets secrets too, so the compose file mounts the folder read-write, in one line, instead of
+read-only with `config.yaml` and `inventory.yaml` read-write on their own:
 
 ```yaml
-      - {type: bind, source: ../config/config.yaml, target: /config/config.yaml, bind: {create_host_path: false}}
-      - {type: bind, source: ../config/inventory.yaml, target: /config/inventory.yaml, bind: {create_host_path: false}}
+    env_file: [{path: .env, required: false}]    # optional now
+    volumes:
+      - ../config:/config
 ```
 
-Without them everything works as before, and Settings says the files are read-only.
+If you keep a compose file of your own, make the same change (paths as in yours). Until you
+do, everything works as before: Settings still writes `config.yaml` and `inventory.yaml`, and
+says `secrets.yaml` is read-only. `required: false` needs Docker Compose 2.24 or later
+([What you need](../getting-started/requirements.md)); with an older one, keep `env_file:
+.env` and the file.
+
+The model's sandboxes now take `LANOWL_HOST_IP` from `docker/.env` or the command line
+(Settings → The model's shell gives the line); `docker/.env` keeps working as it was.
 
 There is no dashboard PIN any more: approving on the dashboard is a confirm, behind its
 login. `--check` names any `actions.pin_sha256`, `pin_max_failures` or `pin_lockout_min`

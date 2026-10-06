@@ -3,8 +3,8 @@
 A device list that is one flat list counts a remote office's router with the main site's
 lamps. So `sites.list` in config.yaml names each network, and:
 
-  - a device's site is where its address falls (`nets`, first match); the main site
-    ("home") is the default;
+  - a device's site is where its address falls (`nets`: the most specific network holding
+    it, so a site can sit inside the main one's); the main site ("home") is the default;
   - a remote site with a router lanowl can log into (OpenWrt or MikroTik, through the VPN
     hub's tunnels; its login in secrets.yaml) has its DHCP read every `dhcp_every_min`: what
     is on that network, named — shown on the dashboard, and the owner picks what to WATCH (by
@@ -45,7 +45,7 @@ import shlex
 import time
 from typing import Optional
 
-from .model import Device
+from .model import Device, best_site, on_main_side
 from .oui import vendor
 
 log = logging.getLogger("lanowl.sites")
@@ -239,11 +239,20 @@ class Sites:
 
     # --- where is it -------------------------------------------------------------------------
     def of(self, ip: str) -> str:
+        """The most specific network holding the address wins (model.best_site)."""
         try:
             a = ipaddress.ip_address(str(ip))
         except ValueError:
             return HOUSE
-        return next((s["key"] for s in self.sites if any(a in n for n in s["nets"])), HOUSE)
+        return best_site(a, ((s["key"], n) for s in self.sites for n in s["nets"]), HOUSE)
+
+    def offer(self, ip: str) -> bool:
+        """A router of the inventory (mikrotik, openwrt) that could be a site of its own: not
+        on the main network (model.on_main_side), not a site's router already. The device page offers "Make it a site"."""
+        dev = self.a.inv.get(ip) if ip else None
+        if dev is None or str(dev.attrs.get("kind") or "") not in ("mikrotik", "openwrt"):
+            return False
+        return not on_main_side(self.a.cfg, ip) and not any(s["router"] == ip for s in self.sites)
 
     def get(self, key: str) -> Optional[dict]:
         return next((s for s in self.sites if s["key"] == key), None)

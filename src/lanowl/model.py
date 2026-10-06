@@ -227,13 +227,66 @@ def main_lans(cfg: dict) -> list:
     return out
 
 
-def on_main_lan(cfg: dict, ip: str) -> bool:
+def best_site(a, pairs, default: str = MAIN_SITE) -> str:
+    """The site an address is on: of every (key, network) holding it, the most specific
+    network's — so a remote site's 192.168.0.0/24 wins over a main site of 192.168.0.0/16.
+    Equal ones: the first listed."""
+    best, plen = default, -1
+    for key, n in pairs:
+        if a in n and n.prefixlen > plen:
+            best, plen = key, n.prefixlen
+    return best
+
+
+def site_of(cfg: dict, ip: str) -> str:
+    """`sites.list`'s key for an address, as sites.py places it; the main site by default."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return MAIN_SITE
+    pairs = []
+    for s in ((cfg or {}).get("sites") or {}).get("list") or []:
+        for n in (s or {}).get("nets") or [] if isinstance(s, dict) else []:
+            try:
+                pairs.append((str(s.get("key")), ipaddress.ip_network(str(n), strict=False)))
+            except ValueError:
+                pass
+    return best_site(a, pairs)
+
+
+def on_main_side(cfg: dict, ip: str) -> bool:
+    """Certainly the main site's: on a network its `sites.list` entry names, or on the main
+    router's /24 (an access point, a switch). Such a router is no site of its own."""
     import ipaddress
     try:
         a = ipaddress.ip_address(str(ip))
     except ValueError:
         return False
-    return any(a in n for n in main_lans(cfg))
+    site = next((s for s in ((cfg or {}).get("sites") or {}).get("list") or []
+                 if isinstance(s, dict) and str(s.get("key")) == MAIN_SITE), None) or {}
+    nets = [str(n) for n in site.get("nets") or []]
+    main = router_host(cfg)
+    if main:
+        nets.append(main + "/24")
+    for n in nets:
+        try:
+            if a in ipaddress.ip_network(n, strict=False):
+                return True
+        except ValueError:
+            pass
+    return False
+
+
+def on_main_lan(cfg: dict, ip: str) -> bool:
+    """On the main site's networks, and not on a site of its own (which may sit inside the
+    192.168.0.0/16 the main site has by default)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return False
+    return any(a in n for n in main_lans(cfg)) and site_of(cfg, ip) == MAIN_SITE
 
 
 def router_host(cfg: dict) -> str:

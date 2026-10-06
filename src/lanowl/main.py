@@ -995,6 +995,14 @@ class Auditor:
                                                     ensure_ascii=False))
         self._sent_log = (self._sent_log + [{"ts": time.time(), "channel": channel,
                                              "text": text[:1500]}])[-80:]
+        if not str((self.cfg.get("telegram") or {}).get("chat_id") or ""):
+            # Telegram not set up (yet: a new install's setup adds it). Nothing waits in the
+            # outbox, which is for a path that failed: it would hand the new chat, once there
+            # is one, everything said before it existed. (A chat with no token is a mistake
+            # --check names; that one still queues.)
+            self.mqtt.publish(channel, {"text": text, "ts": time.time()}, retain=False)
+            log.info("telegram not set up: not sent [%s]: %.100s", channel, text)
+            return
         no_route = (not self._wan_raw_ok or self.tracker.status(WAN_KEY) is False) \
             if wan_ok is None else (not wan_ok)
         if no_route:
@@ -1872,6 +1880,18 @@ async def _amain(args):
     cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
     inv = load_inventory(args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
     _setup_logging(cfg, args.log_level)
+    from . import firstrun
+    if firstrun.created:
+        log.warning("first start: wrote %s in %s", ", ".join(firstrun.created),
+                    os.path.dirname(os.path.abspath(cfg["_path"])))
+    # config.yaml's time zone, unless TZ in the environment says otherwise
+    if firstrun.apply_timezone(cfg) == "bad":
+        log.warning("timezone %r in config.yaml is not a time zone (e.g. Europe/Berlin): ignored",
+                    cfg.get("timezone"))
+    # lanowl's own address, when nothing set it: the one this machine reaches the internet from
+    found = firstrun.fill_host_ip(cfg)
+    if found:
+        log.info("observer.host_ip not set: this machine is %s", found)
     # each device's kind, login and `manage`, into the lists every feature reads (kinds.py)
     kinds = Kinds.load(cfg, inv, Access(cfg, inv))
 
@@ -1927,9 +1947,26 @@ def check_report(cfg: dict, inv) -> tuple:
     return "\n\n".join(parts), bad
 
 
+def _no_config(path: str) -> str:
+    """Why there is no config to read, and what to do; "" when there is one."""
+    if os.path.exists(path):
+        return ""
+    folder = os.path.dirname(os.path.abspath(path))
+    if os.path.isdir(folder) and not os.access(folder, os.W_OK):
+        return (f"{path} is not there, and lanowl cannot write {folder} to make one: mount the "
+                f"config folder read-write (docker/compose.yaml: ../config:/config), or copy "
+                f"config.example.yaml there")
+    return (f"{path} is not there: start lanowl once and it writes it (an empty config folder, "
+            f"mounted read-write), or copy config.example.yaml there")
+
+
 def _check(args) -> int:
     """`lanowl --check`: the plan for every device, read from the same files a start reads.
     1 when something is wrong, so it can gate a deploy."""
+    why = _no_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
+    if why:
+        print(why)
+        return 1
     cfg = load_config(args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml")
     inv = load_inventory(args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
     logging.basicConfig(level=logging.ERROR)
@@ -2008,6 +2045,13 @@ def main():
         sys.exit(_setup_code(args))
     if args.check:
         sys.exit(_check(args))
+    # a new install: lanowl writes its own files into its empty config folder (firstrun.py)
+    from . import firstrun
+    cfg_path = args.config or os.environ.get("LANOWL_CONFIG") or "config.yaml"
+    firstrun.prepare(cfg_path, args.inventory or os.environ.get("LANOWL_INVENTORY") or "inventory.yaml")
+    why = _no_config(cfg_path)
+    if why:
+        sys.exit(why)
     try:
         again = asyncio.run(_amain(args))
     except KeyboardInterrupt:
