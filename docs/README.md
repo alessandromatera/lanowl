@@ -11,9 +11,9 @@ network, and living with it. They describe what lanowl does today; what is plann
 > both what to fix. Your passwords never leave your machine.
 > [How, and the prompt to copy](getting-started/with-an-ai.md).
 
-The screenshots and messages come from a made-up house played through lanowl's own code
-([`demo/`](../demo/)): a family home behind a MikroTik with fibre and an LTE backup, and a
-cabin reached over WireGuard. None of it is a real network.
+The screenshots and messages come from a made-up house played through lanowl's own code: a
+family home behind a MikroTik with fibre and an LTE backup, and a cabin reached over
+WireGuard. None of it is a real network.
 
 ## Getting started
 

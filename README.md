@@ -8,7 +8,7 @@ tools and writes the cause into the alert you already have: the switch, the line
 the Wi-Fi. It changes nothing by itself: a fix is a proposal that runs only when you press a
 button.
 
-![lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix](docs/img/home-wide.png)
+![A minute on lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix, an internet blip, a device's page, the timeline, the security review, a question to the owl](docs/img/tour.gif)
 
 Free and open source (AGPL-3.0). Self-hosted, no account, no telemetry. The model runs on
 your own [Ollama](https://ollama.com); everything else works without it.
@@ -27,22 +27,111 @@ machine. [The prompt to copy](docs/getting-started/with-an-ai.md).
 
 ## What it does
 
-- **Detection that does not depend on the model.** Ping, TCP, HTTP, SNMP, the router's ARP
-  table, a router port's link state: debounced, grouped (a dead switch is one message, not
-  twelve), with devices that sleep by design (solar gear at night) never paging.
-- **One message per incident.** A flapping line pages once and then says "unstable for 3h ·
-  5 outages" when it settles. Recoveries say when, and for how long.
-- **The internet, properly.** A fast ping loop (15 s), the router's own log and route table:
-  `ok`, `down`, and, with a backup link, `on backup`. Every blip keeps its evidence, so
-  "where did it break?" has an answer: your line, the provider, or lanowl's own view.
-- **The owl.** Read-only tools, a fixed catalog of diagnostics (mtr, DNS, TLS, scans, packet
-  headers, the router's own ping) and a sandboxed shell with no keys in it. It diagnoses
-  incidents, answers questions on Telegram and the dashboard, remembers what you tell it,
-  reviews security daily, and grades its own past diagnoses.
-- **Propose → approve → run.** Reboots, updates, service restarts and scans are proposals with
-  a button; the model fills typed slots in a fixed catalog and never writes a command.
-- **Its own dashboard**, made for a phone, that works when the internet does not.
-- **Sites.** Remote routers over WireGuard: their DHCP, their devices, checks from them.
+Besides telling you why, lanowl looks after the whole network from one install. What it does
+with a device besides watching it (updates, reboots, backups, security) is ticked device by
+device, and nothing that changes a device runs without your button.
+
+### Watches every device
+
+- Every device, every minute: ping, TCP, HTTP, SNMP. A device that ignores ping is still seen,
+  in the router's ARP table or by its switch port's link.
+- Two misses in a row before anything is down. A dead switch is one message, not twelve.
+- One message per incident, and one when it is over. A flapping line pages once, then says
+  "unstable for 3h · 5 outages" when it settles.
+- Solar gear asleep at night never pages. A device you switched off for a holiday is paused,
+  not down.
+- Once a day the owl reads the week's numbers and names what is slowly getting worse: a camera
+  that drops every night at 02:00, a line that flaps a little more each week.
+- A weekly review: the internet's week, the devices that kept falling off, what joined.
+
+<img src="docs/img/does-watch.png" width="440" alt="A device's page: down right now, how much it answered in 24 hours and in 7 days, its latency and its week">
+
+### The internet
+
+- A 15-second ping loop, the router's log as it is written and its route table: `ok`, `on
+  backup` or `down`. A failover to your backup line is not "no internet".
+- Every blip keeps its evidence, so "where did it break?" has an answer: your line, the
+  provider, or lanowl's own view.
+- With no internet, messages wait and go out when it is back, with the real times in them.
+- A speed test of the line, or of a remote site's line, when you ask for one.
+
+<img src="docs/img/does-internet.png" width="600" alt="The internet card: online via the fibre, fibre drops and short blips in 24 hours, the last seven days">
+
+### Finds every device
+
+- A new device gets one message: its name, MAC and maker (from an offline list), or "a
+  private address" for a phone's random MAC, and whether it came by DHCP or has a fixed address.
+- It reads the router's DHCP leases, its ARP table for the fixed addresses no DHCP lists, and
+  once a month asks each network "who is there" for the silent ones.
+- A device DHCP moved to another address is followed by its MAC.
+- Each unknown device has two buttons: Watch (ping it from now on) or Known.
+- The first-run setup's Find my devices reads the router, pings the network once and asks a
+  few ports what each device is ("port 8123 answers: Home Assistant").
+- The same on remote sites, through their own routers.
+
+<img src="docs/img/does-finds.png" width="600" alt="Find my devices: the router's DHCP list, its ARP table, one ping to every address, a few ports on each; 27 found">
+
+### Security checks
+
+- Every morning the owl reviews what each machine exposes: who may log in and how, what
+  listens, the firewall, the management services and where they answer from, UPnP, an open
+  resolver, firmware out of support. It also looks from the outside, through your VPS.
+- Each finding has a written fix for that machine: the steps in an order that cannot lock you
+  out, how to check it, how to undo it. You apply it; nothing runs.
+- The auth logs of your Linux machines every two minutes, and the router's log: a burst of
+  failed logins, a login from an address you do not trust, a flood of connections is an
+  alert at once.
+- What changed since yesterday: a firewall rule, a user, an ssh key, a port forward, a
+  crontab, a VPN peer, with the owl's word on how risky it is.
+- A monthly vulnerability scan. Each CVE it matches is checked against the exact package
+  installed (OSV.dev, NVD) and against the machine's own settings: only the real ones page.
+- An insecure service newly open (telnet, ftp) pages once.
+
+<img src="docs/img/does-security.png" width="500" alt="The fix for VPS: ssh accepts passwords from the whole internet, step by step, with how to check it and how to undo it">
+
+### Updates, reboots, backups
+
+- Every morning, what is waiting: apt, RouterOS (and whether a version in between was a
+  security release), Home Assistant with its add-ons and the firmware it knows, ESXi,
+  OpenWrt, UniFi, your own kinds.
+- It pages only when it matters: a security update waiting 2 days, a reboot pending for 3.
+- Install with a button: an apt upgrade or a RouterOS update, with a backup first when
+  backups are on. A failed backup stops the update.
+- Reboot with a button: RouterOS, ssh, a camera's API, Home Assistant, a Shelly (its relays
+  never switch), or any device through its smart plug. Its alerts wait until it is back.
+- Restart a service with a button.
+- Monthly backups onto a disk of yours, and one before every update: MikroTik exports and
+  binary backups, Home Assistant's full backup, Linux configuration files, the ESXi host and
+  every VM's settings, every Shelly's settings and scripts. lanowl backs itself up every day.
+
+<img src="docs/img/does-maintain.png" width="440" alt="The Home server's page: updates waiting with an Update button, Reboot, and Back up">
+
+### Troubleshooting
+
+- Every incident is investigated: the device's history, its neighbours, the router (DHCP, ARP,
+  a port's link, its log), the machine's own log. The cause goes into the alert.
+- Ask it anything, on Telegram or the dashboard: "why did the internet drop on Friday?",
+  "what did you restart last week?". It remembers what you tell it.
+- 42 diagnostics it runs for you: mtr, traceroute, DNS compared across resolvers, TLS, HTTP
+  timing, packet headers, a ping sweep, nmap, a machine's load, disks and failed services.
+  From lanowl, another LAN host, your VPS (the internet's view, the WireGuard peers), a remote
+  site's router, and the router itself (its ping, traceroute, and torch: which device is
+  using the bandwidth).
+- A sandboxed shell, with no keys in it, when a hunch needs one.
+- It grades its own diagnoses once a problem is over, so you know how far to trust it.
+
+<img src="docs/img/does-ask.png" width="600" alt="Asked why the internet dropped on Sunday, the owl answers: the fibre failed at 19:41, LTE took over within a minute, back at 19:47">
+
+### Around it
+
+- Telegram: alerts, Approve buttons, and `/status`, `/security`, `/updates`, `/backups`,
+  `/reboot`, `/pause`, `/week`.
+- Its own dashboard, served by lanowl itself, so it works when the internet
+  does not. Settings change every file from there.
+- Remote sites over WireGuard: their DHCP, their devices, checks from their routers.
+- Results on MQTT, and a heartbeat for a watchdog on another machine.
+- Built-in kinds: MikroTik, OpenWrt, Linux, ESXi, UniFi, Home Assistant, Reolink, Shelly, and
+  macOS as a profile. Any other kind is a YAML profile: a command per operation, never code.
 
 ## Quick start (Docker)
 
@@ -55,16 +144,30 @@ docker exec lanowl lanowl --setup-code
 ```
 
 At its first start lanowl writes its own `config.yaml`, `inventory.yaml`, `secrets.yaml` and
-ssh key into the empty `config/` folder. Open `http://<this host>:8088/`: it asks for the
-setup code the last command printed and a password, then opens on a setup that reads your
-router's DHCP list and the fixed addresses in its ARP table (its address found for you, the
-two RouterOS lines for a read-only user ready to copy), pings your network once and asks each
-device a few ports to tell what it is; lets you tick the devices and give each its own login,
-tried on the spot; finds your Telegram chat from `/start`; and writes the three files. The owl stays off until you tell lanowl where Ollama runs (Settings → The
-model): nothing warns about a model you have not set up.
-Everything else in `config.yaml`, every login and every token can be changed from the gear,
-too; a password or a token goes in and is never shown again. On Linux, allow unprivileged
-ping first (`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
+ssh key into the empty `config/` folder. Then open `http://<this host>:8088/` and the page sets
+it up:
+
+![The first-run setup: the setup code and a password, the router, Find my devices, a camera's login tried, Telegram, and the files written](docs/img/setup.gif)
+
+1. **The setup code** the last command printed, then a password of yours. Only its hash is
+   kept.
+2. **Your router.** Its address is found for you, and a read-only user is enough: the page
+   gives the two RouterOS lines that make one. **Try the router** logs in and counts its DHCP
+   list.
+3. **Find my devices.** The router's DHCP list, its ARP table (the fixed addresses), one ping
+   to every address and a few ports on each: what each device is, and why lanowl thinks so.
+   Half a minute, and nothing is changed.
+4. **Logins.** Tick what to watch. Give a login to what lanowl may update, back up or reboot:
+   **Try** asks the device and quotes its answer.
+5. **Telegram.** A bot from @BotFather, its token, then `/start` from your phone. Optional.
+6. **Write.** What it will do, and every change to the three files, checked first. Then it
+   restarts and watches.
+
+The owl stays off until you tell lanowl where Ollama runs (Settings → The model): nothing
+warns about a model you have not set up. Everything else in `config.yaml`, every login and
+every token can be changed from the gear, too; a password or a token goes in and is never
+shown again. On Linux, allow unprivileged ping first
+(`sysctl -w net.ipv4.ping_group_range="0 2147483647"`), or every device reads DOWN.
 
 Rather write the files yourself, or have an AI assistant write them from a description of your
 network? Copy the examples into `config/` instead: [Quick start](docs/getting-started/quick-start.md),
