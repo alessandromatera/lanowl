@@ -24,11 +24,3 @@ dashboard and the Telegram bot. The same program takes a few options, run with
 
 A one-off run (`--once`) never writes lanowl's record of what you were told, so a rehearsal
 next to a running lanowl cannot confuse it.
-
-## The test suite
-
-The tests ride in the image, so a deploy can be gated on them:
-
-```bash
-docker compose -f docker/compose.yaml run --rm lanowl python /app/tests/run_all.py
-```

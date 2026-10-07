@@ -394,7 +394,7 @@ def name_addresses(text: str, idx) -> str:
     """Put the device's name in front of every bare inventory address in free text.
 
     label() fixes an issue's `device` field, but the model's prose is the other place a bare
-    address reaches a human ("Remote device 10.9.0.10 recovered ~36 min ago"). An address
+    address reaches a human ("10.9.0.14 is back up"). An address
     whose name already appears in the text is
     left alone, and so is one nobody has a name for — same rule as label()."""
     if not text:
@@ -408,7 +408,7 @@ def name_addresses(text: str, idx) -> str:
         if not name or name.casefold() in folded:
             return ip
         if text[m.start() - 1:m.start()] == "(" and text[m.end():m.end() + 1] == ")":
-            return f"{name}, {ip}"          # "(10.9.0.10)" -> "(Name, 10.9.0.10)"
+            return f"{name}, {ip}"          # "(10.9.0.14)" -> "(Name, 10.9.0.14)"
         return f"{name} ({ip})"
     return _IPV4.sub(one, text)
 
@@ -887,7 +887,7 @@ def format_digest(report: dict, now: Optional[float] = None,
 
     # Things that still work but are getting worse. This is the only part of the digest
     # that looks BACKWARDS rather than at the current sweep, and it is the part that would
-    # have caught the lifting pumps before they started crying wolf.
+    # have caught a failing device before it started crying wolf.
     trends = report.get("trends") or []
     if trends:
         lines.append("📉 <b>Quietly getting worse</b>")

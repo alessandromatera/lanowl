@@ -26,8 +26,6 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE config.example.yaml inventory.example.yaml ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir .
-# the test suite rides along: `docker run --rm lanowl python /app/tests/run_all.py` gates a deploy
-COPY tests/ ./tests/
 
 # /config  config.yaml, inventory.yaml, secrets.yaml, lanowl's ssh key: mounted read-write, and
 #          written by lanowl itself when empty (firstrun.py)

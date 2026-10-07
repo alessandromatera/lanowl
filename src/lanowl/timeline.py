@@ -15,7 +15,7 @@ Each incident and each internet outage carries what happened around it: the Tele
 about it, an internet outage at the same moment, and an action on the network that ran just
 before (a likely cause, said as "after", never as "because").
 
-`assemble()` is pure (tested in tests/test_timeline.py); `build()` gathers its inputs.
+`assemble()` is pure (unit-tested); `build()` gathers its inputs.
 """
 from __future__ import annotations
 

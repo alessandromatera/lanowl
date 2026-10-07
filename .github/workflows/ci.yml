@@ -1,5 +1,5 @@
-# Every push and pull request: the test suite, the check that no private address or name
-# slipped into the tree, and the two images building.
+# Every push and pull request: the check that no private address or name slipped into the
+# tree, and the two images building (the maintainer runs the test suite before every commit).
 name: CI
 
 on:
@@ -11,23 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install -e .
-      - name: The suite (each module in its own process)
-        run: python tests/run_all.py
-      - name: What failed
-        if: failure()
-        run: |
-          for f in .test-logs/*.log; do
-            grep -q "FAIL\|Traceback" "$f" && { echo "== $f"; tail -60 "$f"; }
-          done; true
-
   private-data:
     # The denylist is the maintainer's own (addresses and names of a real network): kept as a
     # repository secret, never in the tree, and the check prints file names and counts only.

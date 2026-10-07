@@ -71,7 +71,7 @@ TOOL_SPECS = [
     {"type": "function", "function": {
         "name": "mqtt_last",
         "description": "Return recent last-values from existing home MQTT topics matching a "
-                       "glob (e.g. 'shellies/#', 'ialarm/#'). Read-only.",
+                       "glob (e.g. 'shellies/#', 'zigbee2mqtt/#'). Read-only.",
         "parameters": {"type": "object", "properties": {
             "pattern": {"type": "string"}
         }, "required": ["pattern"]}}},

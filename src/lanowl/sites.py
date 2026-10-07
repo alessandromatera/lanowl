@@ -52,7 +52,7 @@ log = logging.getLogger("lanowl.sites")
 
 RECORD = "sites"
 HOUSE = "home"
-SPEED_URL = "http://speedtest.tele2.net/10MB.zip"      # plain HTTP: LEDE 17.01 has no TLS
+SPEED_URL = "http://speedtest.tele2.net/10MB.zip"      # plain HTTP: an old OpenWrt/LEDE may have no TLS
 SPEED_BYTES = 10 * 1024 * 1024
 _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _PAIR = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\s+([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})\b")

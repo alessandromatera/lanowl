@@ -19,12 +19,6 @@ Run `lanowl --check` on the new image first. When a setting was renamed or moved
 so with a ✗ and what to write instead (for example, an old `ollama:` section is now `model:`,
 with `name:` for the model), and exits with 1, so a script can stop there.
 
-The test suite rides in the image too:
-
-```bash
-docker compose -f docker/compose.yaml run --rm lanowl python /app/tests/run_all.py
-```
-
 ## The config folder, read-write
 
 lanowl writes its own files into an empty config folder at a first start, and the dashboard

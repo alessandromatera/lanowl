@@ -240,8 +240,8 @@ def build_user_context(snapshot_dict: dict, anomalies: list, recent_transitions:
 
     if recent_transitions:
         # Named, and an `up` says how long it had been down. With only {"ip", "kind",
-        # "min_ago"} the model sees "10.9.0.10 up 36 min ago" — its `down` outside the
-        # window — and calls a twelve-hour outage "brief", by address.
+        # "min_ago"} the model sees "10.9.0.14 up 5 min ago" — its `down` outside the
+        # window — and calls a long outage "brief", by address.
         lines.append("RECENT_TRANSITIONS (newest first; `down_min` on an up = how long it "
                      "had been down):")
         names = {d.get("ip"): d.get("name") for d in snapshot_dict.get("devices", [])}

@@ -77,7 +77,8 @@ missing.
 - **Set** and **Replace** open a sheet: the user, a password or lanowl's key, and for a
   password the new one (left empty, the one there is kept). A token is pasted.
 - **Add a login**: a name, then the same. Pick it on a device in Settings → Devices.
-- **Remove** is refused while a device or `config.yaml` still names the login, and says which.
+- **Remove this login**, at the bottom of a login's sheet, is refused while a device or
+  `config.yaml` still names the login, and says which.
 - **Public key**: lanowl's own, with the line that adds it to a machine's `authorized_keys`.
 
 The changes say
@@ -195,8 +196,8 @@ Settings, as **Add from the router's list**.
    `inventory.yaml` is "already watched". **Add a device by address** asks one more. For each
    ticked one: a name, a group, how much it matters (in words), a kind, and its login: a user
    and a password (the usual user filled in) with **Show** and **Try**, the same login as
-   another device, lanowl's ssh key (for `linux` and kinds of your own), Home Assistant's token,
-   or none; a Shelly needs none. The router itself is always watched, with **the same login as
+   another device, lanowl's ssh key (for `linux`), Home Assistant's token, or none; a Shelly
+   needs none. A kind of your own (a profile) is picked afterwards, in Settings → Devices. The router itself is always watched, with **the same login as
    above** once that worked.
 4. **Telegram**: the bot's token, checked with Telegram; then `/start` to the bot, and **Use
    this chat** ([Telegram](../getting-started/telegram.md)). Optional.

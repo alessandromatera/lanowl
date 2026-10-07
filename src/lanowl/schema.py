@@ -45,7 +45,7 @@ ENV = {("model", "url"): "LANOWL_MODEL_URL", ("observer", "host_ip"): "LANOWL_HO
 HASHES = {("web", "password_hash")}
 # What lanowl itself does when config.yaml leaves an on/off key out — read from the code, not
 # the example (six differ from it: the example switches on what a new install wants). Settings
-# draws a switch that is not in the file from here. tests/test_settings checks the list whole.
+# draws a switch that is not in the file from here; the tests check the list whole.
 DEFAULTS = {
     ("model", "think"): True, ("telegram", "chat", "enabled"): False, ("web", "enabled"): False,
     ("web", "login"): True, ("cadence", "llm_on_incident"): True, ("cadence", "digest_when_ok"): False,

@@ -199,7 +199,7 @@ async def snmp_get(ip: str, oid: str = OID_SYSUPTIME, community: str = "public",
 # ---------------------------------------------------------------------------
 async def mikrotik_rest(base: str, path: str, user: str, password: str,
                         verify_tls: bool = False, timeout_ms: int = 5000) -> ProbeResult:
-    """GET against RouterOS /rest (served over the hAP ax3's enabled www:80).
+    """GET against RouterOS /rest (served by the router's www service).
     Only GET is used — read-only. Returns parsed JSON in .data['json']."""
     if aiohttp is None:
         return ProbeResult(False, None, "mikrotik:aiohttp-missing")

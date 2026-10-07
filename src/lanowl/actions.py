@@ -920,7 +920,7 @@ class Actions:
                       key=lambda x: x.get("decided_ts") or 0)
 
     def _queue_words(self, p: dict) -> str:
-        """"queued behind #31 (Update the system — Pi print server (192.168.10.35)) and 1 more"."""
+        """"queued behind #31 (Update the system — NAS (192.168.88.20)) and 1 more"."""
         line = self._queue()
         n = next((i for i, x in enumerate(line) if x is p), len(line))
         cur = next((x for x in self.items if x.get("status") == "running" and not x.get("queued")

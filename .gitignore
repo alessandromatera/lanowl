@@ -10,9 +10,10 @@ id_*
 telegram_token
 mikrotik
 
-# --- the maintainer's own notes, plan and to-do ----------------------------------
+# --- the maintainer's own notes, plan, to-do and tests -------------------------
 .claude/
 TODO.md
+/tests/
 
 # --- local state -------------------------------------------------------------
 *.sqlite

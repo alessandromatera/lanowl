@@ -156,7 +156,7 @@ def overlaps(iv: dict, ip: str, a: float, b: float) -> bool:
 
 def find_devices(devices, query: str) -> list:
     """The devices `query` names: an exact address, an exact name, or every device whose
-    name holds all its words ("tv" -> the LG; "shelly pump" -> one Shelly of eleven)."""
+    name holds all its words ("tv" -> the TV; "shelly lamp" -> one Shelly among several)."""
     q = " ".join(str(query or "").split())
     if not q:
         return []

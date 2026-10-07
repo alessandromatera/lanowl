@@ -1,6 +1,6 @@
 """Dependency-free sunrise/sunset math for `expect_offline: sun` devices.
 
-PV-powered gear (the Solar inverter and its EM100 meter) powers its own network
+PV-powered gear (an inverter and its energy meter) powers its own network
 interface from the panels: no sun, no WiFi. That is not an outage, so the sweep
 needs to know when the sun is down. Uses the classic NOAA / Ed Williams
 approximation — accurate to a few minutes, which is plenty because callers apply

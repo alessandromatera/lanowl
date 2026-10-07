@@ -586,7 +586,7 @@ class Updates:
     # Dismiss what matters, one by one, as known. It leaves "What matters"
     # and stops paging until something NEW shows up for it: a new vulnerability or version
     # on that device at a scan, a new security package, a new pending reboot, a newer
-    # RouterOS release. An insecure port (the alarm's telnet) stays dismissed until undone.
+    # RouterOS release. An insecure port (a telnet left open) stays dismissed until undone.
     def dismiss(self, key: str, note: str = "", by: str = "owner") -> dict:
         f = next((x for x in self.findings() if x["key"] == key), None)
         if f is None:

@@ -962,7 +962,7 @@ class Auditor:
 
         Default: yes, for anything that was reported — that is the point. The floor is a
         knob rather than a hard-coded tier because the gear at the bottom of the inventory
-        is the flappiest (a twilight Shelly, the garage door), and the person reading the
+        is the flappiest (a relay on a dusk timer, a flaky sensor), and the person reading the
         phone is the only one who can say where 'good to know' turns into noise."""
         a = self.cfg.get("alerts", {}) or {}
         if not a.get("notify_recovery", True):
