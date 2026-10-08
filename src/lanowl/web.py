@@ -139,7 +139,7 @@ def state_payload(a, now: float = 0.0) -> dict:
                 "busy": bool(a._llm_busy)},
         # each device with its site (sites.py), and the sites themselves; a router that could
         # be a site of its own says so (its page offers "Make it a site")
-        "devices": [{**x, "site": a.sites.of(x.get("ip")), **_listed(a, x.get("ip")),
+        "devices": [{**x, "site": a.sites.of(x.get("ip")), **_listed(a, x.get("ip")), **_inv_ip(a, x.get("ip")),
                      **({"can_site": True} if a.sites.offer(x.get("ip")) else {})}
                     for x in rep.get("devices") or []],
         "sites": a.sites.view(rep)["sites"],
@@ -1001,6 +1001,14 @@ def _https(request) -> bool:
 
 def _sse(event: str, body) -> bytes:
     return f"event: {event}\ndata: {_dumps(body)}\n\n".encode()
+
+
+def _inv_ip(a, ip) -> dict:
+    """{"inv_ip": the address inventory.yaml gives it} for a device DHCP has moved since: its
+    sheet's gear finds it in the file by that address (model.Inventory.rebind)."""
+    d = a.inv.get(ip) if ip else None
+    c = (d.attrs or {}).get("configured_ip") if d is not None else None
+    return {"inv_ip": str(c)} if c and str(c) != str(ip) else {}
 
 
 def _listed(a, ip) -> dict:

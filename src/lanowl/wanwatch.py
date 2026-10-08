@@ -568,19 +568,23 @@ class WanWatcher:
         return rows
 
     # --- ping half ---------------------------------------------------------
+    PING_COUNT = 2                   # pings per target per round (probes.ping: any reply = up)
+
     async def _ping_round(self) -> bool:
         """Ping every target concurrently. Returns True if the confirmed state flipped.
 
         WAN is up if ANY target answers, so a confirmed blackout means all of 8.8.8.8,
         208.67.222.222 and 1.0.0.1 missed together `fail_checks` times in a row — at 15s
-        that is ~30s, comfortably inside a 57s outage and still far too strict for one
-        unlucky packet to trigger."""
+        that is ~30s, comfortably inside a 57s outage. Each target gets PING_COUNT pings,
+        like a device in the sweep: with one, a few packets lost between lanowl and the
+        router could take all three replies of a round, twice in a row, and a blip was
+        recorded while the network had its internet all along."""
         w = self._wcfg()
         timeout = int(self.cfg.get("probes", {}).get("icmp_timeout_ms", 1500))
         tgts = self._targets()
         t0 = time.time()
         results = await asyncio.gather(
-            *(probes.ping(t, timeout_ms=timeout, count=1) for t in tgts),
+            *(probes.ping(t, timeout_ms=timeout, count=self.PING_COUNT) for t in tgts),
             return_exceptions=True)
         took = time.time() - t0
         self.targets = {t: (getattr(r, "ok", False) is True) for t, r in zip(tgts, results)}
@@ -700,6 +704,7 @@ class WanWatcher:
               "s": round(now - self._fail_since, 1),
               "interval_s": float(w.get("interval_s", 15)),
               "timeout_ms": int(self.cfg.get("probes", {}).get("icmp_timeout_ms", 1500)),
+              "pings": self.PING_COUNT,
               "floor_s": float(w.get("min_outage_s", 90)),
               "targets": self._targets(), "hops": r["hops"],
               "rounds": r["rounds"] + r["tail"], "rounds_n": r["n"], "path": r["path"]}

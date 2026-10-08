@@ -366,7 +366,10 @@ def verdict(event: dict, ev: Optional[dict], netwatch: Optional[dict] = None,
     isp_fail = bool(i_known) and all(r["isp"] is False for r in i_known)
     isp_ok = any(r.get("isp") is True for r in i_known)
     nw = nw_delta(ev)
-    tmo = float(ev.get("timeout_ms") or 1500) / 1000
+    # the longest a round of pings waits: `pings` per target (1 before they were recorded),
+    # each up to the timeout, 0.25 s apart (probes.ping)
+    pings = int(ev.get("pings") or 1)
+    tmo = pings * float(ev.get("timeout_ms") or 1500) / 1000 + (pings - 1) * 0.25
     slow = max((float(r.get("took") or 0) for r in rounds), default=0)
 
     if ev.get("main"):
@@ -481,7 +484,7 @@ def explain(a, ts: float) -> Optional[dict]:
            "floor_s": float(((a.cfg.get("wan") or {}).get("watch") or {}).get("min_outage_s", 90))}
     if ev is not None:
         out["evidence"] = {k: ev.get(k) for k in ("targets", "hops", "rounds", "rounds_n", "interval_s",
-                                                  "timeout_ms", "path", "main")}
+                                                  "timeout_ms", "pings", "path", "main")}
         nw = nw_delta(ev)
         if nw is not None:
             out["evidence"]["router_pings"] = nw
@@ -530,7 +533,9 @@ def brief(x: dict, links: Optional[dict] = None) -> str:
              *[f"- {s}" for s in x["verdict"]["lines"]]]
     e = x.get("evidence")
     if e:
-        lines.append(f"Pinged every {e.get('interval_s'):g} s: {', '.join(e.get('targets') or [])}; "
+        n = int(e.get("pings") or 1)
+        lines.append(f"Pinged every {e.get('interval_s'):g} s, {n} ping{'s' if n > 1 else ''} each "
+                     f"(any reply = up): {', '.join(e.get('targets') or [])}; "
                      f"in a failed round also the router and the {L['main']}'s first hop "
                      f"({json.dumps(e.get('hops'))}).")
         for r in e.get("rounds") or []:

@@ -16,6 +16,7 @@ login is the guard, and nothing asks the password again.
   POST /api/settings/device       {ip | null, device | null, login?, preview | base + sbase,
                                   how}: a device, and its own login (secrets.yaml)
   POST /api/settings/migrate      the devices watched in lanowl's state, into inventory.yaml
+  POST /api/settings/mac          {ip}: the MAC the network gives it now, and where from
   POST /api/settings/secret       {op: login | token | remove, name, user?, how?, value?,
                                   preview | base}: secrets.yaml, write-only
   POST /api/settings/site         {key | null, site: {name, nets, router, criticality} | null,
@@ -176,6 +177,7 @@ class SettingsRoutes:
         r.add_get("/api/settings/devices", self.devices)
         r.add_post("/api/settings/device", self.device)
         r.add_post("/api/settings/migrate", self.migrate)
+        r.add_post("/api/settings/mac", self.mac)
         r.add_post("/api/settings/secret", self.secret)
         r.add_post("/api/settings/site", self.site)
         r.add_post("/api/settings/site/nets", self.site_nets)
@@ -462,6 +464,10 @@ class SettingsRoutes:
             if not rs["ok"]:
                 return self._j(rs, 409)
         r = self.s.save("inventory", ops, str(body.get("base") or ""), request.remote or "", how=how)
+        sites = getattr(self.a, "sites", None)
+        if r["ok"] and not body.get("ip") and dev.get("ip") and sites is not None \
+                and (sites.rec.get("watch") or {}).pop(str(dev["ip"]), None) is not None:
+            sites._save()     # watched from a site's list until now: inventory.yaml has it, as Move does
         url = f"http://{dev.get('ip')}:8123"
         if r["ok"] and ha_tok and str((self.a.cfg.get("access") or {}).get("ha_url") or "") != url:
             c = self.s.files["config"]
@@ -491,6 +497,26 @@ class SettingsRoutes:
             refresh = getattr(self.a, "refresh_report", None)
             if callable(refresh):
                 refresh()
+
+    async def mac(self, request):
+        """The MAC the network gives an address now (Sites.find_mac): the device form fills it
+        in, or offers it. An address of a private network only: a ping goes to it."""
+        body = await self.d._body(request) or {}
+        ip = str(body.get("ip") or "").strip()
+        try:
+            ok = bool(_IP.match(ip)) and ipaddress.ip_address(ip).is_private
+        except ValueError:
+            ok = False
+        if not ok:
+            return self._j({"ok": False, "said": "an address of your own network"}, 400)
+        sites = getattr(self.a, "sites", None)
+        if sites is None:
+            return self._j({"ok": False, "said": "lanowl is still starting"}, 503)
+        try:
+            r = await asyncio.wait_for(sites.find_mac(ip), 40)
+        except asyncio.TimeoutError:
+            r = {"said": "the router did not answer in time"}
+        return self._j({"ok": bool(r.get("mac")), "ip": ip, **r})
 
     async def migrate(self, request):
         """The devices Watch kept in lanowl's state before it wrote inventory.yaml: moved there

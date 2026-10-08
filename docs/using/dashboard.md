@@ -73,6 +73,10 @@ item, under **What happened**:
 - **Details**: its checks, its kind, its login type, and what lanowl may do with it and why
   not.
 - The pencil renames it. The inventory's name stays underneath.
+- The gear opens its settings in the sheet itself: the page of Settings → Devices, and **‹**
+  back to the sheet. A device not in `inventory.yaml` gets **Add a device**, filled in with what
+  lanowl knows of it. After a save the sheet says it is waiting for a restart, with **Restart**
+  right there.
 
 ![A device's sheet](../img/sheet-wide.png)
 

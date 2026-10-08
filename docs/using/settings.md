@@ -111,11 +111,19 @@ changes, the confirm, a line on Telegram, then Restart.
 ## Devices
 
 **Settings → Devices** lists `inventory.yaml`'s devices by group. Tap one to change it, or
-**Add a device**:
+**Add a device**. The same page opens from a device's sheet on the dashboard, with its gear:
+there **‹** goes back to the sheet, and a device not in `inventory.yaml` gets **Add a device**,
+filled in with what lanowl knows of it.
 
 - **Watching**: name, address, MAC (lanowl follows it when DHCP moves it), group,
   criticality, checks, what it depends on, whether it is off at night or by day, a role and a
-  note.
+  note. A name given with the dashboard's pencil wins over the file's: the name field says so.
+- **The MAC from the network**: when the page opens, and when the address changes, lanowl
+  looks the address up: one ping, then lanowl's own ARP table (any router, for a device on
+  lanowl's own network), then the router of the address's site, when lanowl reads it: the main
+  router (a MikroTik) or a site's MikroTik or OpenWrt router, its ARP table and its DHCP list.
+  A new device gets the MAC filled in; an empty field, or one that says another MAC, gets it
+  offered with **Use it**. Not found, the field says where it looked.
 - **Managing**: its kind; its login, asked on its page: its own (a user and a password with
   **Show**, or lanowl's ssh key for `linux` and kinds of your own; the password never shown
   again, left empty to keep it; the page says the login's name in `secrets.yaml`), one shared

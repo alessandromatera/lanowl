@@ -788,6 +788,9 @@ html.modal{overflow:hidden}
   background:var(--ink);color:var(--bg);border-radius:14px;padding:11px 16px;font-size:14.5px;font-weight:550;max-width:calc(100% - 32px);
   box-shadow:0 10px 30px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s,transform .3s cubic-bezier(.2,.8,.2,1)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+/* a popover, so it is in the top layer with the sheets (a modal dialog covers the rest of the page):
+   none of the browser's popover box */
+.toast[popover]{top:auto;right:auto;margin:0;border:0;overflow:visible}
 
 @media (min-width:900px){
   :root{--tabh:0px;--lw:170px}
@@ -911,6 +914,7 @@ html.modal{overflow:hidden}
 .sbar{position:sticky;bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 10px);z-index:6;display:flex;align-items:center;gap:10px;margin:14px 0 6px;padding:10px 10px 10px 14px;
   border-radius:14px;background:var(--bar);border:1px solid var(--sep);box-shadow:0 10px 30px -14px rgba(0,0,0,.35);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
 .sbar[hidden]{display:none}
+#sheet .sbar{bottom:10px}
 .sbar .cnt{flex:1;font-size:14px;color:var(--ink2)}
 .sbar .cnt b{color:var(--ink)}
 .sbar .btn{margin-top:0;width:auto;min-height:40px;padding:0 18px;font-size:15px;border-radius:11px}
@@ -1185,7 +1189,7 @@ html.modal{overflow:hidden}
 </form></dialog>
 <!-- a finding's fix, written out by the model for the owner to apply themselves — never run (fixes.py) -->
 <dialog id="fixdlg" class="sheet" aria-labelledby="fx-title"><div class="sheet-in" id="fix-in"></div></dialog>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
 
 <script>
 "use strict";
@@ -3437,7 +3441,8 @@ function renderWan() {
 
 // ---------------------------------------------------------------- device sheet
 function openSheet(ip, focus) {
-  S.sheet = ip; S.wan = null; S.hist = null; S.histAt = 0; S.sheetProp = null; S.sheetFocus = focus || null;
+  S.sheet = ip; S.wan = null; S.hist = null; S.histAt = 0; S.histTries = 0; S.sheetProp = null; S.sheetFocus = focus || null;
+  devSetLeave();
   if (!TL.d && !TL.busy) loadTimeline();
   renderSheet();
   const dlg = $("sheet");
@@ -3448,7 +3453,7 @@ function closeSheet() {
   const dlg = $("sheet");
   if (dlg.open) dlg.close();
 }
-$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; });
+$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; devSetLeave(); document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; $("sheet-in").__ip = null; });
 $("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
 
 async function loadHist() {
@@ -3458,16 +3463,26 @@ async function loadHist() {
     const r = await fetch("/api/device?ip=" + encodeURIComponent(ip), {cache: "no-store"});
     const h = await r.json();
     if (S.sheet !== ip) return;
-    S.hist = h.ok ? h : {ok: false};
-  } catch (e) { S.hist = {ok: false}; }
+    // "not known" for a device it had a history of: a new run that has not swept yet, what was there stays
+    S.hist = h.ok ? h : S.hist && S.hist.ok ? S.hist : {ok: false};
+  } catch (e) {
+    // lanowl not answering (a restart): what was there stays, never a week drawn from nothing
+    if (!(S.hist && S.hist.ok)) S.hist = {ok: false};
+  }
   S.histAt = Date.now();
   renderSheet();
+  // not there yet (lanowl restarting, a run that has not swept): asked again, a few times
+  if (S.hist.ok) S.histTries = 0;
+  else if ((S.histTries = (S.histTries || 0) + 1) <= 12)
+    setTimeout(() => { if (S.sheet === ip && !(S.hist && S.hist.ok)) loadHist(); }, 5000);
 }
 
 // The sheet's order: what it is
 // doing and its four numbers, the 24h chart, the week and its ups & downs, then Manage (the
 // Monitoring switch first), Security, Ask, and Details at the very end.
 function renderSheet() {
+  if (S.sheetSet) return;          // the gear's settings are open in it: setDevice draws them
+  if (ST.restarting) return;       // as it was until lanowl is back (waitBack)
   if (S.sheetProp != null) { renderPropSheet(); return; }
   const ip = S.sheet, d = S.d;
   if (!ip || !d) return;
@@ -3475,6 +3490,8 @@ function renderSheet() {
   const lbx = (d.logbook || []).filter(e => e.ip === ip);
   // a machine the update check or the backups know without it being a watched device
   const known = ((d.updates || {}).hosts || []).find(h => h.ip === ip) || ((d.backups || {}).machines || []).find(m => m.key === ip);
+  // a run that has not swept yet knows no device: a sheet open across a restart keeps what it showed
+  if (!x && d.sweep && d.sweep.sweeps === 0 && $("sheet-in").__ip === ip) return;
   const name = x ? x.name : (lbx[0] || {}).name || (known || {}).name || ip;
   const s = x ? devState(x, sh) : null;
   const O = outages(d), segs = O.m[ip] || [];
@@ -3485,8 +3502,9 @@ function renderSheet() {
     : `<span class="shchip mono">${esc(ip)}</span><span class="shchip">${known ? "not a watched device" : "no longer monitored"}</span>`;
   const jumps = [["Overview", "sx-top"], ["What happened", "sx-what"], ["Manage", "sx-manage"], secH ? ["Security", "sx-sec"] : null, ["Details", "sx-details"]].filter(Boolean);
   let h = `<div class="shd" id="shd"><div class="grab"></div><div class="shd-row">${s ? `<span class="sd c-${DSTATE[s][1]}"></span>` : ""}
-    <h2 id="sh-title">${esc(name)}</h2>${x ? `<button class="ren" type="button" data-act="rename" data-rip="${esc(ip)}" aria-label="Rename" title="Rename">${ic("compose")}</button>` : ""}<button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div>
+    <h2 id="sh-title">${esc(name)}</h2>${x ? `<button class="ren" type="button" data-act="rename" data-rip="${esc(ip)}" aria-label="Rename" title="Rename">${ic("compose")}</button>` : ""}<button class="ren" type="button" data-act="devset" aria-label="Its settings" title="Its settings">${ic("gear")}</button><button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div>
     <div class="shchips">${chips}</div><div class="jumps">${jumps.map(j => `<button type="button" data-act="jump" data-to="${j[1]}">${j[0]}</button>`).join("")}</div></div><div id="sx-top"></div>`;
+  if (S.sheetSaved === ip && ST.data) h += pendHtml(ST.data);
   const live = runningNow(d, ip);
   if (live) h += `<div class="card" style="margin-top:4px"><div style="font-weight:650">#${esc(live.id)} ${esc(live.title)}</div>${liveHtml(live)}</div>`;
   let monRow = "";
@@ -3525,6 +3543,7 @@ function renderSheet() {
   h += `<div id="sx-details"></div>` + detailsHtml();
   const keepY = $("sheet").scrollTop;
   const rebuilt = put("sheet-in", h);
+  $("sheet-in").__ip = ip;
   $("sheet").scrollTop = keepY;
   sheetFocusNow();
   // the row just opened at stays in view while what is above it grows (the chart arriving)
@@ -3693,7 +3712,17 @@ async function refresh() {
 
 let toastT = 0;
 // long enough to read: an Update's refusal can be two sentences
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), Math.min(12000, Math.max(3200, String(msg).length * 55))); }
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg;
+  // over the newest sheet: shown again, a popover goes on top of the top layer
+  if (t.showPopover) try {
+    const was = t.classList.contains("on");
+    if (t.matches(":popover-open")) t.hidePopover();
+    t.showPopover();
+    if (!was) void t.offsetWidth;            // from hidden: the slide-in still runs
+  } catch (e) { /* no popover: under a sheet, as before */ }
+  t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), Math.min(12000, Math.max(3200, String(msg).length * 55)));
+}
 async function post(path, body) {
   const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
   return r.json().catch(() => ({ok: r.ok}));
@@ -3853,6 +3882,8 @@ document.addEventListener("click", async e => {
   else if (act === "openprop") openProp(+t.dataset.pid);
   else if (act === "pal") openPal();
   else if (act === "rename") openRename(t.dataset.rip ? {ip: t.dataset.rip} : {site: t.dataset.rsite, mac: t.dataset.rmac, name: t.dataset.rname, renamed: !!t.dataset.rren});
+  else if (act === "devset") devSetOpen(t);
+  else if (act === "devsetback") devSetClose();
   else if (act === "rnclose") closeRename();
   else if (act === "rnreset") saveRename("");
   else if (act === "modelon") setModel(true);
@@ -4358,7 +4389,7 @@ function openSet(title, body, go, opts) {
 }
 function closeSet() { const d = $("setdlg"); if (d.open) d.close(); }
 // a close event arrives a moment after close(): a sheet opened in that moment is not closed by it
-$("setdlg").addEventListener("close", () => { if ($("setdlg").open) return; ST.sheet = null; document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
+$("setdlg").addEventListener("close", () => { if ($("setdlg").open) return; ST.sheet = null; if (!$("sheet").open) document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
 $("setdlg").addEventListener("click", e => { if (e.target === $("setdlg")) closeSet(); });
 $("setf").addEventListener("submit", async e => {
   e.preventDefault();
@@ -4426,6 +4457,7 @@ async function waitBack(started) {
   ST.restarting = false;
   await setData(true); ST.devs = null;
   if (S.tab === "set") renderSet();
+  if (S.sheet && !S.sheetSet) { renderSheet(); loadHist(); }
   toast("lanowl is back, running what was saved.");
 }
 
@@ -4708,19 +4740,62 @@ function devStart(ip) {
   return ST.dev;
 }
 const CRITH = CRIT_WORDS;
+// The device's settings, on Settings → Devices or in its sheet (the sheet's gear): one form,
+// drawn where ST.devIn says, its fields and buttons looked up there
+const devRoot = () => $(ST.devIn === "sheet" ? "sheet-in" : "set");
+async function devSetOpen(btn) {
+  const ip = S.sheet; if (!ip) return;
+  const got = await withSpin(btn, "", () => Promise.all([devData(true), setData(true)]));
+  if (!got || S.sheet !== ip) return;          // pressed twice, or the sheet was closed meanwhile
+  const [V] = got;
+  if (!V.ok) { toast(V.error || "Settings did not load."); return; }
+  const d = S.d || {}, x = (d.devices || []).find(v => v.ip === ip);
+  // in inventory.yaml by the address the file gives it (DHCP may have moved the device since)
+  const orig = (V.devices || []).find(v => String(v.ip) === String((x && x.inv_ip) || ip));
+  ST.dev = null; ST.devIn = "sheet"; S.sheetSet = true;
+  if (orig) devStart(String(orig.ip));
+  else {
+    // not in the file: Add a device, filled in with what the dashboard knows of it
+    const lb = (d.logbook || []).find(e => e.ip === ip) || {};
+    const known = ((d.updates || {}).hosts || []).find(h => h.ip === ip) || ((d.backups || {}).machines || []).find(m => m.key === ip) || {};
+    devStart("new");
+    Object.assign(ST.dev.d, {ip, name: x ? x.name : lb.name || known.name || ""},
+      x && x.group && !["watched", "remote"].includes(x.group) ? {group: x.group} : {}, x && x.criticality ? {criticality: x.criticality} : {});
+  }
+  await setDevice(ST.dev.key);
+  const sh = $("sheet"); if (sh) sh.scrollTop = 0;
+}
+// back to the device's own sheet (Back, Discard, a save)
+function devSetClose() {
+  devSetLeave();
+  renderSheet();
+  const sh = $("sheet"); if (sh) sh.scrollTop = 0;
+}
+function devSetLeave() {
+  if (ST.devIn === "sheet") { ST.dev = null; ST.devIn = null; }
+  S.sheetSet = false;
+}
 async function setDevice(ip) {
   const V = await devData(), D = await setData();
-  if (!V.ok) { renderSet(); return; }
+  const inSheet = ST.devIn === "sheet";
+  if (inSheet && !S.sheetSet) return;          // the sheet was closed meanwhile
+  if (!V.ok) { if (inSheet) { toast(V.error || "Settings did not load."); devSetClose(); } else renderSet(); return; }
   const S2 = devStart(ip), d = S2.d, can = (V.kinds || {})[d.kind || ""] || [];
   const changed = (!sameV(S2.d, S2.orig || null) && (S2.orig || d.ip || d.name)) || S2.lchanged;
   const inp = (k, ph, mode) => `<input class="fin" data-dk="${k}" value="${esc(d[k] == null ? "" : d[k])}" placeholder="${esc(ph || "")}"${mode ? ` inputmode="${mode}"` : ""} autocomplete="off" spellcheck="false">`;
   const fld = (k, body, help) => `<div class="fld"><div class="fh"><span class="lab">${esc(k)}</span></div>${body}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
   const groups = groupList(V.groups, d.group || "misc");
   const logins = V.logins || [];
-  let h = back("set/devices", "Devices") + setHead(S2.orig ? (S2.orig.name || S2.orig.ip) : "A new device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "It goes into inventory.yaml.");
+  // the name the dashboard shows when it was renamed (✎): that one wins over the file's
+  const shown = S2.orig && ((S.d || {}).devices || []).find(v => v.listed && String(v.inv_ip || v.ip) === String(S2.orig.ip));
+  const sname = (S.d && ((S.d.devices || []).find(v => v.ip === S.sheet) || {}).name) || S.sheet;
+  let h = inSheet
+    ? `<div class="shd" id="shd"><div class="grab"></div><div class="shd-row"><button class="sback" type="button" data-act="devsetback">${ic("chev")}${esc(sname)}</button><span style="flex:1"></span><button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div></div>` +
+      setHead(S2.orig ? "Its settings" : "Add a device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "Not in inventory.yaml yet: it goes there, filled in with what lanowl knows of it.")
+    : back("set/devices", "Devices") + setHead(S2.orig ? (S2.orig.name || S2.orig.ip) : "A new device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "It goes into inventory.yaml.");
   h += `<div class="sh">Watching</div><div class="list">` +
-    fld("name", inp("name", "A name you will recognise")) + fld("ip", inp("ip", "192.168.88.10", "decimal")) +
-    fld("mac", inp("mac", "optional"), "follows it when DHCP moves it") +
+    fld("name", inp("name", "A name you will recognise"), shown ? `shown as “${esc(shown.name)}”: the ✎ name ${inSheet ? "" : "on its sheet "}wins` : "") + fld("ip", inp("ip", "192.168.88.10", "decimal")) +
+    fld("mac", inp("mac", "optional"), `follows it when DHCP moves it<span id="macq">${macLine(S2) ? "<br>" + macLine(S2) : ""}</span>`) +
     fld("group", `<div class="fsw"><select class="fsel" data-dk="group">${groups.map(g => `<option${g === d.group ? " selected" : ""}>${esc(g)}</option>`).join("")}<option value="__new">A new group…</option></select></div>` +
       (S2.newGroup ? `<input class="fin" data-dk="group" value="${esc(d.group || "")}" placeholder="the new group's name" style="margin-top:8px" autocomplete="off" spellcheck="false">` : "")) +
     fld("criticality", `<div class="segc" role="group">${["critical", "high", "warning", "low", "info"].map(c => `<button type="button" data-sact="crit" data-v="${c}" aria-pressed="${(d.criticality || "low") === c}">${c}</button>`).join("")}</div>`, esc(CRITH[d.criticality || "low"])) +
@@ -4743,24 +4818,55 @@ async function setDevice(ip) {
         ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`
         : `<span class="muted">${esc(f)}: switched on, from the next restart</span>`).join("<br>")) +
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
-  if (S2.orig) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);
+  if (S2.orig && !inSheet) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);   // the sheet has its own row
   if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
   h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Check and save</button></div>`;
-  put("set", `<div class="setw">${h}</div>`);
-  const pw = document.querySelector("#set input[data-dk=lpw]");
+  put(devRoot(), `<div class="setw">${h}</div>`);
+  const pw = devRoot().querySelector("input[data-dk=lpw]");
   if (pw) pw.value = S2.lpw || "";
+  macLook(S2);
+}
+// The MAC the network gives its address now (POST /api/settings/mac: lanowl's own ARP table,
+// then the router of its site): filled in for a new device, offered (Use it) when the field is
+// empty or says another. Drawn in place, so a field being typed in keeps its caret.
+function macLine(S2) {
+  const q = S2.macq, cur = String(S2.d.mac || "").toUpperCase();
+  if (!q || q.ip !== S2.d.ip) return "";
+  if (q.wait) return `<span class="muted">looking for it on the network…</span>`;
+  if (q.mac && q.mac === cur) return q.filled ? `filled in from ${esc(q.from)}` : "";
+  if (q.mac) return `${cur ? "the network says" : "on the network now:"} <span class="mono">${esc(q.mac)}</span> (${esc(q.from)}) <button class="flnk" type="button" data-sact="macuse">Use it</button>`;
+  return cur ? "" : `<span class="muted">Not found: ${esc(q.said || "nothing answered")}. Type it.</span>`;
+}
+function macShow(S2) {
+  const el = devRoot().querySelector("#macq");
+  if (el) { const m = macLine(S2); el.innerHTML = m ? "<br>" + m : ""; }
+}
+async function macLook(S2) {
+  const ip = String(S2.d.ip || "").trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || (S2.macq && S2.macq.ip === ip)) return;
+  S2.macq = {ip, wait: true}; macShow(S2);
+  const r = await post("/api/settings/mac", {ip}).catch(() => ({ok: false, said: "lanowl did not answer"}));
+  if (ST.dev !== S2 || String(S2.d.ip || "").trim() !== ip) return;
+  S2.macq = {ip, mac: String(r.mac || "").toUpperCase(), from: r.from || "", said: r.said || ""};
+  // a new device: filled in at once (nothing is written before Check and save)
+  if (!S2.orig && S2.macq.mac && !S2.d.mac) {
+    S2.d.mac = S2.macq.mac; S2.macq.filled = true;
+    const i = devRoot().querySelector("input[data-dk=mac]"); if (i) i.value = S2.macq.mac;
+  }
+  macShow(S2);
 }
 function onDevField(el) {
   const S2 = ST.dev; if (!S2) return;
   const k = el.dataset.dk;
   if (k === "lmode") { S2.lmode = el.value; S2.lchanged = true; if (S2.lmode.startsWith("own") && !S2.lname) S2.lset = false; setDevice(S2.key); return; }
-  if (k === "luser" || k === "lpw" || k === "htok") { S2[k] = el.value; S2.lchanged = true; S2.tryRes = null; const bar = $("sbar"); if (bar) bar.hidden = false; return; }
+  if (k === "luser" || k === "lpw" || k === "htok") { S2[k] = el.value; S2.lchanged = true; S2.tryRes = null; const bar = devRoot().querySelector("#sbar"); if (bar) bar.hidden = false; return; }
   if (k === "group" && el.value === "__new") {
     // a box for the new group's name, under the list: part of the page, so a redraw keeps it
     S2.newGroup = true; S2.d.group = ""; setDevice(S2.key);
-    const box = document.querySelector('#set input[data-dk="group"]'); if (box) box.focus();
+    const box = devRoot().querySelector('input[data-dk="group"]'); if (box) box.focus();
     return;
   }
+  if (k === "ip") { clearTimeout(S2.macT); S2.macT = setTimeout(() => macLook(S2), 700); }
   if (k === "units") S2.d.restart = {...(S2.d.restart || {}), units: el.value.split(",").map(x => x.trim()).filter(Boolean)};
   else if (el.value === "") delete S2.d[k];
   else S2.d[k] = el.value;
@@ -4771,7 +4877,8 @@ function onDevField(el) {
     else if (S2.lmode === "own-key" && !((ST.devs || {}).key_kinds || ["linux"]).includes(el.value)) S2.lmode = "own-pw";
     setDevice(S2.key); return;
   }
-  const bar = $("sbar"); if (bar) bar.hidden = false;
+  if (k === "mac") macShow(S2);
+  const bar = devRoot().querySelector("#sbar"); if (bar) bar.hidden = false;
 }
 // the device as the form has it, and its own login: {device, login} or {error}
 function devBody(S2) {
@@ -4798,7 +4905,12 @@ async function devReview(remove) {
   openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : p.secrets ? "Save the device and its login" : "Save to inventory.yaml",
     planHtml(p, "inventory.yaml") + (p.secrets ? planHtml(p.secrets, "secrets.yaml") : ""), async () => {
     const r = await saveCall("/api/settings/device", {...body, base: p.base, ...(p.secrets ? {sbase: p.secrets.base} : {})});
-    if (r.ok) { ST.dev = null; await devData(true); await setData(true); setNav("set/devices"); refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
+    if (r.ok) {
+      const inSheet = ST.devIn === "sheet";
+      ST.dev = null; await devData(true); await setData(true);
+      if (inSheet) { S.sheetSaved = S.sheet; devSetClose(); } else setNav("set/devices");
+      refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply.");
+    }
     return r;
   }, {blocked: (p.problems || []).length > 0 || ((p.secrets || {}).problems || []).length > 0, label: remove ? "Remove it" : "Save"});
   return V;
@@ -5245,12 +5357,13 @@ document.addEventListener("click", async e => {
   if (a === "man" && S2) { const m = new Set(S2.d.manage || []); m.has(t.dataset.f) ? m.delete(t.dataset.f) : m.add(t.dataset.f); const can = ((ST.devs || {}).kinds || {})[S2.d.kind || ""] || []; S2.d.manage = can.filter(x => m.has(x)); if (!S2.d.manage.length) delete S2.d.manage; setDevice(S2.key); return; }
   if (a === "ckdel" && S2) { S2.d.checks.splice(+t.dataset.i, 1); setDevice(S2.key); return; }
   if (a === "ckadd" && S2) {
-    const type = $("ckt").value, port = $("ckp").value.trim();
+    const type = devRoot().querySelector("#ckt").value, port = devRoot().querySelector("#ckp").value.trim();
     if (type === "tcp" && !/^\d+$/.test(port)) { toast("A tcp check needs a port."); return; }
     if (type === "link" && !port) { toast("A link check needs the router port it hangs off, e.g. ether3: type it in the box."); return; }
     S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), type === "link" ? {type, iface: port} : {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
   }
-  if (a === "devreset") { ST.dev = null; renderSet(); return; }
+  if (a === "macuse" && S2 && S2.macq && S2.macq.mac) { S2.d.mac = S2.macq.mac; setDevice(S2.key); return; }
+  if (a === "devreset") { if (ST.devIn === "sheet") devSetClose(); else { ST.dev = null; renderSet(); } return; }
   if (a === "sitecrit" && ST.site) { ST.site.d.criticality = t.dataset.v; setSitePage(ST.site.id); return; }
   if (a === "sitereset") { ST.site = null; renderSet(); return; }
   if (a === "sitereview") { withSpin(t, "Checking…", () => siteReview(null)); return; }
@@ -5318,6 +5431,7 @@ document.addEventListener("click", async e => {
 });
 document.addEventListener("input", e => {
   const el = e.target;
+  if (S.sheetSet && el.dataset.dk && el.tagName === "INPUT") { onDevField(el); return; }
   if (S.tab !== "set") return;
   if (el.dataset.k && el.dataset.t !== "bool" && el.dataset.t !== "choice") onField(el);
   else if (el.dataset.dk && el.tagName === "INPUT") onDevField(el);
@@ -5326,6 +5440,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
+  if (S.sheetSet && el.dataset.dk && el.tagName === "SELECT") { onDevField(el); return; }
   if (S.tab !== "set") return;
   if (el.dataset.k && (el.dataset.t === "bool" || el.dataset.t === "choice")) onField(el);
   else if (el.dataset.dk && el.tagName === "SELECT") onDevField(el);

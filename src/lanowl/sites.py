@@ -134,6 +134,16 @@ def parse_routeros_arp(text: str) -> list:
     return out
 
 
+def read_own_arp() -> Optional[list]:
+    """This machine's own ARP table (lanowl's host: host networking shows the host's), or None
+    where there is none to read (not Linux)."""
+    try:
+        with open("/proc/net/arp", encoding="ascii") as f:
+            return parse_proc_arp(f.read())
+    except OSError:
+        return None
+
+
 def parse_pairs(text: str) -> list:
     """Address and MAC side by side, however a RouterOS tool lays its table out (ip-scan)."""
     out = []
@@ -265,6 +275,56 @@ class Sites:
         except ValueError:
             return False
         return any(a in n for n in s["nets"])
+
+    # --- a device's MAC, for its settings ------------------------------------------------------
+    async def find_mac(self, ip: str, ping=None, own_arp=None) -> dict:
+        """The MAC the network gives `ip` now, for the device form's MAC field: {mac, from}, or
+        {said}: where it was looked for. In order: lanowl's own machine — one ping, then its own
+        ARP table: any router, for a device on lanowl's own network (a routed address is never
+        in it, so nothing else is taken for it); then the router of the address's site — the
+        main router (MikroTik, over its API), or a site's router lanowl logs into (MikroTik,
+        OpenWrt: ssh) — its ARP table, then its DHCP list."""
+        from . import discovery, probes
+        try:
+            await (ping or probes.ping)(ip, timeout_ms=1000, count=1)
+        except Exception:
+            pass
+        own = (own_arp or read_own_arp)()
+        hit = next((r for r in own or [] if r["ip"] == ip), None)
+        if hit:
+            return {"mac": hit["mac"].upper(), "from": "lanowl's own network"}
+        said = ["lanowl's machine has no ARP table to read" if own is None
+                else "not on lanowl's own network, or it did not answer a ping"]
+        key = self.of(ip)
+        s = self.get(key)
+        if key == HOUSE:
+            arp = await discovery.fetch_arp(self.a.cfg)
+            if arp is None:
+                said.append("the router could not be read (lanowl reads a MikroTik's lists, with its login)")
+            else:
+                for x in arp:
+                    mac = str(x.get("mac-address") or "").lower()
+                    if (str(x.get("address") or "") == ip and _MAC.match(mac) and mac != _NOMAC
+                            and str(x.get("status") or "") not in ("failed", "incomplete")):
+                        return {"mac": mac.upper(), "from": "the router's ARP table"}
+                for x in await discovery.fetch_leases(self.a.cfg) or []:
+                    if ip in (str(x.get("active-address") or ""), str(x.get("address") or "")):
+                        mac = str(x.get("active-mac-address") or x.get("mac-address") or "").lower()
+                        if _MAC.match(mac):
+                            return {"mac": mac.upper(), "from": "the router's DHCP list"}
+                said.append("the router's lists do not have it")
+        elif s is not None and s in self.remote():
+            for r in await self.arp(s) or []:
+                if r["ip"] == ip:
+                    return {"mac": r["mac"].upper(), "from": f"{s['name']}'s router (its ARP table)"}
+            leases, err = await self.leases(s)
+            for r in leases or []:
+                if r["ip"] == ip:
+                    return {"mac": r["mac"].upper(), "from": f"{s['name']}'s router (its DHCP list)"}
+            said.append(f"{s['name']}'s router does not have it" + (f" ({err})" if err else ""))
+        else:
+            said.append(f"{(s or {}).get('name') or 'its site'} has no router lanowl reads")
+        return {"said": "; ".join(said)}
 
     def remote(self) -> list:
         """The sites with a router lanowl logs into (their DHCP, their checks)."""
