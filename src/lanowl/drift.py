@@ -11,7 +11,7 @@ worst latency, times it went down, service checks failing; the hours of the day 
 fall in; the internet per day; what the owner ran on the machines — and the model names what
 is slowly changing, each with one check from CHECKS. Nothing pages: new ones ride the next
 digest once; all are on Now and in the device's sheet. Devices asleep by design are marked;
-paused ones are left out (not watched, getting worse included).
+paused ones are left out (no alerts, getting worse included).
 
 Only what is meaningful. Left to itself the model reports that a device's latency doubled (8 →
 17 ms: its Wi-Fi, not the device), that a spike has cleared, that something recovered — none
@@ -252,7 +252,7 @@ class Drift(FindingsReview):
                       "(confirm or explain; it compares one day only):"]
             lines += [f"  {x}" for x in f["hints"]] + [""]
         if f["paused"]:
-            lines += ["Paused by the owner (not watched, left out): " + ", ".join(f["paused"]), ""]
+            lines += ["Paused by the owner (no alerts, left out): " + ", ".join(f["paused"]), ""]
         if f.get("open"):
             lines += ["OPEN RIGHT NOW, already reported to the owner by the monitor (do not repeat these; "
                       "only say what the WEEK adds — e.g. that it was getting worse for days before):"]

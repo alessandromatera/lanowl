@@ -806,14 +806,14 @@ def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None) ->
     rows = [(i, d) for i in issues for d in [match_diagnosis(i, llm.get("issues") or [])] if d]
     if not rows:
         s = _short(llm.get("summary"), 300)
-        return f"\n\n🦉 <i>model, {when}:</i> {_html(s)}" if s else ""
+        return f"\n\n🦉 <i>the owl, {when}:</i> {_html(s)}" if s else ""
     if len(rows) == 1:
         _, d = rows[0]
-        out = f"\n\n🦉 <b>Likely cause</b> <i>(model, {when})</i>: {_html(_short(d.get('root_cause')))}"
+        out = f"\n\n🦉 <b>Likely cause</b> <i>(the owl, {when})</i>: {_html(_short(d.get('root_cause')))}"
         if d.get("recommendation"):
             out += f"\n→ {_html(_short(d['recommendation'], 140))}"
         return out
-    lines = ["", "", f"🦉 <b>Likely causes</b> <i>(model, {when})</i>"]
+    lines = ["", "", f"🦉 <b>Likely causes</b> <i>(the owl, {when})</i>"]
     for i, d in rows[:6]:
         lines.append(f"• {label(i.get('device'), i.get('ip'))}: {_html(_short(d.get('root_cause'), 120))}")
     return "\n".join(lines)
@@ -866,7 +866,7 @@ def format_digest(report: dict, now: Optional[float] = None,
     extra = [d for d in llm_issues if id(d) not in used
              and d.get("severity") in ("critical", "high", "warning")][:3]
     if extra:
-        lines.append("🦉 <b>The model also noticed</b>")
+        lines.append("🦉 <b>The owl also noticed</b>")
         for d in extra:
             lines.append(f"• {label(d.get('device'), d.get('ip'), idx)}: "
                          f"{_html(_short(d.get('root_cause'), 140))}"
@@ -899,7 +899,7 @@ def format_digest(report: dict, now: Optional[float] = None,
     # item rides ONE digest; the lines are already HTML, escaped where they were written.
     for sec in report.get("review_news") or []:
         lines.append(f"{sec.get('icon') or '•'} <b>{_html(sec.get('title') or '')}</b> "
-                     "<i>(the model's look — the dashboard has the rest)</i>")
+                     "<i>(the owl's look — the dashboard has the rest)</i>")
         lines += list(sec.get("lines") or [])[:5]
         if len(sec.get("lines") or []) > 5:
             lines.append(f"…and {len(sec['lines']) - 5} more on the dashboard")
@@ -929,10 +929,10 @@ def format_model_off(m: dict, now: Optional[float] = None) -> str:
 
 
 def format_paused(paused: list, now: Optional[float] = None) -> str:
-    """'⏸ Paused, not watched: TV (192.168.10.36) since 20/09 14:02, off; …'"""
+    """'⏸ Paused, no alerts: TV (192.168.10.36) since 20/09 14:02, off; …'"""
     now = time.time() if now is None else now
     bits = [f"{_html(label(p.get('name'), p.get('ip')))} since {_clock(p['ts'], now)}"
             + ("" if p.get("up") is None else (", answering" if p["up"] else ", off"))
             for p in paused[:8]]
     more = f" …and {len(paused) - 8} more" if len(paused) > 8 else ""
-    return "⏸ <b>Paused, not watched</b>: " + "; ".join(bits) + more
+    return "⏸ <b>Paused, no alerts</b>: " + "; ".join(bits) + more

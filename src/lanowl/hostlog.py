@@ -49,6 +49,7 @@ from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
 
 from . import access
+from .records import kept_lines
 from .seclog import rank
 from .wanwatch import verdict_kind
 
@@ -912,7 +913,9 @@ class HostLogWatcher:
              "severity": str(verdict.get("severity", "info")).lower(),
              "summary": str(verdict.get("summary", ""))[:200],
              # whole: cut at 300 it loses its last sentence on the dashboard
-             "detail": str(verdict.get("detail", ""))[:1500]}
+             "detail": str(verdict.get("detail", ""))[:1500],
+             # what it read, word for word: a verdict of "fine" can be checked against it
+             "log": kept_lines(batch)}
         self.findings = (self.findings + [f])[-30:]
         if self.on_event is not None:
             try:

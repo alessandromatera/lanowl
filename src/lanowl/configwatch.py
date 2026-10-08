@@ -17,7 +17,7 @@ Security tab's Compare now):
     model did not explain is listed anyway, as the rule's (`RISKY`). No model: the rule alone.
 
 A change is an event, not a condition: it is listed under What changed for 30 days. A high or
-critical one is also a security event (seclog.py) — in What matters, with Handled
+critical one is also a security event (seclog.py) — in To decide, with Handled
 ("It was me") — and rides the next digest once. Nothing pages.
 """
 from __future__ import annotations
@@ -32,6 +32,14 @@ import uuid
 from typing import Optional
 
 from .records import scrub
+
+
+def change_id(c: dict) -> str:
+    """One change's name across the Timeline, Security and Now: its own id when it has one."""
+    if c.get("id"):
+        return f"cfg:{c['id']}"
+    import zlib
+    return f"cfg:{c.get('ip')}:{float(c.get('ts') or 0):.0f}:{zlib.crc32(str(c.get('what') or '').encode()):08x}"
 from .reboot import routeros_field
 from .report import _html, label
 from .reviews import Review, actions_done, clip, today_at, words
@@ -99,7 +107,14 @@ script, a cron job, a new service listening);
   "none"     = no real change (a re-ordering, a default the system rewrote after an update, a \
 process that only moved).
 What RAN on each machine in between is listed: an update or reboot explains changed defaults and \
-moved processes — say so. One change may span several lines: describe it once, quoting its lines.
+moved processes — say so. What its OWN LOG showed in between (lanowl's log checks) and the devices \
+NEW on the network in between are listed too: a change that matches an admin session from the LAN \
+at that time, or a device that just joined, is most likely the owner's own work — say so in `why`, \
+naming the session ("made in the admin session from 192.168.88.10 at 14:05, the router log says"). \
+Keep "critical" for what would let someone in even if the owner made it by mistake (management open \
+to the internet, password login on a public host, a firewall drop removed); a VPN peer, a route or a \
+user the owner added in their own session is "high" at most. One change may span several lines: \
+describe it once, quoting its lines.
 
 Reply with ONLY this JSON object, no prose, no code fence:
 {"summary": "<one sentence: what changed overall, the riskiest first>",
@@ -378,7 +393,7 @@ class ConfigWatch(Review):
                 "lines": lines, "sections": secs, "by": by}
 
     def _file(self, new: list):
-        """Kept for KEEP_DAYS; a high or critical one is a security event as well (What matters,
+        """Kept for KEEP_DAYS; a high or critical one is a security event as well (To decide,
         Handled) — one per change."""
         for c in new:
             if c["risk"] in ("high", "critical"):
@@ -399,14 +414,53 @@ class ConfigWatch(Review):
         for k in ("snap", "machines"):
             self.rec[k] = {ip: v for ip, v in self.rec[k].items() if ip in known}
 
+    def _logs_between(self, ip: str, since: float) -> list:
+        """The log checks of this machine's log since the last snapshot: the router's for the
+        main router, a host's own for a host (10-08: the review rated the owner's own WireGuard
+        peer critical while the router log had already tied the work to their session)."""
+        import json as _json
+        hosts = {f"host log {h.name}": h.ip for h in (getattr(getattr(self.a, "hostlog", None), "hosts", None) or [])}
+        try:
+            from .model import router_host
+            router = router_host(self.a.cfg)
+        except Exception:
+            router = ""
+        out = []
+        for e in reversed(self.a.state.events(since, kind="finding", limit=300)):
+            try:
+                f = _json.loads(e.get("detail") or "{}")
+            except ValueError:
+                continue
+            src = str(f.get("source") or "")
+            if (src == "router log" and ip == router) or hosts.get(src) == ip:
+                out.append(f"{time.strftime('%a %H:%M', time.localtime(e['ts']))} "
+                           f"{'PROBLEM ' + str(f.get('severity')) if f.get('problem') else 'fine'}: "
+                           f"{str(f.get('summary') or '')[:200]}")
+        return out[-12:]
+
+    def new_devices_between(self, since: float) -> list:
+        try:
+            rows = self.a.sites.seen()
+        except Exception:
+            return []
+        return [f"{r.get('name') or r.get('host') or r.get('vendor') or 'a device'} ({r.get('ip')}, {r.get('mac')}) "
+                f"first seen {time.strftime('%a %H:%M', time.localtime(r['first_seen']))}"
+                for r in rows if (r.get("first_seen") or 0) >= since and not r.get("before")][:12]
+
     def context(self, changed: dict) -> str:
         lines = [f"NOW: {time.strftime('%A %d/%m/%Y %H:%M')}", ""]
+        oldest = min((ch["since"] for ch in changed.values()), default=time.time())
+        news = self.new_devices_between(oldest)
+        lines += ["NEW ON THE NETWORK since the oldest snapshot: " + ("; ".join(news) if news else "nothing"), ""]
         for ip, ch in changed.items():
             since = ch["since"]
             ran = actions_done(self.a, since, ips={ip})
             lines.append(f"=== {ch['name']} ({ip}) — {'RouterOS export' if ch['kind'] == 'routeros' else 'Linux snapshot'}, "
                          f"compared with {time.strftime('%a %d/%m %H:%M', time.localtime(since))}")
             lines.append("What ran on it in between: " + ("; ".join(ran) if ran else "nothing lanowl knows of"))
+            seen = self._logs_between(ip, since)
+            lines.append("What its own log showed in between (lanowl's log checks): "
+                         + ("; ".join(seen) if seen else "nothing read, or nothing worth a line"))
             lines.append(hunks(ch["old"], ch["new"]))
             lines.append("")
         lines.append("Return the JSON.")
@@ -435,7 +489,7 @@ class ConfigWatch(Review):
         out = []
         for c in ch[:120]:
             it = self.a.seclog._get(c.get("sid") or "") if c.get("sid") else None
-            out.append({**c, **({"handled": it.get("handled")} if it and it.get("handled") else {})})
+            out.append({**c, "tid": change_id(c), **({"handled": it.get("handled")} if it and it.get("handled") else {})})
         return {"enabled": self.enabled, "running": self.running, "last": self.rec.get("last_done") or None,
                 "summary": self.rec.get("summary") or "", "error": self.rec.get("error") or "",
                 "changes": out,

@@ -60,8 +60,9 @@ router's (behind a provider's shared NAT, nothing inbound can reach you anyway).
 
 The owl reads it all and names each problem with one of a fixed set of checks (ssh accepts
 passwords, a management service exposed, a firmware out of support, and so on), so the same
-problem keeps the same name every day. That is what lets you **Dismiss** it once, with a note.
-A dismissal lasts until you undo it, or until the problem has been gone for three reviews.
+problem keeps the same name every day. That is what lets you **Accept** it once, with a note.
+It is accepted until you undo it, or until the problem has been gone for three reviews. The
+review's summary leaves it out; the Security tab names what you accepted once, under the summary.
 
 Pages start from `page_from` (watch what it finds for a couple of weeks first), and then
 only for a new critical finding, once.
@@ -81,7 +82,7 @@ accounts, sudo rules, keys, crontabs, services, listening ports, firewall and VP
 owl says what each change does and how risky it is, knowing what you ran on the machine in
 between. A change in a part that decides who gets in, that the owl did not explain, is listed
 anyway. The first comparison is the baseline. Nothing pages: a high or critical change rides
-the next digest and stays in What matters until you mark it handled ("It was me").
+the next digest and stays in To decide until you mark it handled ("It was me").
 
 ## Slowly changing
 
@@ -108,7 +109,7 @@ connections is an alert at once, without waiting for the model; the owl reads th
 explains. lanowl's own logins are recognised by user and address, so they are never mistaken
 for someone else. The router's log is read the same way.
 
-Each security event stays in What matters until you mark it **handled**.
+Each security event stays in To decide until you mark it **handled**.
 
 ## Backups
 

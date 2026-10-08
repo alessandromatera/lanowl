@@ -139,6 +139,10 @@ class Auditor:
         # into a single Telegram message. See alerts.py.
         self.gate = AlertGate.from_config(cfg)
         self._last_incident_llm = 0.0
+        # a new device starts the owl's look within minutes, not at the next hourly audit
+        # (an hourly look can tell you about a box hours after it has left)
+        self._newdev_look_at: Optional[float] = None
+        self._newdev_look_last = 0.0
         self._last_digest = 0.0
         self._last_digest_fp = ""     # content of the last digest actually sent
         self._last_digest_sent = 0.0
@@ -453,6 +457,29 @@ class Auditor:
         self.sites.tick()          # the remote sites' DHCP, every half hour
         return snap, report, incident
 
+    def _hold_flapping(self, report: dict):
+        """A degraded service that fails every other sweep (a smart plug's http/80: failed,
+        fine, failed…) turned the page Degraded and All good once a
+        minute while its incident stayed open. Until the gate closes the incident — the same
+        moment Telegram hears it is over — it stays on the report, marked as coming and going,
+        and the health follows it."""
+        present = {self._key(i) for i in report.get("issues") or []}
+        held = []
+        for k in self.gate.open_keys():
+            ep = self.gate._eps.get(k)
+            if (k in present or ep is None or ep.issue.get("kind") != "degraded"
+                    or self.pauses.is_paused(ep.issue.get("ip"))):
+                continue
+            held.append({**ep.issue, "since": ep.started, "comes_and_goes": True})
+        if not held:
+            return
+        report["issues"] = list(report.get("issues") or []) + held
+        sevs = {i.get("severity") for i in report["issues"]}
+        if "critical" in sevs:
+            report["overall_health"] = "critical"
+        elif sevs & {"high", "warning"} and report.get("overall_health") == "ok":
+            report["overall_health"] = "degraded"
+
     def _make_report(self, snap) -> dict:
         """The deterministic report for `snap`, kept for the dashboard and published.
 
@@ -474,6 +501,7 @@ class Auditor:
         # miss, not the confirming sweep — see StatusTracker.down_since.
         report = build_report(snap, self.inv, down_ips, self.cfg,
                               down_since={ip: self.tracker.down_since(ip) for ip in down_ips})
+        self._hold_flapping(report)
         report = merge_llm(report, None)  # ensures a deterministic summary is present
         report["wan_watch"] = self.wanwatch.snapshot_state()
         if self.hostlog.enabled:
@@ -524,8 +552,8 @@ class Auditor:
         """Pause or resume one device. `by`: dashboard | telegram.
 
         Returns {"ok", "changed", "text"}, `text` being what the owner is told. From the
-        dashboard it also goes to Telegram: the page has no login, so a pause must never
-        be silent. From Telegram it is the reply, which the caller sends."""
+        dashboard it also goes to Telegram: a pause must never be silent (a login can be
+        shared). From Telegram it is the reply, which the caller sends."""
         dev = self.inv.get(ip)
         if dev is None:
             return {"ok": False, "changed": False,
@@ -548,7 +576,7 @@ class Auditor:
             src = " — from the dashboard" if by == "dashboard" else ""
             still = ("\n<i>It is still unreachable, so from now on it is reported as down.</i>"
                      if self.tracker.status(ip) is False else "")
-            text = f"▶️ <b>Monitoring resumed</b>{src}\n{who}{still}"
+            text = f"▶️ <b>Alerts back on</b>{src}\n{who}{still}"
         self._on_event("pause" if paused else "resume", None, event_detail(ip, dev.name, by), now)
         self._save_pauses()
         log.info("%s %s (%s) — by %s", "PAUSED" if paused else "RESUMED", dev.name, ip, by)
@@ -689,10 +717,11 @@ class Auditor:
     def _pause_text(self, dev, by: str) -> str:
         who = _html(label(dev.name, dev.ip))
         src = " — from the dashboard" if by == "dashboard" else ""
-        how = "Not watched until you /resume it (or switch it back on in the dashboard)."
+        how = ("Still pinged and graphed, but nothing about it alerts you until you /resume it "
+               "(or switch its alerts back on in the dashboard). The digest reminds you it is paused.")
         crit = ("\n⚠️ A critical device: nothing about it will page you while it is paused."
                 if dev.criticality == "critical" else "")
-        return f"⏸ <b>Monitoring paused</b>{src}\n{who}\n<i>{how}</i>{crit}"
+        return f"⏸ <b>Paused: no alerts</b>{src}\n{who}\n<i>{how}</i>{crit}"
 
     def _forget_incidents(self, ip: str):
         """A device just paused, or about to reboot: close its open incidents without a word
@@ -803,7 +832,7 @@ class Auditor:
     async def _probe_ollama(self):
         """The model server, as a named service rather than a device.
 
-        A ping of the model's host and an open port are not a working model. What matters is
+        A ping of the model's host and an open port are not a working model. What counts is
         whether lanowl can use the model, so it asks the URL it actually calls (from a
         container, perhaps host.docker.internal). None with the LLM off: nothing needs it."""
         if self.no_llm or self.agent is None:
@@ -831,7 +860,8 @@ class Auditor:
         # is left out too: its incident was just forgotten, and must not reopen as NEW.
         current = {self._key(i): i for i in report["issues"]
                    if i.get("kind") not in WATCHER_OWNED_KINDS
-                   and not self.pauses.is_paused(i.get("ip"))}
+                   and not self.pauses.is_paused(i.get("ip"))
+                   and not i.get("comes_and_goes")}     # held below: never what keeps it open
         events = self.gate.update(current, now=snap.ts)
 
         crit = [e for e in events if e.issue.get("severity") == "critical"]
@@ -1198,7 +1228,8 @@ class Auditor:
                                      wan_note=self.wanwatch._wan_context(now),
                                      findings=self.executor._findings(6),
                                      proposals=(self.actions.context(now)
-                                                if self.actions.enabled else None))
+                                                if self.actions.enabled else None),
+                                     told={k[-17:]: t for k, t in self._newdev_told.items()})
             log.info("Running LLM audit (%s) ...", reason)
             t0 = time.time()
             # the persona's voice and the network's description: added by LlmAgent
@@ -1240,6 +1271,10 @@ class Auditor:
             except Exception:
                 log.exception("scorecard: the audit's claims were not noted")
         self.mqtt.publish("report", report, retain=True)
+        try:
+            self._trends(report)              # Now's "getting worse", the same list the digest carries
+        except Exception:
+            log.debug("trends not refreshed", exc_info=True)
         if incident_issues and report.get("llm"):
             await self._annotate_incident(incident_issues, report["llm"], ran)
         self._tell_new_devices(llm)
@@ -1252,6 +1287,7 @@ class Auditor:
         pending = self._pending_digest_reason
         self._pending_digest_reason = None
         digest = (self._maybe_send_digest(report, pending or reason) if send_digest or pending
+                  else "no digest: a look at a device new on a network" if reason == "new device"
                   else "no digest: an incident's triage — its diagnosis goes onto the alert")
         self._record_audit(llm, pending or reason, digest, time.time() - t0, ran)
         return report
@@ -1454,19 +1490,26 @@ class Auditor:
         Computed here rather than in the sweep: it is a week-wide aggregate over ~1M rows
         and nothing on the alerting path needs it, so it runs only when a digest is actually
         being written."""
-        try:
-            rows = self.state.degrading(time.time())
-        except Exception as e:
-            log.warning("trend query failed (%s: %s)", type(e).__name__, e)
-            return []
+        now = time.time()
+        at, rows = getattr(self, "_trend_rows", (0.0, None))
+        if rows is None or now - at > 1800:
+            try:
+                rows = self.state.degrading(now)
+            except Exception as e:
+                log.warning("trend query failed (%s: %s)", type(e).__name__, e)
+                return []
+            self._trend_rows = (now, rows)
         names = {d.ip: d.name for d in self.inv.devices}
-        for r in rows:
-            r["device"] = names.get(r["ip"], r["ip"])
+        rows = [{**r, "device": names.get(r["ip"], r["ip"])} for r in rows]
         # An issue already open says the same thing louder; no need to say it twice. A
-        # paused device is not being watched, getting worse included. Nor one the model's
-        # week-long look already explains (drift.py).
-        noisy = {i.get("ip") for i in report.get("issues", [])} | self.pauses.ips() | self.drift.ips()
-        return [r for r in rows if r["ip"] not in noisy]
+        # paused device has no alerts, getting worse included. Nor one the model's
+        # week-long look already explains (drift.py). Nor gear dark on schedule: its "missed
+        # probes" are the schedule (a dusk-to-dawn light misses about half)
+        noisy = ({i.get("ip") for i in report.get("issues", [])} | self.pauses.ips() | self.drift.ips()
+                 | {d.ip for d in self.inv.devices if d.attrs.get("expect_offline")})
+        out = [r for r in rows if r["ip"] not in noisy]
+        self._trends_shown = (now, out)       # the Now card shows the same list as the digest
+        return out
 
     def _date_issues(self, report: dict):
         """Stamp every issue with when its incident began, and how many times it flapped.
@@ -1649,6 +1692,7 @@ class Auditor:
         elif new_devs:
             names = [d.get("host") or d["ip"] for d in new_devs]
             log.warning("discovery: %d NEW device(s) joined: %s", len(new_devs), names)
+            self.new_device_seen(now)
             # Still recorded in history and shown on the dashboard's Discovered panel;
             # only the Telegram ping is opt-in (phones/guests join constantly = noise).
             if disc_cfg.get("notify_new_devices", False):
@@ -1663,6 +1707,24 @@ class Auditor:
             log.info("discovery: %d DHCP device(s) not in inventory (was %d)",
                      disc["unknown_count"], self._last_unknown_count)
             self._last_unknown_count = disc["unknown_count"]
+
+    def new_device_seen(self, now: float):
+        """A device new on any site's network: the owl looks in a minute or two (sites.py calls
+        this for the other sites, run_discovery for the main one)."""
+        if not self.no_llm and self._newdev_look_at is None:
+            self._newdev_look_at = now + 90
+
+    def _newdev_look_due(self, now: float) -> bool:
+        """A device new on a network: the owl's look, at most every 10 minutes, so its one
+        message (if it is worth one) goes out while the device is there. Kept, not dropped,
+        while another audit runs: it starts after."""
+        at = self._newdev_look_at
+        if at is None or now < at or now - self._newdev_look_last < 600:
+            return False
+        if self._audit_task is not None and not self._audit_task.done():
+            return False
+        self._newdev_look_at, self._newdev_look_last = None, now
+        return True
 
     def _due_for_scheduled_llm(self, now: float) -> bool:
         mode = self.cad.get("llm_mode", "interval")
@@ -1779,6 +1841,8 @@ class Auditor:
                     self._last_incident_llm = t0
                     self._start_llm_audit(snap, report, send_digest=False, reason="incident",
                                           incident_issues=dict(self._incident_issues))
+                elif self._newdev_look_due(t0):
+                    self._start_llm_audit(snap, report, send_digest=False, reason="new device")
 
                 if weekly.is_due(self.cfg, t0, self._weekly_last, self._weekly_since):
                     self._weekly_last = t0      # claimed now: a slow review must not start twice

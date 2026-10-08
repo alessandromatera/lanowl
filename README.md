@@ -59,7 +59,7 @@ device, and nothing that changes a device runs without your button.
 
 ### Finds every device
 
-- A new device gets one message: its name, MAC and maker (from an offline list), or "a
+- A new device the owl finds worth it gets one message: its name, MAC and maker (from an offline list), or "a
   private address" for a phone's random MAC, and whether it came by DHCP or has a fixed address.
 - It reads the router's DHCP leases, its ARP table for the fixed addresses no DHCP lists, and
   once a month asks each network "who is there" for the silent ones.

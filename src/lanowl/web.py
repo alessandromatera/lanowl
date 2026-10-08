@@ -45,7 +45,7 @@ from typing import Optional
 from . import timeline, wanexplain
 from .conversations import Conversations
 from .login import COOKIE, SESSION_S, verify
-from .model import model_name, on_main_lan, wan_links
+from .model import model_name, on_main_lan, router_host, wan_links
 from .report import label, match_diagnosis
 from .settingsweb import SettingsRoutes
 
@@ -96,6 +96,16 @@ def state_payload(a, now: float = 0.0) -> dict:
               for d in llm_issues if id(d) not in used
               and d.get("severity") in ("critical", "high", "warning")][:5] if fresh else [])
 
+    # What each config change is part of (timeline.story_index): built with the Timeline,
+    # and here at most every 5 minutes when nobody has the Timeline open
+    st = getattr(a, "stories", None)
+    if not isinstance(st, dict) or now - float(st.get("ts") or 0) > 300:
+        try:
+            timeline.build(a, now)
+        except Exception:
+            log.debug("stories unavailable", exc_info=True)
+        st = getattr(a, "stories", None)
+
     # The WAN's own history (events start ts, value seconds). The page is told when the
     # record begins and draws the time before it as "no record", not as a clean line.
     # One per moment (wanexplain.merge); the last few with the code's reading of where it
@@ -139,7 +149,10 @@ def state_payload(a, now: float = 0.0) -> dict:
         "services": rep.get("services") or [],
         "shadowed": rep.get("shadowed") or {},
         "host_logs": rep.get("host_logs") or {},
-        "findings": a.executor._findings(48),
+        # the log checks of 48 hours from the state DB, as the Timeline reads them: the
+        # watchers' own lists start empty after a restart and keep 30 (10-08)
+        "findings": log_checks(a, now, 48),
+        "router_ip": router_host(a.cfg),
         "discovery": {k: v for k, v in (a._discovery or {}).items()
                       if k in ("unknown", "unknown_count", "ignored", "new", "recent_new", "moved", "ts")},
         "logbook": (a._logbook_cache or {}).get("entries", [])[:200],
@@ -162,7 +175,48 @@ def state_payload(a, now: float = 0.0) -> dict:
         "fixes": a.fixes.view(),
         "scorecard": a.scorecard.view(),
         "login": a.login.view() if getattr(a, "login", None) is not None else {"on": False},
+        "stories": st if isinstance(st, dict) else {},
+        # Now's owl card: what is quietly getting worse (the digest's list), and its last changes of mind
+        "trends": {"ts": (getattr(a, "_trends_shown", None) or (0, []))[0],
+                   "items": (getattr(a, "_trends_shown", None) or (0, []))[1],
+                   # gear dark on schedule: its "getting worse" is the schedule, the owl's too
+                   "asleep": [d.ip for d in a.inv.devices if d.attrs.get("expect_offline")]},
+        "owl_history": owl_history(a, now),
     }
+
+
+def log_checks(a, now: float, hours: float) -> list:
+    """Every log check's verdict of the last `hours`, newest first, with the lines it read."""
+    out = []
+    try:
+        for e in a.state.events(now - hours * 3600, kind="finding", limit=500):
+            try:
+                f = json.loads(e.get("detail") or "{}")
+            except ValueError:
+                continue
+            out.append({**f, "ts": e["ts"], "at": time.strftime("%d/%m %H:%M", time.localtime(e["ts"]))})
+    except Exception:
+        log.debug("log checks unavailable", exc_info=True)
+        return a.executor._findings(hours, lines=True)
+    return out
+
+
+def owl_history(a, now: float) -> list:
+    """The owl's verdict each time it changed in the last day, newest first (timeline.owl_items):
+    what it said before, one tap away on Now."""
+    try:
+        aud = [{"ts": e["ts"], **json.loads(e.get("detail") or "{}")}
+               for e in a.state.events(now - 2 * 86400, kind="audit", limit=60)]
+        tg = []
+        for e in a.state.events(now - 86400, kind="telegram", limit=200):
+            x = json.loads(e.get("detail") or "{}")
+            tg.append({"ts": e["ts"], "channel": x.get("channel"), "text": x.get("text") or ""})
+        out = timeline.owl_items(aud, tg, now - 86400)
+    except Exception:
+        log.debug("owl history unavailable", exc_info=True)
+        return []
+    return [{"ts": o["ts"], "health": o["health"], "summary": o["summary"], "changed": o["changed"],
+             "told": [t["text"] for t in o["told"]]} for o in reversed(out)][:8]
 
 
 def wan_moments(a, now: float) -> tuple:
@@ -605,7 +659,11 @@ class Dashboard:
             return web.json_response(r, status=200 if r.get("ok") else 409)
         if body is None or not isinstance(body.get("approve"), bool):
             return web.json_response({"ok": False, "error": "bad request"}, status=400)
-        r = self.a.actions.decide(body.get("id"), body["approve"], "dashboard")
+        who = None
+        if self.login is not None:
+            who = self.login.who(request.cookies.get(COOKIE, ""), request.remote or "",
+                                 request.headers.get("User-Agent", ""))
+        r = self.a.actions.decide(body.get("id"), body["approve"], "dashboard", who=who)
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
     async def api_reboot(self, request):
@@ -665,7 +723,7 @@ class Dashboard:
 
     async def api_security(self, request):
         """{"handle": id, "pick": "me"|"fixed", "note"}: the owner has seen a security event the
-        logs showed — it leaves What matters for Handled, with his words. {"unhandle": id} puts
+        logs showed — it leaves To decide for Handled, with their words. {"unhandle": id} puts
         it back. Like a dismissal, it changes what the page lists, nothing on a machine."""
         body = await self._body(request)
         if body is None:

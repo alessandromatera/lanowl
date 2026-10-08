@@ -6,8 +6,14 @@ not. It is made for a phone first: add it to your home screen and it opens like 
 computer the tabs sit in a sidebar, with lanowl's own vitals under them (last sweep, last
 audit, how long it has been running).
 
-**Search** (⌘K, or the magnifier on a phone) finds devices by name or address, jumps to a tab,
-or sends what you typed to the owl as a question.
+**Search** (⌘K, or the magnifier on a phone) finds devices by name or address, the Timeline's
+events, messages and log checks, jumps to a tab, or sends what you typed to the owl as a
+question.
+
+Each thing has one home, and the other tabs link to it: a security item to decide lives under
+Security → To decide (Now's Needs you is the same list, with the same buttons), a story on the
+Timeline. When a site is picked (Home, the office…), every tab it
+filters says so in a blue line, with **Show all sites**.
 
 It is closed until you log in: see [Logging in](#logging-in). The **gear** in the header opens
 [Settings](settings.md): config.yaml, your devices, and the first-run setup.
@@ -19,40 +25,51 @@ It is closed until you log in: see [Logging in](#logging-in). The **gear** in th
 What needs you, first.
 
 - **The headline** says the state of the network in one line: "Cam Garage is down", "All
-  quiet", and how many devices answer, the internet, and each site.
+  clear", and how many of all devices answer (asleep and paused said apart, the same count as
+  the digest's), the internet, and each site.
 - **The incident card**, when there is one: the problem, its severity, since when, and its
-  trail: when it stopped answering, what Telegram was told, the owl's diagnosis, a proposal
-  waiting for you. **Open** shows the device; **Ask about it** starts a question with its
-  facts.
+  trail: when it stopped answering, what Telegram was told about this incident (with the day,
+  when not today), the owl's diagnosis, a proposal waiting for you. A service that fails every
+  other minute stays on it, marked as coming and going, until its incident is over. **Open**
+  shows the device; **Ask about it** starts a question with its facts.
 - **Groups**: one tile per group, with what is down and what went down this week.
-- **Needs you**: proposals waiting for your approval, updates that have waited too long,
-  devices on a network for the first time, the security findings that matter. Each with its
-  buttons.
+- **Needs you**: proposals waiting for your approval, the security findings that matter (each
+  saying what story it is part of, with **Open the story**), updates waiting, and each device on
+  a network for the first time by name, with what the owl said of it. Buttons that change
+  something are blue with a tick; the ones that only open something end with an arrow.
 - **Internet**: online, on the backup line, or down, through which link, the targets' answers,
   drops and blips in 24 hours, and seven days as a bar. Tap an event to see where it broke.
 - **Sites**: each site with its devices answering and its unnamed devices.
-- **The owl's assessment**: its last audit in a sentence, a box for a follow-up question, and
-  **Audit now** (the digest goes to Telegram too).
-- **The model also looks**: what it found slowly getting worse over the week.
-- **Last 24 hours**: a lane per device that had anything to show.
+- **The owl**: what it says now (its last audit), what is getting worse this week (its own
+  look at the week and the monitor's numbers: the same list the digest carries; gear asleep on
+  schedule is left out), **What it said before** (each change of mind in the last day), a box
+  for a follow-up question, and **Audit now** (the digest goes to Telegram too). When the
+  monitor's reading now differs from the owl's, the card says so.
 
 ![An internet blip and its evidence](../img/wan-wide.png)
 
 ## Devices
 
 Every watched device, grouped, with its state now, its latency over 24 hours and seven days
-of answers. Filter by site, by what is down, by what went down this week, by what is asleep,
+of answers. **New on your networks** comes first while anything is new: each with what the owl
+said of it, the message that went out, and a note when its name looks like a device you
+watch (the name only: lanowl does not decide they are one device). Filter by site, by what is down, by what went down this week, by what is asleep,
 or sort the least stable first. Under the list: each site's DHCP devices that nobody watches,
 with **Watch** and **Known**, and every named service. **Watch** writes the device into
 `inventory.yaml` (after a sheet that names the change) and pings it at once: it is on the page
 when the sheet closes, no restart needed. **Known** only stops it counting as unknown.
 
-Tap a device for its sheet:
+Tap a device for its sheet (centered on a computer, rising from the bottom on a phone). Tap
+a warning, a log check or a configuration change anywhere, and its machine's sheet opens at that
+item, under **What happened**:
 
 - **Overview**: down since when, the share of answers in 24 hours and seven days, its
-  outages, a latency chart with lost probes, seven days of ups and downs.
-- **Manage**: pause its monitoring (Telegram is told), and the actions its kind allows,
-  such as Reboot or Update, each confirmed in a sheet that says what runs.
+  outages, a latency chart with lost probes, seven days as a bar.
+- **What happened**: its own seven days, by day: outages, the messages about them, the log checks
+  that name it, its configuration's changes, actions, and the owl's verdicts that named it.
+- **Manage**: its **Alerts** switch, to pause it (still pinged and graphed, no alerts:
+  [Pausing a device](pausing.md); Telegram is told), and the actions its kind allows, such as
+  Reboot or Update, each confirmed in a sheet that says what runs.
 - **Details**: its checks, its kind, its login type, and what lanowl may do with it and why
   not.
 - The pencil renames it. The inventory's name stays underneath.
@@ -61,10 +78,22 @@ Tap a device for its sheet:
 
 ## Timeline
 
-Seven days in one stream: outages grouped into incidents, the internet, security events,
-actions, every Telegram message, new devices and the log checks. On top, seven days at a
-glance, a lane per device that went down, with moments when several went down together
-shaded. Filter by kind; switch on the devices asleep on schedule or paused to see them too.
+Seven days, everything lanowl saw, said and did: outages grouped into incidents, the
+internet, security events and log checks, the configurations' changes, the owl's verdicts (each
+time they changed), actions, new devices and every Telegram message. **Everything** shows all
+of it: the routine rows are drawn quiet, never left out.
+
+Each event carries what was said about it: the Telegram message about it sits under it, not
+apart; a new device carries what the owl said and **the same story**, the log checks and
+configuration changes that name its address, MAC or name within a day, or a network those
+name, each saying why it is there. A log check opens to the lines it read. An approval says
+which browser it came from.
+
+Filter by kind: Outages, Internet, Security & logs, The owl, New devices, Actions, Telegram.
+Tapping an action opens it in a sheet (its steps, what it found, its buttons); tapping anything
+about a device opens that device's sheet at it.
+**Seven days at a glance** (a lane per device, moments when several went down together shaded)
+is folded to one line; **Show the lanes** opens it.
 
 ![The Timeline](../img/log-wide.png)
 
@@ -72,19 +101,22 @@ shaded. Filter by kind; switch on the devices asleep on schedule or paused to se
 
 What could let someone in, and whether every machine is patched and backed up.
 
-- **The model's review**: this morning's summary, **Check now** (updates, then the review),
-  and **Deep scan** (the monthly vulnerability scan, now).
-- **To decide**: what matters, first.
-- **Worth fixing, not urgent**: the rest. **Fix** shows the owl's written fix for you to
-  apply yourself; **Dismiss** takes it off the list until it changes (with a note, if you
+- **To decide**: what matters, first, each saying what story it is part of.
+- **What changed**: configuration changes since yesterday, with the owl's reading of each, the
+  worst first; the changes of one story (a route that names a new device, the VPN peer for its
+  network) are one card. **Compare now** runs it.
+- **The owl's review**: this morning's summary (what you accepted is said once, apart), **Check
+  now** (updates, then the review) and **Deep scan** (the monthly vulnerability scan, now).
+- **Log checks**: every one of the last 48 hours, the problems first, each opening to the lines
+  it read; and each public host's ssh scanners, counted.
+- **Worth fixing, not urgent**: the rest. **How to fix** shows the owl's written fix for you
+  to apply yourself; **Accept** takes it off the list until it changes (with a note, if you
   like).
-- **Machines**: per machine, its updates, its last backup, its review, the deep scan and
-  how long it has been up, with **Update** or **Reboot** where they apply.
-- **What changed**: configuration changes since yesterday, with the owl's reading of each.
-  **Compare now** runs it.
-- **Logins and logs**: what the auth logs showed, until you mark an event handled ("It was
-  me" or "Fixed").
+- **Machines**: per machine, its updates, its last backup, the review's findings, the deep scan
+  and how long it has been up, with **Update** or **Reboot** where they apply.
 - **Backups**: where they go, when the next run is, and **Back up everything now**.
+- **Accepted and handled**: what you accepted, and the security events you marked handled
+  ("It was me" or "Fixed").
 
 ![The Security tab](../img/sec-wide.png)
 
@@ -104,7 +136,8 @@ Beside it, the model's side:
 - **Memory**: the notes it keeps. Add, edit or forget them.
 - **Proposed and run**: everything it proposed, what you decided, and what happened.
 - **Track record**: each diagnosis, checked with hindsight once the problem was over.
-- **The model's shell**: every command it ran in its sandbox.
+- **The model's shell**: its two sandboxes' daily check (fenced off from your network; only a
+  failed check reaches Needs you) and every command they ran.
 
 ![Ask the owl](../img/ask-wide.png)
 
@@ -160,7 +193,9 @@ your own (Authelia, Authentik, Tailscale). `--check` says so while it is off.
 
 Anything on the dashboard that changes something (approving a proposal, a reboot, an update)
 opens a sheet that says what runs, on which device, and the risk; your tap on its button is
-the approval. Reject, End and Cancel need no sheet: they can only stop something. There is no
+the approval. lanowl records which browser approved or rejected it (its address, what it is,
+and a short tag of its login), shown on the Timeline and in Ask's Proposed and run; when an
+approved action has run, the Telegram line that says so names it too. Reject, End and Cancel need no sheet: they can only stop something. There is no
 PIN: the page is behind its login.
 
 ## Who can reach it

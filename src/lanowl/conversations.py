@@ -118,6 +118,16 @@ def describe_tool(name: str, args: dict, inv) -> str:
     return name or "?"
 
 
+
+def chat_title(q: str) -> str:
+    """A conversation's name: its first words worth reading — not a pasted banner line
+    ("=== START OF INFORMATION SECTION ===", 10-08), not a fence, not a bare separator."""
+    for line in str(q or "").splitlines():
+        t = line.strip().strip("=#*-_`>| ").strip()
+        if len(t) >= 3 and not re.fullmatch(r"[\W_]+", t) and not re.fullmatch(r"(start|end) of .*", t, re.I):
+            return t[:90]
+    return str(q or "").strip()[:90]
+
 class Conversations:
     def __init__(self, auditor):
         self.a = auditor
@@ -168,7 +178,7 @@ class Conversations:
 
     def recent(self) -> list:
         cs = sorted(self._convs.values(), key=lambda c: c["updated"], reverse=True)
-        return [{"id": c["id"], "title": c["turns"][0]["q"][:90] if c["turns"] else "",
+        return [{"id": c["id"], "title": chat_title(c["turns"][0]["q"]) if c["turns"] else "",
                  "updated": c["updated"], "n": len(c["turns"]),
                  "pending": any(t["status"] == "pending" for t in c["turns"])} for c in cs]
 

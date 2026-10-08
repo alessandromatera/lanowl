@@ -473,13 +473,16 @@ class ToolExecutor:
         return {"link": L[link], "active_link_now": active,
                 "meaning": f"{ip} goes only over the {L[link]}: {why}"}
 
-    def _findings(self, hours: float) -> list:
+    def _findings(self, hours: float, lines: bool = False) -> list:
+        """The log checks' verdicts. Their lines only on request (the dashboard): the model
+        reads the verdicts, and a log tool of its own when it wants lines."""
         since = _time.time() - hours * 3600
         out = []
         for src in (self.wanwatch, self.hostlog):
             for f in (getattr(src, "findings", None) or []):
                 if f.get("ts", 0) >= since:
-                    out.append({**f, "at": _time.strftime("%d/%m %H:%M", _time.localtime(f["ts"]))})
+                    out.append({**({k: v for k, v in f.items() if k != "log"} if not lines else f),
+                                "at": _time.strftime("%d/%m %H:%M", _time.localtime(f["ts"]))})
         out.sort(key=lambda f: f["ts"], reverse=True)
         return out[:30]
 

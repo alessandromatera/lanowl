@@ -89,6 +89,20 @@ def _tok(token: str) -> str:
     return hashlib.sha256(str(token).encode()).hexdigest()
 
 
+def browser_name(agent: str) -> str:
+    """'Chrome on Mac' from a User-Agent: enough to recognise one's own browser, nothing more."""
+    a = str(agent or "")
+    if not a:
+        return ""
+    app = next((n for k, n in (("Edg/", "Edge"), ("OPR/", "Opera"), ("Firefox/", "Firefox"),
+                               ("CriOS/", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari"))
+                if k in a), "a browser")
+    osn = next((n for k, n in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
+                               ("Mac OS X", "Mac"), ("Macintosh", "Mac"), ("Windows", "Windows"),
+                               ("Linux", "Linux")) if k in a), "")
+    return f"{app} on {osn}" if osn else app
+
+
 def _hm(ts: float) -> str:
     return time.strftime("%H:%M", time.localtime(ts))
 
@@ -134,6 +148,18 @@ class Login:
 
     def view(self) -> dict:
         return {"on": self.on, "source": self.source, "days": SESSION_DAYS}
+
+    def who(self, token: str, addr: str = "", agent: str = "") -> dict:
+        """Which browser did something (an approval): its address, what it is, and a short tag
+        of its login — two browsers on one address are told apart, the cookie never kept."""
+        out = {k: v for k, v in (("addr", str(addr or "")), ("agent", browser_name(agent))) if v}
+        if token:
+            k = _tok(token)
+            out["browser"] = k[:6]
+            s = self.sessions.get(k) or {}
+            if s.get("made"):
+                out["since"] = float(s["made"])
+        return out
 
     # --- browsers -------------------------------------------------------------
     def check(self, token: str, now: Optional[float] = None) -> bool:

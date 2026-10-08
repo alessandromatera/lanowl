@@ -1135,7 +1135,7 @@ class WanWatcher:
         if not verdict:
             log.info("router-log triage: no usable verdict")
             return
-        self._note_finding(verdict, n)
+        self._note_finding(verdict, n, lines)
         if not verdict.get("problem"):
             log.info("router-log triage: nothing worth reporting (%s)",
                      str(verdict.get("summary", ""))[:80])
@@ -1158,14 +1158,17 @@ class WanWatcher:
                       + (f"\n<i>{detail}</i>" if detail else "")
                       + f"\n<i>from {n} new log line(s)</i>")
 
-    def _note_finding(self, verdict: dict, n: int):
+    def _note_finding(self, verdict: dict, n: int, lines: str = ""):
+        from .records import kept_lines
         f = {"ts": time.time(), "source": "router log", "lines": n,
              "problem": bool(verdict.get("problem")),
              "kind": verdict_kind(verdict, "health"),
              "severity": str(verdict.get("severity", "info")).lower(),
              "summary": str(verdict.get("summary", ""))[:200],
              # whole: cut at 300 it loses its last sentence on the dashboard
-             "detail": str(verdict.get("detail", ""))[:1500]}
+             "detail": str(verdict.get("detail", ""))[:1500],
+             # what it read, word for word: a verdict of "fine" can be checked against it
+             "log": kept_lines(lines)}
         self.findings = (self.findings + [f])[-30:]
         self._event("finding", None, json.dumps(f, ensure_ascii=False))
 

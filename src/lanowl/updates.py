@@ -583,7 +583,7 @@ class Updates:
         return out
 
     # --- the owner's dismissals -----------------------------------------------------------
-    # Dismiss what matters, one by one, as known. It leaves "What matters"
+    # Accept what is left to decide, one by one, as known. It leaves "To decide"
     # and stops paging until something NEW shows up for it: a new vulnerability or version
     # on that device at a scan, a new security package, a new pending reboot, a newer
     # RouterOS release. An insecure port (a telnet left open) stays dismissed until undone.

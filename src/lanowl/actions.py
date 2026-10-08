@@ -140,6 +140,15 @@ def report(cfg: dict) -> tuple:
     return head, 0
 
 
+
+def _from_words(who) -> str:
+    """'192.168.88.140, Chrome on Mac' — which browser approved, for the log and Telegram."""
+    if not isinstance(who, dict):
+        return ""
+    return ", ".join(x for x in (str(who.get("addr") or ""), str(who.get("agent") or ""),
+                                 f"login {who['browser']}" if who.get("browser") else "") if x)
+
+
 def _hm(ts: float) -> str:
     return time.strftime("%H:%M", time.localtime(ts))
 
@@ -1130,7 +1139,7 @@ class Actions:
         await self._refresh(p)
 
     # --- deciding -------------------------------------------------------------
-    def decide(self, pid, approve: bool, by: str) -> dict:
+    def decide(self, pid, approve: bool, by: str, who: Optional[dict] = None) -> dict:
         """The owner's answer, from Telegram or the dashboard (a logged-in page, after its
         confirm). An approval checks again and then runs — or, in shadow mode, records the dry
         run — in the background: a button press is answered at once."""
@@ -1147,6 +1156,8 @@ class Actions:
             if other is not None:
                 return {"ok": False, "error": f"session #{other['id']} is still open (until "
                                               f"{_hm(other['until'])}) — end it first"}
+            if who:
+                p["decided_from"] = who
             p.update(decided_by=by, decided_ts=now, status="open", mode=self.mode,
                      opened_ts=now, until=now + float(p.get("minutes") or self.sess_min) * 60,
                      used=0, steps=[])
@@ -1160,7 +1171,11 @@ class Actions:
                     "text": f"#{p['id']} approved — session open until {_hm(p['until'])}; the "
                             "model is investigating now."}
         p.update(decided_by=by, decided_ts=now)
-        log.info("actions: #%d %s by %s", p["id"], "APPROVED" if approve else "rejected", by)
+        if who:
+            # which browser: "from you, on the dashboard" cannot tell two apart (10-08)
+            p["decided_from"] = who
+        log.info("actions: #%d %s by %s%s", p["id"], "APPROVED" if approve else "rejected", by,
+                 f" ({_from_words(who)})" if who else "")
         if not approve:
             p.update(status="rejected", done_ts=now)
             self._save()
@@ -1251,7 +1266,8 @@ class Actions:
         self._event(p)
         await self._refresh(p)
         if p.get("decided_by") == "dashboard":
-            # the page has no login: anything approved there that ran is said on Telegram
+            # anything approved on the page that ran is said on Telegram, with which browser:
+            # a login can be shared, a phone left logged in
             self.a._emit_telegram("digest", self._announce(p))
 
     async def _run(self, p: dict, chk: dict) -> dict:
@@ -1378,9 +1394,11 @@ class Actions:
         o = p.get("outcome") or {}
         icon = {"done": "✅", "failed": "⚠️", "skipped": "⏭"}.get(p["status"], "•")
         what = o.get("result") or o.get("error") or o.get("check") or ""
+        src = _from_words(p.get("decided_from"))
         return (f"{icon} <b>Approved on the dashboard</b> — #{p['id']} "
                 f"{_html(CATALOG[p['action']])}, {_html(label(p.get('name'), p['ip']))}\n"
-                f"{_html(what)}")
+                + (f"<i>from {_html(src)}</i>\n" if src else "")
+                + f"{_html(what)}")
 
     def tick(self, now: Optional[float] = None):
         """Expire what nobody answered. Called every sweep and before any decision."""
@@ -1490,11 +1508,11 @@ class Actions:
             f = p["findings"]
             n = 400 if tight else 1500
             f = f if len(f) <= n else f[:n].rstrip() + " […]"
-            lines.append(f"🦉 <b>Findings</b> (model, {_hm(p['findings_ts'])}):\n{_html(f)}")
+            lines.append(f"🦉 <b>Findings</b> (the owl, {_hm(p['findings_ts'])}):\n{_html(f)}")
         elif p.get("findings_error"):
             lines.append(f"⚠️ {_html(p['findings_error'])}")
         elif st == "open":
-            lines.append("⏳ <i>The model is investigating…</i>")
+            lines.append("⏳ <i>The owl is investigating…</i>")
         return "\n".join(lines)
 
     def _block(self, p: dict, alone: bool, tight: bool = False) -> str:
@@ -1669,6 +1687,7 @@ class Actions:
                 "mode": p.get("mode", SHADOW),
                 "command": p.get("command"), "check": p.get("check"), "risk": p.get("risk") or [],
                 "refused": p.get("refused"), "decided_by": p.get("decided_by"),
+                "decided_from": p.get("decided_from"),
                 "decided_ts": p.get("decided_ts"), "done_ts": p.get("done_ts"),
                 "started_ts": p.get("started_ts"), "queued": bool(p.get("queued")),
                 # the live view: its steps so far, a long step's latest word, when it gives up

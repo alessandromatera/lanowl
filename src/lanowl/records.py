@@ -150,6 +150,14 @@ def scrub(text: str) -> str:
     return text
 
 
+def kept_lines(lines, cap: int = 40, width: int = 300) -> list:
+    """The log lines a check read, kept with its verdict so "fine" can be checked: the last
+    `cap`, each cut at `width`, secrets scrubbed (the same as everything else lanowl keeps)."""
+    if isinstance(lines, str):
+        lines = lines.split("\n")
+    return [scrub(str(x))[:width] for x in list(lines or [])[-cap:] if str(x).strip()]
+
+
 def finding_kind(f: dict) -> str:
     """security | health — the model's label, or the source's default when it gave none."""
     k = str(f.get("kind") or "")
@@ -687,7 +695,7 @@ class Records:
     RANK = {"critical": 0, "high": 1, "warning": 2, "info": 3}
 
     def security_items(self) -> list:
-        """What matters, as the Security tab lists it: the
+        """What is left to decide, as the Security tab lists it (To decide): the
         update check's findings, the model's review, the security log problems of 24 h and the
         DHCP devices nobody knows — one list, by severity, each saying where it came from.
         The dashboard, /security and this tool read the same. The log events are open ones

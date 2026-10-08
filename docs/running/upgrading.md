@@ -37,7 +37,7 @@ says `secrets.yaml` is read-only. `required: false` needs Docker Compose 2.24 or
 ([What you need](../getting-started/requirements.md)); with an older one, keep `env_file:
 .env` and the file.
 
-The model's sandboxes now take `LANOWL_HOST_IP` from `docker/.env` or the command line
+The model's two shells (its sandboxes) now take `LANOWL_HOST_IP` from `docker/.env` or the command line
 (Settings → The model's shell gives the line); `docker/.env` keeps working as it was.
 
 There is no dashboard PIN any more: approving on the dashboard is a confirm, behind its

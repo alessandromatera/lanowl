@@ -5,19 +5,20 @@ unplugged) should not page you. Taking it out of the inventory loses the way bac
 `expect_offline` is for gear that sleeps every day, not for a holiday. So pause it.
 
 - **Telegram:** `/pause tv`, or several at once: `/pause tv, boiler, garage door`.
-- **Dashboard:** the device's sheet, Manage, the Monitoring switch.
+- **Dashboard:** the device's sheet, Manage, the **Alerts** switch.
 
-A paused device is still probed and recorded, so its history stays true, but nothing reports
-it: no alert, no digest line, no finding from the owl, no share of a group's majority. The
-dashboard shows it as Paused.
+A paused device is still pinged and graphed, so its history stays true, but nothing about it
+alerts you: no alert, no problem in the digest, no finding from the owl, no share of a group's
+majority. The dashboard shows it as **Paused — no alerts**, and its switch on the device's page is
+called **Alerts**.
 
 Pausing closes its open incident without a "back online": it is off on purpose, not fixed.
 
 ## Ending a pause
 
-Only by hand: `/resume tv`, `/resume all`, or the switch again. A device that comes back never
-decides for you that it is watched again. The digests and the weekly review list every pause,
-so none is forgotten. `/paused` lists them now, with whether each one answers.
+Only by hand: `/resume tv`, `/resume all`, or its **Alerts** switch again. A device that comes
+back never decides for you that its alerts are back on. The digests and the weekly review list
+every pause ("⏸ Paused, no alerts"), so none is forgotten. `/paused` lists them now, with whether each one answers.
 
 ## Every pause is told
 

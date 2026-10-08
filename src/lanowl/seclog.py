@@ -4,7 +4,7 @@ A security event from the logs (a burst of failed logins, a login from outside, 
 flood, or the model's read of the same lines) must not vanish because newer verdicts pushed it
 out of memory, or because the process restarted. And it must reach the dashboard, not only
 Telegram. So every such event is an ITEM here, in the SQLite record `seclog`:
-  - it stays in What matters until the owner marks it handled — one button, a quick pick
+  - it stays in To decide until the owner marks it handled — one button, a quick pick
     ("It was me" / "Fixed") and a note if they like. A log line is an event, not a
     condition: nothing can "fix" it, so it never leaves on its own;
   - handled, it sits under Handled for a week, with the owner's words;

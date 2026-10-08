@@ -320,6 +320,7 @@ class Sites:
                 if r.get("new") and not r.get("known"):
                     out.append({"ip": r["ip"], "mac": r["mac"].upper(), "host": r.get("name") or "",
                                 "vendor": r.get("vendor") or "", "first_seen": r.get("first_seen"),
+                                **({"heard": r["heard"]} if r.get("heard") else {}),
                                 "how": r.get("how") or "dhcp", "site": s["key"], "site_name": s["name"],
                                 **({"stale": True} if r.get("stale") else {}),
                                 **({"not_routed_here": True} if s["nets"] and not self.routed(s, r["ip"]) else {})})
@@ -364,12 +365,15 @@ class Sites:
                 self.listening(s["key"], now)
             if leases:
                 self._follow(s, leases)
-                self.remember(s["key"], [{"ip": r["ip"], "mac": r["mac"], "host": r.get("name") or "",
-                                          **({"heard": heard[r["mac"]]} if r["mac"] in heard else {})}
-                                         for r in leases if r.get("status") in (None, "", "bound")],
-                              "dhcp", now)
+                new = self.remember(s["key"], [{"ip": r["ip"], "mac": r["mac"], "host": r.get("name") or "",
+                                                **({"heard": heard[r["mac"]]} if r["mac"] in heard else {})}
+                                               for r in leases if r.get("status") in (None, "", "bound")],
+                                    "dhcp", now)
+                if new:
+                    getattr(self.a, "new_device_seen", lambda t: None)(now)   # the owl looks in minutes, as on the main site
             if arp is not None:
-                self.remember(s["key"], static, "arp", now)
+                if self.remember(s["key"], static, "arp", now):
+                    getattr(self.a, "new_device_seen", lambda t: None)(now)
         self._save()
 
     def listening(self, key: str, now: float):
@@ -832,7 +836,8 @@ class Sites:
                         # what the owner watches here, whether or not DHCP still lists it
                         "watched": [{"ip": ip, "name": w["name"], "mac": w["mac"]}
                                     for ip, w in watched.items() if w["site"] == s["key"]],
-                        "up": sum(1 for d in mine if d.get("up")), "total": len(mine),
+                        # answering, paused ones apart: the same count as the headline and the digest
+                        "up": sum(1 for d in mine if d.get("up") and not d.get("paused")), "total": len(mine),
                         "down": [d.get("name") for d in mine
                                  if not d.get("up") and not d.get("asleep") and not d.get("paused")],
                         **self._dhcp_view(s)})

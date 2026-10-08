@@ -67,9 +67,9 @@ HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.
         "/updates — updates, pending reboots, known vulnerabilities\n"
         "/backups — the machines' backups on the store\n"
         "/upgrade <i>machine</i> — update it (you approve)\n"
-        "/pause <i>device</i> — stop watching something you switched off "
+        "/pause <i>device</i> — no alerts for something you switched off, still pinged "
         "(e.g. <i>/pause tv, boiler</i>)\n"
-        "/resume <i>device</i> | all — watch it again · /paused — what is paused\n"
+        "/resume <i>device</i> | all — its alerts back on · /paused — what is paused\n"
         "/memory — what I remember · /remember <i>text</i> · /forget <i>number</i>\n"
         "/model on | off — the local model (off: no diagnoses, answers or reviews; alerts "
         "and digests go on)\n"
@@ -329,7 +329,7 @@ class Chat:
         return ""
 
     def security_text(self) -> str:
-        """/security: the Security tab's What matters — every source, by severity (Records)."""
+        """/security: the Security tab's To decide — every source, by severity (Records)."""
         items = self.a.records.security_items()
         top = [i for i in items if i["top"] and not i["dismissed"]]
         later = [i for i in items if not i["top"] and not i["dismissed"]]
@@ -342,14 +342,14 @@ class Chat:
             lines.append("Nothing that matters right now.")
         if later:
             lines.append(f"\n<i>Worth fixing, not urgent: {len(later)}"
-                         + (f" · dismissed by you: {dis}" if dis else "") + " — the Security tab has them.</i>")
+                         + (f" · accepted by you: {dis}" if dis else "") + " — the Security tab has them.</i>")
         if any(i.get("id") for i in top):
             lines.append("<i>A log event stays here until you mark it handled on the Security tab.</i>")
         if handled:
             lines.append(f"<i>Handled by you this week: {handled}.</i>")
         x = self.a.exposure.view()
         if x.get("reviewed"):
-            lines.append(f"<i>The model's review {_clock(x['reviewed'])}: {_html(x.get('summary') or '')}</i>")
+            lines.append(f"<i>The owl's review {_clock(x['reviewed'])}: {_html(x.get('summary') or '')}</i>")
         return "\n".join(lines)
 
     def sites_text(self) -> str:
@@ -390,7 +390,7 @@ class Chat:
     def paused_list(self) -> str:
         es = self.a.pauses.entries()
         if not es:
-            return "Nothing is paused — every device is watched."
+            return "Nothing is paused: every device alerts as usual."
         rep = self.a._last_report or {}
         up = {d.get("ip"): d.get("up") for d in rep.get("devices") or []}
         lines = [f"⏸ <b>Paused</b> ({len(es)})"]

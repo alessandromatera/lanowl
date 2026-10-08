@@ -40,7 +40,7 @@ password**; it is never shown, and a new one logs every browser out, yours too.
 
 ## Saving
 
-Change what you want; a bar at the bottom counts the changes. **Review** shows what the save
+Change what you want; a bar at the bottom counts the changes. **Check and save** shows what the save
 would do before it does anything:
 
 1. What changes, in words: "model.name qwen3:30b → qwen3:32b", "NVR (192.168.88.20) added".
@@ -159,7 +159,7 @@ It opens the site's page, filled in from the router:
   over ssh with the router's login; a router with no login yet says so.
 - **Criticality**: for the devices you Watch from its DHCP list; `info` by default (never pages).
 
-**Review** shows the change in words, **Save** writes it into `sites.list` in `config.yaml`, and
+**Check and save** shows the change in words, **Save** writes it into `sites.list` in `config.yaml`, and
 it runs from the next restart.
 
 **Settings → Sites** lists every site, the main one first: its networks and its router, with

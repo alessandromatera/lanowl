@@ -321,9 +321,11 @@ class Shell:
                    f"isolation not proven: the control ({h}:{p}) did not even take a "
                    "handshake — the LAN or that host is down")
         else:
-            ok, why, breach = True, ("offline: no internet, no DNS; LAN handshake only, the VM "
-                                     "unreachable" if self.audit else
-                                     "isolated: LAN handshake only, the VM unreachable"), False
+            ok, why, breach = True, ("fenced off and offline: no internet, no DNS; on your network "
+                                     "nothing but a handshake, and never the machine lanowl runs on"
+                                     if self.audit else
+                                     "fenced off: on your network nothing but a handshake, and never "
+                                     "the machine lanowl runs on"), False
         was = self.state["ok"]
         self.state = {"ok": ok, "why": why, "ts": time.time(), "marker": mark}
         who = "the audit's offline shell" if self.audit else "the model's shell"

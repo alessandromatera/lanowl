@@ -493,9 +493,12 @@ class Exposure:
             # Still to be REPORTED while they hold: the code keeps a dismissed finding out of what
             # matters. Told "do not report these", a model obeys, the code reads the silence as
             # "fixed", and the owner's dismissals are forgotten.
-            lines += ["DISMISSED BY THE OWNER (known and accepted, the key is ip:check). Still report "
-                      "each one that still holds, with the SAME ip and check — the monitor keeps it "
-                      "out of what matters; leaving it out would read as if it were fixed:"]
+            lines += ["ACCEPTED BY THE OWNER (known, and left as they are on purpose; the key is ip:check). "
+                      "Still report each one that still holds, with the SAME ip and check — the monitor "
+                      "keeps it out of what matters; leaving it out would read as if it were fixed. But the "
+                      "SUMMARY leaves these out entirely: the owner has decided about them, and the "
+                      "dashboard lists them once, as accepted. The summary is about what is NOT accepted, "
+                      "the worst of it first — or says that nothing else is exposed:"]
             lines += [f"  {x}" for x in dis] + [""]
         for ip, f in facts.items():
             lines.append(f"=== {f['name']} ({ip}) — read as {f['kind']}")
@@ -600,7 +603,7 @@ class Exposure:
         for f in new[:5]:
             lines.append(f"• <b>{_html(label(f['name'], f['ip']))}</b>: {_html(f['title'])}"
                          + (f"\n  <i>{_html(f['fix'])}</i>" if f.get("fix") else ""))
-        lines.append("<i>The model's review of this morning's facts — the Security tab has the evidence.</i>")
+        lines.append("<i>The owl's review of this morning's facts — the Security tab has the evidence.</i>")
         self.a._emit_telegram("critical", "\n".join(lines))
         self.rec["announced"] += [f["key"] for f in new]
 
@@ -622,7 +625,7 @@ class Exposure:
             return []
         fs = [f for f in self.rec["findings"] if f["key"] not in self.rec["dismissed"]]
         if not fs:
-            return ["🔎 Security review: nothing exposed that the model could find."]
+            return ["🔎 Security review: nothing exposed that the owl could find."]
         worst = fs[0]      # plain text: the weekly review escapes its lines itself
         return [f"🔎 Security review: {len(fs)} finding(s), the worst {worst['severity']}: "
                 f"{label(worst['name'], worst['ip'])} — {worst['title']}"]

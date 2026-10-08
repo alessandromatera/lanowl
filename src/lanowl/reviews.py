@@ -291,7 +291,7 @@ class FindingsReview(Review):
             return []
         fs = self.open_findings()
         if not fs:
-            return [f"{self.ICON} {self.TITLE}: nothing the model found worth a look."]
+            return [f"{self.ICON} {self.TITLE}: nothing the owl found worth a look."]
         w = fs[0]
         who = label(w.get("name"), w.get("ip")) + " — " if w.get("ip") else ""
         return [f"{self.ICON} {self.TITLE}: {len(fs)} open, the worst {w['severity']}: {who}{w['title']}"]

@@ -116,8 +116,8 @@ button.row:active,a.row:active{background:var(--fill)}
 @media (hover:hover){button.row:hover{background:var(--fill2)}}
 .row+.row::before,.pkrow+.row::before{content:"";position:absolute;top:0;right:0;left:var(--inset);border-top:.5px solid var(--sep)}
 .rt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.rn{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rs{font-size:13px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rn{font-size:16px;font-weight:500;overflow-wrap:anywhere}
+.rs{font-size:13px;color:var(--ink2);overflow-wrap:anywhere}
 .rs.wrap{white-space:normal}
 /* a log event's whole text: two lines, the rest on a tap */
 .rs.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;cursor:pointer}
@@ -170,6 +170,7 @@ button.row:active,a.row:active{background:var(--fill)}
 .beacon::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--c);opacity:0;animation:ping 2.4s ease-out infinite}
 .ssum{margin:8px 0 0;color:var(--ink2);font-size:15px;max-width:66ch}
 .gtiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.status .gtiles{border-top:1px solid var(--sep);padding-top:16px}
 .gt{border:1px solid var(--sep);border-radius:10px;padding:9px 11px;background:var(--bg);cursor:pointer;min-width:0}
 @media (hover:hover){.gt:hover{border-color:var(--ink3)}}
 .gt.c-red,.gt.c-orange{border-color:color-mix(in srgb,var(--c) 45%,var(--sep));background:color-mix(in srgb,var(--c) 8%,var(--card))}
@@ -200,6 +201,16 @@ button.row:active,a.row:active{background:var(--fill)}
 .sbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--sep);
   background:var(--card);color:var(--ink);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
 .sbtn.pri{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+/* a button that changes something says so: blue, with its icon; one that only opens something ends with a chevron */
+.sbtn.chg{color:var(--blue-t);border-color:color-mix(in srgb,var(--blue) 38%,var(--sep));background:color-mix(in srgb,var(--blue) 7%,var(--card))}
+.sbtn .ic:last-child:not(:first-child){width:14px;height:14px;margin-right:-3px}
+/* the owl's earlier verdicts, one tap away on Now */
+.vlist{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:7px}
+.vlist li{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;font-size:13.5px;line-height:1.45}
+.vlist .w{color:var(--ink3);font-variant-numeric:tabular-nums}
+.vlist .tagx{margin-right:4px}
+.nit .pof{display:flex;gap:6px;align-items:flex-start;color:var(--blue-t)}
+.nit .pof .ic{width:13px;height:13px;margin-top:3px;flex:none}
 .sbtn .ic{width:16px;height:16px}
 .sbtn:disabled{opacity:.5;cursor:default}
 .nbox{padding:0;overflow:hidden}
@@ -251,7 +262,7 @@ button.lrow{cursor:pointer}
 .drow>.sd{grid-area:dot;width:10px;height:10px}
 .dn{grid-area:name;min-width:0}
 .dn .dnm,.dn .dip{display:block}
-.dn .dnm{font-size:15.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dn .dnm{font-size:15.5px;font-weight:550;overflow-wrap:anywhere}
 .dn .dip{font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsite{grid-area:site;display:none;font-size:13px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dnow{grid-area:now;text-align:right;font-size:14px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -307,12 +318,14 @@ dialog.pal::backdrop{background:rgba(10,10,12,.34)}
 .palres .grp{font-size:11px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);padding:10px 10px 4px}
 .palres .o{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:none;text-align:left;font-size:15px;color:var(--ink)}
 .palres .o .ic{width:17px;height:17px;color:var(--ink2);flex:none}
-.palres .o .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palres .o .t{flex:1;min-width:0;overflow-wrap:anywhere}
 .palres .o .v{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%}
 .palres .o.sel{background:color-mix(in srgb,var(--blue) 12%,var(--card))}
 @media (hover:hover){.palres .o:hover{background:var(--fill2)}}
 .palres .none{padding:14px 10px;color:var(--ink2);font-size:14px}
 .askseg{margin:10px 0 6px}
+/* the side's own name on a wide screen, where the Chat / The model switch is hidden: "Ask → The model" names it */
+.asidettl{display:none;font-size:20px;font-weight:750;letter-spacing:-.01em;margin:14px 16px 0}
 .askside{display:none}
 @media (max-width:1099px){#v-ask.pm .askc{display:none!important}#v-ask.pm .askside{display:block}}
 @media (min-width:900px){
@@ -326,6 +339,7 @@ dialog.pal::backdrop{background:rgba(10,10,12,.34)}
   .askmain{min-width:0}
   .askside{display:block;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow:auto;padding:0 2px 20px}
   .segc.askseg{display:none}
+  .asidettl{display:block}
 }
 /* typing on a phone (html.kb): the chat fills the space above the keyboard, the panel away */
 html.kb .askwrap,html.kb .askmain{display:flex;flex-direction:column;flex:1;min-height:0}
@@ -367,6 +381,27 @@ html.kb .askside,html.kb .askseg{display:none}
 .tlband{position:absolute;top:0;bottom:0;min-width:3px;background:color-mix(in srgb,var(--red) 9%,transparent);border-left:1px dashed color-mix(in srgb,var(--red) 45%,transparent)}
 .tltog{margin:12px 0 0;box-shadow:none;border:1px solid var(--sep);background:var(--bg)}
 #tl-body{max-width:1000px}
+.tlfold{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-top:10px}
+.tlfold .rs b{color:var(--ink);font-weight:650}
+/* a new device's story: the checks and changes that name it, each saying why it is here */
+.tlstory{margin-top:8px;background:color-mix(in srgb,var(--blue) 7%,transparent);border-radius:10px;padding:8px 10px}
+.tlstory .lab{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--blue-t);margin-bottom:2px}
+.tls{display:flex;gap:7px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;padding:4px 0;font-size:13px;color:var(--ink2);cursor:pointer}
+.tls .ic{width:14px;height:14px;margin-top:2px;flex:none}
+.tls .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.tls .why{flex:none;color:var(--ink3);font-size:12px;white-space:nowrap}
+.tls.hot .t{color:var(--red-t)}
+@media (hover:hover){.tls:hover .t{color:var(--blue-t)}}
+@media (max-width:560px){.tls{flex-wrap:wrap}.tls .why{width:100%;padding-left:21px}}
+.tlp{display:flex;gap:6px;align-items:flex-start;margin-top:5px;background:none;border:0;padding:0;font-size:12.5px;color:var(--blue-t);text-align:left;cursor:pointer}
+.tlp .ic{width:13px;height:13px;margin-top:2px;flex:none}
+.tlr.lit,.prop.lit{background:color-mix(in srgb,var(--blue) 12%,transparent);transition:background .4s}
+.tlr[data-act=openprop]{cursor:pointer}
+.shday{margin:12px 4px 6px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+@media (hover:hover){.tlr[data-act=openprop]:hover{background:var(--fill2)}}
+/* a site picked on any tab is said on every tab that it filters */
+.sitebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:color-mix(in srgb,var(--blue) 9%,transparent);color:var(--blue-t);border-radius:10px;padding:7px 12px;font-size:13.5px;font-weight:600;margin:8px 0 2px}
+.sitebar button{background:none;border:0;padding:0;color:inherit;font:inherit;text-decoration:underline;cursor:pointer}
 
 /* ---- Security (phase 2): the review and its numbers, the machines as a table ---- */
 .secgrid{display:grid;gap:0 16px}
@@ -382,7 +417,7 @@ html.kb .askside,html.kb .askseg{display:none}
 @media (hover:hover){.frow[data-ip]:hover{background:var(--fill2)}}
 .frow.hd{display:none}
 .frow .fm{grid-area:fm;min-width:0}
-.fm b{display:block;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm b{display:block;font-weight:600;font-size:15px;overflow-wrap:anywhere}
 .fm>span{display:block;font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .frow .fbtn{grid-area:fbtn}
 .frow .fbtn .rowbtn{margin-left:0}
@@ -478,6 +513,7 @@ details.acc>summary .fine{text-transform:none;letter-spacing:0;font-weight:500;m
   font:inherit;font-size:13.5px;font-weight:600;padding:6px 12px;min-height:32px;display:inline-flex;gap:6px;align-items:center;margin-left:8px}
 .rowbtn .ic{width:16px;height:16px}
 .rowbtn.ok{color:var(--green-t);background:color-mix(in srgb,var(--green) 12%,transparent)}
+.rowbtn.ghost{background:none;box-shadow:inset 0 0 0 1px var(--sep);color:var(--ink2)}
 .rowbtn.bad{color:var(--red-t);background:color-mix(in srgb,var(--red) 12%,transparent)}
 .rowbtn:disabled{opacity:1}
 .rs.ok{color:var(--green-t)}.rs.bad{color:var(--red-t)}.rs.warn{color:var(--orange-t)}
@@ -724,6 +760,7 @@ dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:
 dialog.sheet[open]{animation:sheetup .36s cubic-bezier(.2,.85,.2,1)}
 dialog.sheet::backdrop{background:rgba(0,0,0,.38)}
 @keyframes sheetup{from{transform:translateY(40%);opacity:.4}to{transform:none;opacity:1}}
+@keyframes sheetpop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
 .sheet-in{padding:0 16px calc(24px + env(safe-area-inset-bottom))}
 .shd{position:sticky;top:0;z-index:2;background:var(--bg);padding:8px 0 10px;margin:0 -16px;padding-left:16px;padding-right:16px;touch-action:none}
 .grab{width:38px;height:5px;border-radius:3px;background:var(--ink3);margin:0 auto 10px}
@@ -789,10 +826,10 @@ html.modal{overflow:hidden}
   .drow.hd{display:grid;padding-top:10px;padding-bottom:8px;background:none}
   .drow.hd span{font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink2)}
   .four{grid-template-columns:repeat(4,1fr)}
-  dialog.sheet.drawer{inset:0 0 0 auto;margin:0;width:min(560px,100vw);height:100vh;height:100dvh;max-height:none;border-radius:0;
-    border-left:1px solid var(--sep);box-shadow:-24px 0 60px -30px rgba(0,0,0,.4)}
-  dialog.sheet.drawer[open]{animation:drawerin .3s cubic-bezier(.2,.85,.2,1)}
-  dialog.sheet.drawer::backdrop{background:rgba(10,10,12,.22)}
+  dialog.sheet.drawer{inset:0;margin:auto;width:min(780px,94vw);max-width:780px;height:fit-content;max-height:88vh;max-height:88dvh;
+    border-radius:22px;border:1px solid var(--sep);box-shadow:0 30px 90px -30px rgba(0,0,0,.5)}
+  dialog.sheet.drawer[open]{animation:sheetpop .2s ease-out}
+  dialog.sheet.drawer::backdrop{background:rgba(10,10,12,.3)}
   .narrow{max-width:760px;margin:0 auto}
   .chips{margin:0;padding-left:1px;padding-right:1px}
   dialog.sheet{inset:0;margin:auto;height:fit-content;max-height:86vh;border-radius:24px}
@@ -1009,9 +1046,6 @@ html.modal{overflow:hidden}
         <div id="status" class="o1"></div>
         <div id="net" class="o2"></div>
         <div id="model" class="o5"></div>
-        <!-- the model's own look: slowly changing -->
-        <div id="looks" class="o5"></div>
-        <div id="lanes24" class="o8"></div>
       </div>
       <div class="ncol">
         <div id="inbox" class="o3"></div>
@@ -1027,11 +1061,13 @@ html.modal{overflow:hidden}
     <p class="sub" id="dev-sub"></p>
     <!-- the sites as chips, not a picker -->
     <div class="chips sitechips" id="dev-sites" role="group" aria-label="Site"></div>
+    <div id="dev-sitebar"></div>
     <label class="search">
       <span data-ic="search"></span>
       <input id="q" type="search" placeholder="Search name, address or group" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button class="x" id="qx" type="button" aria-label="Clear search" hidden data-ic="x"></button>
     </label>
+    <div id="devnew"></div>
     <div class="chips" id="dev-filters" role="group" aria-label="Filter"></div>
     <div id="devlist"></div>
     <div id="sitedhcp"></div>
@@ -1043,10 +1079,11 @@ html.modal{overflow:hidden}
        in one stream, from /api/timeline (timeline.py) -->
   <section class="view" id="v-log" role="tabpanel" aria-label="Timeline">
     <h1 class="ttl">Timeline</h1>
-    <p class="sub">Seven days in one stream: outages grouped into incidents, the internet, security, actions, what Telegram was told, new devices and the log checks.</p>
+    <p class="sub">Seven days, everything lanowl saw, said and did. Each event carries what was said about it: the message Telegram got, the owl's words, the log checks and changes that name the same device.</p>
     <div class="chips sitechips" id="tl-sites" role="group" aria-label="Site"></div>
-    <div id="tl-lanes"></div>
+    <div id="tl-sitebar"></div>
     <div class="chips" id="tl-filters" role="group" aria-label="Show"></div>
+    <div id="tl-lanes"></div>
     <div id="tl-body"></div>
   </section>
 
@@ -1054,6 +1091,7 @@ html.modal{overflow:hidden}
     <h1 class="ttl">Security</h1>
     <p class="sub">What could let someone in, and whether every machine is patched and backed up. <span id="sec-when">Checked by itself every morning at <span id="sec-at">06:30</span>; only what matters goes to Telegram.</span></p>
     <div class="chips sitechips" id="sec-sites" role="group" aria-label="Site"></div>
+    <div id="sec-sitebar"></div>
     <div id="sec"></div>
   </section>
 
@@ -1085,6 +1123,7 @@ html.modal{overflow:hidden}
     </div>
     </div>
     <aside class="askside" id="askside" aria-label="The model">
+      <h2 class="asidettl">The model</h2>
       <div class="sh">lanowl</div><div id="about"></div>
       <div class="sh">Memory <span class="r" id="mem-n"></span></div><div id="mem"></div>
       <div class="sh">Proposed and run <span class="r" id="act-n"></span></div><div id="acts"></div>
@@ -1118,14 +1157,14 @@ html.modal{overflow:hidden}
   <button class="btn ghost" id="memdel" type="button" data-act="memdel" style="margin-top:10px">Forget this note</button>
 </form></dialog>
 <dialog id="disdlg" class="sheet" aria-labelledby="dis-title"><form class="sheet-in" id="disf" autocomplete="off">
-  <div class="shd"><div class="grab"></div><div class="shd-row"><h2 id="dis-title">Dismiss it?</h2><button class="x" type="button" data-act="disclose" aria-label="Close" data-ic="x"></button></div></div>
+  <div class="shd"><div class="grab"></div><div class="shd-row"><h2 id="dis-title">Accept it?</h2><button class="x" type="button" data-act="disclose" aria-label="Close" data-ic="x"></button></div></div>
   <p class="sub" id="dis-what" style="margin-top:0"></p>
   <textarea id="disq" class="memin" rows="3" maxlength="300" placeholder="Why, if you like — e.g. the alarm panel cannot turn telnet off" aria-label="Why (optional)"></textarea>
   <div class="pinerr" id="diserr" role="alert"></div>
-  <button class="btn" id="disb" type="submit" style="margin-top:6px">Dismiss</button>
+  <button class="btn" id="disb" type="submit" style="margin-top:6px">Accept</button>
 </form></dialog>
 <dialog id="pal" class="pal" aria-label="Search"><div class="palbox">
-  <div class="palin"><span data-ic="search"></span><input id="palq" type="search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Devices, addresses, pages — or ask the model" aria-label="Search"><kbd>esc</kbd></div>
+  <div class="palin"><span data-ic="search"></span><input id="palq" type="search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Devices, events, addresses, pages — or ask the owl" aria-label="Search"><kbd>esc</kbd></div>
   <div class="palres" id="palres" role="listbox"></div>
 </div></dialog>
 <dialog id="rndlg" class="sheet" aria-labelledby="rn-title"><form class="sheet-in" id="rnf" autocomplete="off">
@@ -1202,6 +1241,8 @@ const P = {
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"/>',
   key: '<circle cx="8" cy="15.5" r="4"/><path d="m11 12.5 8.5-8.5M16.2 7.3l2.4 2.4M14 9.5l2 2"/>',
   undo: '<path d="M9 14 4.5 9.5 9 5"/><path d="M4.5 9.5h10a5.5 5.5 0 0 1 0 11H11"/>',
+  cfg: '<path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>',
+  link: '<path d="M10 13.5a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10.5a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
 };
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
 // on what the monitor measured — that keeps its 🔴🟡🟢.
@@ -1262,7 +1303,7 @@ function put(el, html) {
 const HEALTH = {ok: ["All good", "check", "green"], degraded: ["Degraded", "warn", "orange"],
                 critical: ["Critical", "xo", "red"], unknown: ["Waiting", "clock", "gray"], empty: ["Nothing watched yet", "clock", "gray"]};
 const SEV = {critical: "red", high: "orange", warning: "yellow", info: "gray"};
-const DSTATE = {up: ["Up", "green"], asleep: ["Asleep on schedule", "gray"], paused: ["Paused — not watched", "indigo"], held: ["Rebooting — alerts held", "indigo"], shadow: ["Unreachable — behind a link that is down", "orange"], down: ["Down", "red"]};
+const DSTATE = {up: ["Up", "green"], asleep: ["Asleep on schedule", "gray"], paused: ["Paused — no alerts", "indigo"], held: ["Rebooting — alerts held", "indigo"], shadow: ["Unreachable — behind a link that is down", "orange"], down: ["Down", "red"]};
 const GROUP_ORDER = ["network", "servers", "services", "vpn", "security", "cameras", "energy", "home", "iot", "media"];
 const GROUP_NAME = {vpn: "VPN & remote sites", iot: "IoT", media: "Media"};
 // Paused wins over everything, answering or not: the owner said not to watch it.
@@ -1279,6 +1320,7 @@ const S = {d: null, tab: "home", scroll: {}, pane: load("pane", "events"), sched
            sort: load("dsort", "group"), group: null,   // the Devices table's order; a group tapped on Now
            site: load("site", "all"),     // every tab's site (sites.py)
            tlf: load("tlf", "all"),       // the Timeline's filter
+           lanes: load("lanes", false),   // the Timeline's seven-day lanes, folded to one line by default
            askp: load("askp", "chat"),
            lookAll: {}, cfgAll: false, scAll: false, fixFor: null, cp: []};   // the model's looks   // Ask below 1100px: the chat, or the model's side    // the Devices and Security tabs' site filter (sites.py)
 
@@ -1422,6 +1464,8 @@ function setSite(k) {
 function renderSites(d) {
   const sc = siteChips(d);
   put("dev-sites", sc); put("tl-sites", sc); put("sec-sites", sc);
+  const bar = S.site === "all" ? "" : `<div class="sitebar">${ic("search")}Showing ${esc(siteName(d, S.site))} only<button type="button" data-act="site" data-sk="all">Show all sites</button></div>`;
+  put("dev-sitebar", bar); put("tl-sitebar", bar); put("sec-sitebar", bar);
   // Now: every site, the main one too — its devices up, the down ones named; tap = its Devices
   put("sitescard", (d.sites || []).length ? `<div class="sh">Sites</div><div class="list">` + d.sites.map(s => {
     const c = (s.down || []).length ? "red" : "green", unk = (s.dhcp || {}).unknown || 0;
@@ -1525,11 +1569,11 @@ function tilesHtml(d) {
   const groups = [...new Set(devs.map(x => x.group))].sort((a, b) => grank(a) - grank(b) || String(a).localeCompare(b));
   return `<div class="gtiles">` + groups.map(g => {
     const xs = devs.filter(x => x.group === g), odd = xs.filter(x => st(x) !== "up").sort((a, b) => SORD[st(a)] - SORD[st(b)]);
-    const watched = xs.filter(x => !x.paused).length, upN = xs.filter(x => st(x) === "up").length;
+    const upN = xs.filter(x => st(x) === "up").length;
     const c = odd.some(x => st(x) === "down") ? "red" : odd.some(x => st(x) === "shadow") ? "orange" : "green";
     const fl = xs.filter(x => st(x) === "up" && (O.m[x.ip] || []).some(v => !v.sched));
     const lines = odd.map(x => `<span class="ent${st(x) === "down" ? " bad" : ""}" data-ip="${esc(x.ip)}">${esc(x.name)}</span> ${SWORD[st(x)]}`);
-    return `<div class="gt c-${c}" data-act="group" data-g="${esc(g)}"><div class="gt-h"><span class="sd"></span><b>${esc(GN(g))}</b><span class="gt-n">${watched ? `${upN}/${watched}` : "paused"}</span></div>
+    return `<div class="gt c-${c}" data-act="group" data-g="${esc(g)}"><div class="gt-h"><span class="sd"></span><b>${esc(GN(g))}</b><span class="gt-n">${upN}/${xs.length}</span></div>
       <div class="gt-s">${lines.length ? lines.join("<br>") : "all answering"}</div>${fl.length ? `<div class="gt-f">↓ ${esc(fl.slice(0, 3).map(x => x.name).join(", "))}${fl.length > 3 ? ` +${fl.length - 3}` : ""} this week</div>` : ""}</div>`;
   }).join("") + `</div>`;
 }
@@ -1539,15 +1583,18 @@ function incHtml(d, i) {
   const od = (d.logbook || []).find(e => e.ip === i.ip && e.kind === "down" && e.open);
   const since = i.since || (od && od.ts) || 0, name = String(i.device || ""), steps = [];
   if (since) steps.push([since, i.kind === "down" ? "Stopped answering" : "Started", "bad"]);
-  (d.sent || []).filter(m => m.ts >= since - 90 && name && plainTg(m.text).includes(name)).sort((a, b) => a.ts - b.ts).slice(0, 3)
+  // only this incident's messages: from when it began (unknown: the last two hours), never an
+  // older one that named the same device (an old warning under today's)
+  const from = since ? since - 90 : NOW - 7200;
+  (d.sent || []).filter(m => m.ts >= from && name && plainTg(m.text).includes(name)).sort((a, b) => a.ts - b.ts).slice(0, 3)
     .forEach(m => steps.push([m.ts, "Telegram: " + plainTg(m.text).split("\n")[0].replace(/^\S+\s+/, "").slice(0, 140), "tg"]));
-  if (i.diag) steps.push([Math.max((d.llm || {}).at || 0, since), `The model: ${i.diag.cause}${i.diag.rec ? " → " + i.diag.rec : ""}`, "ai"]);
+  if (i.diag) steps.push([Math.max((d.llm || {}).at || 0, since), `The owl: ${i.diag.cause}${i.diag.rec ? " → " + i.diag.rec : ""}`, "ai"]);
   ((d.actions || {}).pending || []).filter(p => p.ip === i.ip).forEach(p =>
     steps.push([p.ts, `${p.title} — ${p.status === "pending" ? "waiting for you, under Needs you" : (PST[p.status] || [p.status])[0].toLowerCase()}`, "act"]));
   steps.sort((a, b) => a[0] - b[0]);
   return `<div class="inc c-${c}"><div class="ih"><span class="tagx">${esc(i.severity)}</span><b>${esc(i.label || i.device)}</b>${since ? `<span class="fine">since ${esc(clock(since))} · ${esc(dur(NOW - since))}</span>` : ""}</div>
-    <div class="idet">${esc(i.detail)}</div>${i.flaps ? `<div class="fine">${i.flaps + 1} outages in this episode</div>` : ""}
-    ${steps.length ? `<ol class="itl">${steps.map(v => `<li class="${v[2]}">${v[0] ? `<span class="t">${esc(hm(v[0]))}</span>` : ""}${esc(v[1])}</li>`).join("")}</ol>` : ""}
+    <div class="idet">${esc(i.detail)}${i.comes_and_goes ? " — it comes and goes: answering right now, still open until it has been fine for a while" : ""}</div>${i.flaps ? `<div class="fine">${i.flaps + 1} outages in this episode</div>` : ""}
+    ${steps.length ? `<ol class="itl">${steps.map(v => `<li class="${v[2]}">${v[0] ? `<span class="t">${esc(hmd(v[0], NOW))}</span>` : ""}${esc(v[1])}</li>`).join("")}</ol>` : ""}
     ${known ? `<div class="ibtns"><button class="sbtn" type="button" data-ip="${esc(i.ip)}">Open ${esc(name)}</button><button class="sbtn" type="button" data-act="askabout" data-q="${esc(`What is wrong with ${name} (${i.ip}) right now?`)}">Ask about it</button></div>` : ""}</div>`;
 }
 function renderStatus(d) {
@@ -1562,8 +1609,8 @@ function renderStatus(d) {
   const tone = !d.sweep.ts ? "gray" : worst ? TONE[worst] || "orange" : missed.length ? "gray" : "green";
   const title = !d.sweep.ts ? "Waiting for the first sweep" : !devs.length ? "Nothing watched yet" : iss.length > 1 ? `${iss.length} problems` : iss.length ? issueTitle(iss[0])
     : missed.length === 1 ? `${missed[0].name} missed a check` : missed.length ? `${missed.length} devices missed a check` : "All clear";
-  const watched = devs.length - n.paused;
-  const said = !d.sweep.ts ? "" : [`${n.up} of ${watched} devices answering${n.asleep ? `, ${n.asleep} asleep on schedule` : ""}${n.held ? `, ${n.held} rebooting` : ""}${n.paused ? `, ${n.paused} paused` : ""}.`,
+  // one count everywhere (the digest's "58/60 up · 1 asleep · 1 paused"): answering of every device
+  const said = !d.sweep.ts ? "" : [`${n.up} of ${devs.length} devices answering${n.asleep ? `, ${n.asleep} asleep on schedule` : ""}${n.held ? `, ${n.held} rebooting` : ""}${n.paused ? `, ${n.paused} paused` : ""}.`,
     wanWords(d), sitesWords(d)].filter(Boolean).join(" ");
   put("status", `<div class="card status c-${tone}"><div class="shl"><span class="beacon"></span><h1>${esc(title)}</h1></div>
     ${said ? `<p class="ssum">${esc(said)}</p>` : ""}${iss.map(i => incHtml(d, i)).join("")}
@@ -1573,64 +1620,51 @@ function renderStatus(d) {
 
 // Everything that waits for the owner, in one list: proposals to approve, security to decide,
 // updates, devices on a network for the first time. Nothing else is on it.
+// what a security item is part of (timeline.story_index): "your own setup work", not a lone critical
+const storyOf = x => x.sid ? (((S.d || {}).stories || {}).cfg || {})[x.sid] : null;
+const storyLine = po => po ? `<div class="m pof">${ic("link")}Part of the story of ${esc(po.name)}, which joined ${esc(hmd(po.ts, NOW))} · ${esc(po.why)}</div>` : "";
 function nitHtml(x) {
   const c = x.sev === "critical" ? "red" : x.sev === "high" ? "orange" : "yellow";
-  const kind = x.sid ? "Security" : x.from === "the model's review" ? "Exposure" : x.from === "the update check" ? "Updates" : "Security";
-  return `<div class="nit c-${c}"${x.ip ? ` data-ip="${esc(x.ip)}"` : ""}><div class="k">${kind}</div><div class="t">${esc(x.text)}</div><div class="m">${esc(x.from)}</div>
-    ${x.sub ? `<div class="rs clamp" data-act="more">${esc(x.sub)}</div>` : ""}
-    <div class="ibtns">${x.sid ? `<button class="sbtn" type="button" data-act="handle" data-sid="${esc(x.sid)}">Handled</button>` : ""}${x.can ? `<button class="sbtn" type="button" data-act="dismiss" data-fk="${esc(x.key)}">Dismiss</button>` : ""}${x.fx ? `<button class="sbtn" type="button" data-act="fix" data-fk="${esc(x.key)}">${ic("compose")}Fix</button>` : ""}<button class="sbtn" type="button" data-act="askabout" data-q="${esc("Tell me more about this: " + x.text)}">Ask</button></div></div>`;
+  const kind = x.sid ? "Security" : x.from === "the owl's review" ? "Exposure" : x.from === "the update check" ? "Updates" : "Security";
+  const po = storyOf(x);
+  const cf = x.sid ? ((((S.d || {}).configwatch || {}).changes) || []).find(c => c.sid === x.sid) : null;
+  const foc = cf ? cf.tid : x.sid ? String(x.sid) : "";
+  return `<div class="nit c-${c}"${x.ip ? ` data-ip="${esc(x.ip)}"${foc ? ` data-focus="${esc(foc)}"` : ""}` : ""}><div class="k">${kind}</div><div class="t">${esc(x.text)}</div><div class="m">${esc(x.from)}</div>
+    ${storyLine(po)}${x.sub ? `<div class="rs clamp" data-act="more">${esc(x.sub)}</div>` : ""}
+    <div class="ibtns">${x.sid ? `<button class="sbtn chg" type="button" data-act="handle" data-sid="${esc(x.sid)}">${ic("check")}Handled</button>` : ""}${x.can ? `<button class="sbtn chg" type="button" data-act="dismiss" data-fk="${esc(x.key)}">${ic("check")}Accept</button>` : ""}${x.fx ? `<button class="sbtn" type="button" data-act="fix" data-fk="${esc(x.key)}">${ic("compose")}How to fix it</button>` : ""}${po ? `<button class="sbtn" type="button" data-act="tlgo" data-id="${esc(po.id)}">${ic("link")}Open the story</button>` : ""}<button class="sbtn" type="button" data-act="askabout" data-q="${esc("Tell me more about this: " + x.text)}">Ask</button></div></div>`;
 }
 function renderInbox(d) {
   const ps = (d.actions || {}).pending || [], sec = secItems(d, true).filter(x => x.top && !x.dis);
   const hs = ((d.updates || {}).hosts || []).filter(h => !h.error), nUpd = hs.reduce((t, h) => t + (h.updates || 0), 0);
   const upd = hs.filter(h => h.updates || h.reboot_since), mUpd = hs.filter(h => h.updates).length, reb = hs.filter(h => h.reboot_since).length;
-  const fresh = (d.sites || []).flatMap(x => (((x.dhcp || {}).rows) || []).filter(r => r.new).map(() => x));
   const parts = ps.map(propHtml).concat(sec.map(nitHtml));
   if (upd.length) parts.push(`<div class="nit c-blue"><div class="k">Updates</div><div class="t">${esc([nUpd ? `${nUpd} update${nUpd > 1 ? "s" : ""} waiting on ${mUpd} machine${mUpd > 1 ? "s" : ""}` : "", reb ? `${reb} reboot${reb > 1 ? "s" : ""} pending` : ""].filter(Boolean).join(" · "))}</div>
     <div class="m">${esc(upd.map(h => `${h.name}${h.updates ? " " + h.updates : ""}${h.reboot_since ? " (reboot)" : ""}`).join(" · "))}</div>
-    <div class="ibtns"><a class="sbtn" href="#sec">Review</a></div></div>`);
-  if (fresh.length) {
-    const by = {}; fresh.forEach(x => { by[x.name] = (by[x.name] || 0) + 1; });
-    const one = new Set(fresh.map(x => x.key)).size === 1 ? fresh[0].key : "all";
-    parts.push(`<div class="nit c-blue"><div class="k">New devices</div><div class="t">${fresh.length} device${fresh.length > 1 ? "s" : ""} on a network for the first time</div>
-      <div class="m">${esc(Object.entries(by).map(([k, v]) => `${k} ${v}`).join(" · "))} — watch them, or mark them known</div>
-      <div class="ibtns"><button class="sbtn" type="button" data-act="gosite" data-sk="${esc(one)}">Review</button></div></div>`);
+    <div class="ibtns"><a class="sbtn" href="#sec">See them on Security${ic("chev")}</a></div></div>`);
+  // each new device by name, with what the owl said of it and the way to its story; phones and
+  // guests on one line together
+  const nrows = (d.sites || []).flatMap(x => (((x.dhcp || {}).rows) || []).filter(r => r.new && !r.known).map(r => ({...r, site: x})));
+  const phoneish = r => (r.vendor || "").startsWith("private") || r.guest;
+  const named = nrows.filter(r => !phoneish(r)), phones = nrows.filter(phoneish);
+  for (const r of named.slice(0, 3)) {
+    const st = ((d.stories || {}).dev || {})[String(r.mac || "").toLowerCase()] || {}, o = st.owl || {};
+    parts.push(`<div class="nit c-blue"><div class="k">New device · ${esc(r.site.name)}</div><div class="t">${esc(r.name || r.vendor || r.ip)}</div>
+      <div class="m">${esc([r.ip, r.mac, r.name && r.vendor ? r.vendor : "", "first seen " + hmd(r.first_seen, NOW), r.here ? "here now" : r.heard ? "last heard " + hmd(r.heard, NOW) : ""].filter(Boolean).join(" · "))}</div>
+      ${o.said ? `<div class="m">${ic("owl")} ${linkify(d, o.said)}</div>` : ""}
+      <div class="ibtns">${r.routed === false ? "" : `<button class="sbtn chg" type="button" data-act="watch" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}" data-nm="${esc(r.name || "")}">Watch</button><button class="sbtn chg" type="button" data-act="known" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}">Known</button>`}${st.id ? `<button class="sbtn" type="button" data-act="tlgo" data-id="${esc(st.id)}">${ic("link")}Open the story</button>` : ""}</div></div>`);
   }
-  const n = ps.filter(p => p.status === "pending").length + sec.length + (upd.length ? 1 : 0) + (fresh.length ? 1 : 0);
+  const rest = [...named.slice(3), ...phones];
+  if (rest.length) parts.push(`<div class="nit c-blue"><div class="k">New devices · ${rest.length}${named.length ? " more" : ""}</div><div class="t">${esc(rest.slice(0, 4).map(r => r.name || (phoneish(r) ? "a phone" : r.vendor || r.ip)).join(", "))}${rest.length > 4 ? ` and ${rest.length - 4} more` : ""}</div>
+      <div class="m">${esc([...new Set(rest.map(r => r.site.name))].join(" · "))}${phones.length ? " · phones and guests: the owl names them in its summary" : ""}</div>
+      <div class="ibtns"><button class="sbtn" type="button" data-act="gosite" data-sk="${esc(new Set(rest.map(r => r.site.key)).size === 1 ? rest[0].site.key : "all")}">See them on Devices${ic("chev")}</button></div></div>`);
+  // lanowl's own isolation self-check reaches you only when it fails (10-08)
+  for (const [x, who] of [[d.shell || {}, "your questions"], [d.shell_audit || {}, "the hourly audit"]])
+    if (x.enabled && x.ok === false) parts.push(`<div class="nit c-red"><div class="k">lanowl itself</div><div class="t">The model's shell for ${who} failed its check</div><div class="m">${esc(x.why || "")}</div>
+      <div class="ibtns"><a class="sbtn" href="#more">See it in Ask → The model${ic("chev")}</a></div></div>`);
+  const n = ps.filter(p => p.status === "pending").length + sec.length + (upd.length ? 1 : 0) + Math.min(named.length, 3) + (rest.length ? 1 : 0)
+    + [d.shell || {}, d.shell_audit || {}].filter(x => x.enabled && x.ok === false).length;
   put("inbox", `<div class="sh">Needs you${n ? ` <span class="r">${n}</span>` : ""}</div><div class="card nbox">` +
     (parts.length ? parts.join("") : `<div class="nzero">${ic("check")}Nothing needs you.</div>`) + `</div>`);
-}
-
-// The last 24 hours as lanes: the internet first, then every device that went down in them.
-function hourAxis(t0, t1) {
-  let h = "";
-  const d0 = new Date(t0 * 1000); d0.setMinutes(0, 0, 0);
-  for (let t = d0 / 1000 + 3600; t < t1; t += 3600) {
-    const hr = new Date(t * 1000).getHours();
-    if (!(hr % 6)) h += `<span style="left:${((t - t0) / (t1 - t0) * 100).toFixed(2)}%">${String(hr).padStart(2, "0")}:00</span>`;
-  }
-  return h;
-}
-function renderLanes24(d) {
-  const O = outages(d), t1 = NOW, t0 = t1 - 86400, w = d.wan || {}, ww = w.watch || {};
-  const st = w.state || (w.ok === false ? "down" : w.ok ? "ok" : "unknown");
-  const ws = (w.events || []).filter(e => e.ts + (e.s || 0) > t0).map(e => ({a: e.ts, b: e.ts + Math.max(e.s || 0, e.kind === "blip" ? 120 : 0),
-    cls: e.kind === "blackout" ? "bad" : e.kind === "blip" ? "blip" : "warn"}));
-  ws.sort((a, b) => WDRAW[a.cls] - WDRAW[b.cls]);
-  if (st === "backup" || st === "down") ws.push({a: ww.state_since || ww.down_since || t1 - 60, b: t1, cls: st === "down" ? "bad" : "warn"});
-  const wrec = w.events_since ? Math.max(t0, w.events_since) : t1;
-  const moved = (d.devices || []).filter(x => (O.m[x.ip] || []).some(v => v.b > t0))
-    .sort((a, b) => grank(a.group) - grank(b.group) || String(a.name).localeCompare(b.name));
-  const segs24 = moved.flatMap(x => (O.m[x.ip] || []).filter(v => v.b > t0));
-  const rec = Object.fromEntries(moved.map(x => [x.ip, recFrom(O.rec0, firstOf(x.ip))]));
-  const lane = (label, segs, rec0, ip, wan) => ip
-    ? `<button class="lrow" type="button" data-ip="${esc(ip)}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</button>`
-    : `<div class="lrow${wan ? " wan" : ""}"><span class="ll">${esc(label)}</span>${strip(segs, t0, t1, rec0, "lanebar")}</div>`;
-  put("lanes24", `<div class="sh">Last 24 hours <a class="r" href="#log" style="color:var(--blue-t);text-decoration:none">Timeline</a></div><div class="card"><div class="lanes">
-    <div class="lrow"><span></span><div class="lax">${hourAxis(t0, t1)}</div></div>
-    ${lane("Internet", ws, wrec, null, true)}${moved.map(x => lane(x.name, O.m[x.ip], rec[x.ip], x.ip)).join("")}</div>
-    ${moved.length ? "" : `<div class="fine" style="margin-top:10px">No device went down in the last 24 hours.</div>`}
-    <div class="keys" style="margin-top:10px"><span><i class="k-ok"></i>answering</span><span><i class="k-bad"></i>down</span>${segs24.some(v => v.cls === "sched") ? `<span><i class="k-sched"></i>asleep on schedule</span>` : ""}${segs24.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${ws.some(v => v.cls === "blip") ? `<span><i class="k-blip"></i>blip</span>` : ""}${ws.some(v => v.cls === "warn") ? `<span><i class="k-warn"></i>on backup</span>` : ""}${wrec > t0 || moved.some(x => rec[x.ip] > t0) ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`);
 }
 
 // lanowl's own vitals, under the sections in the sidebar (desktop)
@@ -1647,12 +1681,12 @@ function renderSys(d) {
 // Home for as long as it lasts.
 const BY = {telegram: "Telegram", dashboard: "the dashboard"};
 function pauseNote(p) {
-  return p ? "watched again only when you switch it back on, here or with /resume" : "";
+  return p ? "it ends only when you switch its alerts back on, here or with /resume" : "";
 }
 function renderPaused(d) {
   const ps = d.paused || [];
   if (!ps.length) { put("pausedlist", ""); return; }
-  put("pausedlist", `<div class="sh">Paused <span class="r">${ps.length} not watched</span></div><div class="list">` + ps.map(p =>
+  put("pausedlist", `<div class="sh">Paused <span class="r">${ps.length} · no alerts</span></div><div class="list">` + ps.map(p =>
     `<button class="row" data-ip="${esc(p.ip)}"><span class="sd c-indigo"></span>
       <span class="rt"><span class="rn">${esc(p.name)}</span><span class="rs">since ${esc(clock(p.ts))}${p.by ? " · " + esc(BY[p.by] || p.by) : ""}</span></span>
       <span class="rv">${p.up == null ? "" : p.up ? "answering" : "off"}</span>${ic("chev", "chev")}</button>`).join("") + `</div>`);
@@ -1735,20 +1769,42 @@ function renderModel(d) {
   put("model", `<div class="sh">The owl</div><div class="card"><div id="model-top"></div>
     <form class="follow" id="followf" autocomplete="off"><textarea id="followq" rows="1" maxlength="1000" placeholder="Ask a follow-up…" enterkeyhint="send" aria-label="Ask a follow-up"></textarea><button class="go" type="submit" aria-label="Ask" disabled>${ic("up")}</button></form>
     <div id="model-foot"></div></div>`);
-  let h = `<div class="mh">${ic("owl")}<b>The owl's assessment</b>`;
+  let h = `<div class="mh">${ic("owl")}<b>What it says now</b>`;
   if (l.health) { const hh = HEALTH[l.health] || HEALTH.unknown; h += `<span class="tagx c-${hh[2]}">${esc(l.health)}</span>`; }
   h += `<span class="fine" style="margin-left:auto">${l.at ? esc(ago(l.at)) + (l.fresh ? "" : " · stale") : ""}</span></div>`;
-  if (l.running) h += `<div class="running"><span class="spin"></span>${l.queued ? "Starting — a fresh sweep first, then the model…" : "The model is auditing the network…"}</div>`;
+  if (l.running) h += `<div class="running"><span class="spin"></span>${l.queued ? "Starting — a fresh sweep first, then the owl…" : "The owl is reading the network…"}</div>`;
   if (l.summary) {
     const long = l.summary.length > 240;
     h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, l.summary)}</p>`;
-    if (long) h += `<button class="more" data-act="expand">${S.expanded ? "Less" : "More"}</button>`;
-  } else if (!l.running) h += `<p class="mtext muted">No assessment yet — the model runs about hourly.</p>`;
+    if (long) h += `<button class="more" data-act="expand" id="owlmore">${S.expanded ? "Less" : "More"}</button>`;
+  } else if (!l.running) h += `<p class="mtext muted">No assessment yet — the owl looks about hourly.</p>`;
+  // the owl read the network a while ago; the monitor reads it every minute. When they differ
+  // the card says so, instead of OK under a Degraded header (10-08)
+  const mon = (d.issues || []).filter(i => i.severity !== "info");
+  if (l.health && d.health && l.health !== d.health && d.sweep.ts) h += `<div class="fine" style="margin-top:6px">The monitor's own reading now: <b>${esc(d.health)}</b>${mon.length ? " — " + esc(mon.map(i => `${i.label || i.device}: ${i.detail}`).slice(0, 2).join(" · ")) : ""}.</div>`;
   if ((l.also || []).length) h += `<div class="also"><b>Also noticed</b>` + l.also.map(x =>
     `<div><span class="tagx c-${SEV[x.severity] || "gray"}">${esc(x.severity)}</span> <b>${esc(x.label)}</b> — ${esc(x.cause)}${x.rec ? ` → ${esc(x.rec)}` : ""}</div>`).join("") + `</div>`;
+  // getting worse: the owl's look at the week and the monitor's own numbers, one list — the
+  // same one the digest carries (10-08: Now said "nothing" while the digest listed three)
+  const dr = d.drift || {}, skip = new Set((d.trends || {}).asleep || []);
+  const dOpen = dr.enabled ? (dr.findings || []).filter(f => !f.dismissed && !skip.has(f.ip)) : [];
+  const tr = (d.trends || {}).items || [];
+  h += `<div class="also"><b>Getting worse this week</b>` + (dOpen.length || tr.length
+    ? tr.map(t => `<div><span class="ent" data-ip="${esc(t.ip)}">${esc(t.device)}</span> — ${esc(t.why)}</div>`).join("")
+      + dOpen.map(f => `<div><span class="tagx c-${SEV[f.severity] || "gray"}">${esc(f.severity)}</span> <b>${esc(lookWho(f) || "")}</b> — ${esc(f.title)}${f.why ? ` <span class="fine">${esc(f.why)}</span>` : ""} <button class="flnk" type="button" data-act="dismiss" data-fk="${esc(f.key)}">Accept</button></div>`).join("")
+    : `<div class="fine">Nothing${dr.reviewed ? ` — the week was read ${esc(ago(dr.reviewed))}` : ""}.</div>`) + `</div>`;
+  // what it said before: each change of mind in the last day, one tap away
+  const hist = (d.owl_history || []).filter(o => !l.at || Math.abs(o.ts - l.at) > 120);
+  if (hist.length) h += `<details class="acc" data-how="owlh"${CH.how.has("owlh") ? " open" : ""}><summary>${ic("chev")}What it said before<span class="fine">${hist.length} change${hist.length > 1 ? "s" : ""} in 24 hours</span></summary>
+    <ul class="vlist">${hist.map(o => `<li><span class="w">${esc(hmd(o.ts, NOW))}</span><span><span class="tagx c-${(HEALTH[o.health] || HEALTH.unknown)[2]}">${esc(o.health || "?")}</span> ${esc(String(o.summary || "").split(/(?<=[.!?])\s+/)[0])}${o.told.length ? ` <span class="fine">→ Telegram</span>` : ""}</span></li>`).join("")}
+    <li><span class="w"></span><button class="flnk" type="button" data-act="tlowl">Every verdict, on the Timeline${ic("chev")}</button></li></ul></details>`;
   put("model-top", h);
-  put("model-foot", `<div class="ibtns" style="align-items:center"><button class="sbtn" data-act="check"${l.running ? " disabled" : ""}>${l.running ? '<span class="spin"></span>Auditing…' : ic("refresh") + "Audit now"}</button>
-    <span class="fine">the digest goes to Telegram too</span></div>`);
+  // "More" only when the text is cut: at a wide screen four lines often hold it all (10-08)
+  const mt = $("model-top").querySelector(".mtext"), mb = $("owlmore");
+  if (mt && mb && !S.expanded) mb.hidden = mt.scrollHeight <= mt.clientHeight + 2;
+  const DL = d.drift || {};
+  put("model-foot", `<div class="ibtns" style="align-items:center"><button class="sbtn chg" data-act="check"${l.running ? " disabled" : ""}>${l.running ? '<span class="spin"></span>Auditing…' : ic("refresh") + "Audit now"}</button>
+    <span class="fine">the digest goes to Telegram too</span>${DL.enabled ? `<button class="flnk" type="button" data-act="lookrun" data-look="drift"${DL.running ? " disabled" : ""} style="margin-left:auto">${DL.running ? "reading the week…" : "Read the week again"}</button>` : ""}</div>`);
 }
 // Sent from the card: a conversation of its own (the model is handed the assessment with every
 // question — prompts.build_qa_context), then Ask, to watch the answer come.
@@ -1810,13 +1866,46 @@ function spark(b, w = 96, h = 24) {
   }
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${p}"/>${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="1.8"/>` : ""}</svg>`;
 }
+// a new device's name that looks like a device you watch ("Office-main-router" beside the
+// watched "Office mikrotik router"): a word they share that few names have, never a common one
+const NAMEW = new Set(["router", "mikrotik", "shelly", "camera", "switch", "server", "iphone", "ipad", "android",
+  "galaxy", "phone", "main", "home", "office", "living", "room", "lite", "plus", "mini", "pro", "the"]);
+const nameWords = n => String(n || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !NAMEW.has(w) && !/^\d+$/.test(w));
+function lookAlike(d, r) {
+  const devs = d.devices || [], mine = nameWords(r.name);
+  if (!mine.length) return null;
+  for (const w of mine) {
+    const hits = devs.filter(x => nameWords(x.name).includes(w));
+    if (hits.length && hits.length <= 2 && !hits.some(x => x.ip === r.ip)) return hits[0];
+  }
+  return null;
+}
+// New on your networks: on top of Devices while anything is new — each with what the owl said,
+// the message that went out, the way to its story (10-08)
+function newDevHtml(d) {
+  const rows = (d.sites || []).filter(x => S.site === "all" || x.key === S.site)
+    .flatMap(x => (((x.dhcp || {}).rows) || []).filter(r => r.new && !r.known).map(r => ({...r, site: x})));
+  if (!rows.length) return "";
+  const priv = r => (r.vendor || "").startsWith("private");
+  return `<div class="sh">New on your networks <span class="r">${rows.length} · first seen in the last day</span></div><div class="list">` + rows.map(r => {
+    const st = ((d.stories || {}).dev || {})[String(r.mac || "").toLowerCase()] || {}, o = st.owl || {}, like = lookAlike(d, r);
+    const title = r.name || (priv(r) ? "A phone or laptop hiding its MAC" : r.vendor || r.ip);
+    return `<div class="row row2"><span class="sd c-blue"></span><span class="rt"><span class="rn">${esc(title)}</span>
+      <span class="rs wrap mono">${esc(r.site.name)} · ${esc(r.ip)} · ${esc(r.mac)}</span>
+      <span class="rs wrap">${esc([r.name && r.vendor && !priv(r) ? r.vendor : "", "first seen " + hmd(r.first_seen, NOW), r.here ? "here now" : r.heard ? "last heard " + hmd(r.heard, NOW) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · "))}</span>
+      ${o.said ? `<span class="rs wrap" style="color:var(--ink)">${ic("owl")} ${linkify(d, o.said)}${(st.told || []).length ? ` <span class="fine">· told on Telegram ${esc(st.told.map(t => hmd(t, NOW)).join(", "))}</span>` : ""}</span>` : ""}
+      ${like ? `<span class="rs wrap" style="color:var(--orange-t)">${ic("warn")} Its name looks like <span class="ent" data-ip="${esc(like.ip)}">${esc(like.name)}</span> (${esc(like.ip)}), a device you watch. Only the name: whether they are one device is for you, or the owl, to say</span>` : ""}
+      </span><span class="rbtns">${r.routed === false ? "" : `<button class="rowbtn" type="button" data-act="watch" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}" data-nm="${esc(r.name || "")}">Watch</button><button class="rowbtn" type="button" data-act="known" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}">Known</button>`}${st.id ? `<button class="rowbtn ghost" type="button" data-act="tlgo" data-id="${esc(st.id)}">Story</button>` : ""}</span></div>`;
+  }).join("") + `</div>`;
+}
 function renderDevices(d) {
+  put("devnew", newDevHtml(d));
   const sh = d.shadowed || {}, devs = (d.devices || []).filter(x => S.site === "all" || x.site === S.site), O = outages(d);
   const flaps = ip => (O.m[ip] || []).filter(v => !v.sched).length;
   const count = {all: devs.length, down: 0, unstable: 0, asleep: 0, paused: 0};
   devs.forEach(x => { const v = devState(x, sh); if (v === "down" || v === "shadow") count.down++; if (v === "asleep") count.asleep++; if (v === "paused") count.paused++; if (flaps(x.ip)) count.unstable++; });
   const up = devs.filter(x => x.up && !x.paused).length;
-  put("dev-sub", devs.length ? `${devs.length - count.paused} monitored · ${up} answering · ${count.asleep} asleep on schedule${count.paused ? ` · ${count.paused} paused` : ""}` : "No sweep yet.");
+  put("dev-sub", devs.length ? `${devs.length} watched · ${up} answering${count.asleep ? ` · ${count.asleep} asleep on schedule` : ""}${count.paused ? ` · ${count.paused} paused` : ""}` : "No sweep yet.");
   put("dev-filters", (S.group ? `<button class="chip" data-act="clrgroup" aria-pressed="true">${esc(GN(S.group))} ${ic("x")}</button>` : "") +
     [["all", "All"], ["down", "Down"], ["unstable", "Went down this week"], ["asleep", "Asleep"], ["paused", "Paused"]]
     .filter(([k]) => k !== "paused" || count.paused || S.filter === "paused")
@@ -1858,8 +1947,8 @@ function renderDevices(d) {
     const bad = g => groups[g].some(isDown) ? 0 : 1;
     Object.keys(groups).sort((a, b) => bad(a) - bad(b) || grank(a) - grank(b) || a.localeCompare(b)).forEach(g => {
       const ds = groups[g].sort((a, b) => sev[devState(a, sh)] - sev[devState(b, sh)] || String(a.name).localeCompare(b.name));
-      const all = devs.filter(x => x.group === g && !x.paused), dn = all.filter(isDown).length;
-      body += `<div class="drow gh"><span>${esc(GN(g))}</span><span class="r${dn ? " bad" : ""}">${all.length ? `${all.length - dn}/${all.length}` : "paused"}</span></div>` + ds.map(row).join("");
+      const all = devs.filter(x => x.group === g), dn = all.filter(isDown).length, upG = all.filter(x => devState(x, sh) === "up").length;
+      body += `<div class="drow gh"><span>${esc(GN(g))}</span><span class="r${dn ? " bad" : ""}">${upG}/${all.length}</span></div>` + ds.map(row).join("");
     });
   }
   put("devlist", list.length ? `<div class="dtab">${body}</div>` : `<div class="list" style="margin-top:10px"><div class="empty">${devs.length ? "Nothing matches." : "No sweep yet."}</div></div>`);
@@ -1883,14 +1972,22 @@ async function loadTimeline() {
   } catch (e) { TL.err = "not read — is lanowl running?"; }
   TL.at = Date.now(); TL.busy = false;
   if (S.d) renderLog(S.d);
+  if (S.sheet || S.sheetProp != null) renderSheet();
 }
-const TLF = [["all", "Everything"], ["out", "Outages"], ["wan", "Internet"], ["sec", "Security"], ["act", "Actions"],
-             ["tg", "Telegram"], ["new", "New devices"], ["chk", "Log checks"]];
-const tlType = x => ({incident: "out", wan: "wan", security: "sec", action: "act", refused: "act", rename: "act", telegram: "tg", new_device: "new", check: "chk"})[x.type];
-// under Everything: what is news. The rest is one filter away
-const quietIt = x => (x.type === "incident" && x.cat !== "down") || (x.type === "check" && !x.problem) || x.type === "telegram" || x.type === "refused";
+// an old "chk" filter, saved before Security and Log checks became one (10-08)
+if (S.tlf === "chk") S.tlf = "sec";
+const TLF = [["all", "Everything"], ["out", "Outages"], ["wan", "Internet"], ["sec", "Security & logs"], ["owl", "The owl"],
+             ["new", "New devices"], ["act", "Actions"], ["tg", "Telegram"]];
+const tlType = x => ({incident: "out", wan: "wan", security: "sec", check: "sec", config: "sec", owl: "owl", action: "act",
+                      refused: "act", rename: "act", telegram: "tg", new_device: "new"})[x.type];
+// Everything is everything (the owner, 10-08): routine rows are drawn quiet, never left out.
+// Only a Telegram copy that sits under its own event is not drawn twice; the Telegram filter has them all.
+const quietIt = x => (x.type === "incident" && x.cat !== "down") || (x.type === "check" && !x.problem)
+  || (x.type === "config" && ["low", "none"].includes(x.risk)) || (x.type === "owl" && x.health === "ok")
+  || x.type === "telegram" || x.type === "refused";
+const shownIn = (x, f) => f === "all" ? !(x.type === "telegram" && x.attached) : tlType(x) === f;
 function tlSite(d, x) {
-  if (S.site === "all" || x.type === "telegram") return true;     // what lanowl told you, whatever the site
+  if (S.site === "all" || x.type === "telegram" || x.type === "owl") return true;   // what lanowl told you, the owl's word on the network
   if (x.type === "incident") return x.members.some(m => siteOf(d, m.ip) === S.site);
   if (x.type === "wan") return S.site === "home";
   if (x.type === "new_device") return x.site === S.site;
@@ -1901,7 +1998,20 @@ const wanw = k => ({blackout: "Internet blackout", "main-outage": `The ${LK().ma
 // pings every 15 s only bound a blip or a blackout: "~"; the router times a main-link drop itself
 const wanLen = x => (x.kind === "main-outage" ? "" : "~") + dur(x.s);
 const causeText = c => `after #${c.id} ${c.title}${c.label ? " on " + c.label.split(" (")[0] : ""} at ${hm(c.ts)}`;
-function tlRow(d, x) {
+// a time beside another: the day only when it differs
+const hmd = (ts, ref) => sameDay(ts, ref) ? hm(ts) : `${wd(ts)} ${hm(ts)}`;
+const RISKW = {critical: "critical", high: "high", low: "low", none: "no real change"};
+const tgLine = (m, ref) => `<div class="tlt">${ic("send")}<span>${esc(hmd(m.ts, ref))} Telegram: ${esc(m.text)}</span></div>` +
+  (m.full ? `<details class="pkl" data-how="${esc("tgm:" + m.ts)}"${CH.how.has("tgm:" + m.ts) ? " open" : ""}><summary>The whole message${ic("chev")}</summary><div class="bub" style="margin-top:6px"><div class="t">${tg(m.full)}</div></div></details>` : "");
+const partOf = (x) => x.part_of ? `<button class="tlp" type="button" data-act="tlgo" data-id="${esc(x.part_of.id)}">${ic("link")}part of the story of ${esc(x.part_of.name)}, ${esc(hmd(x.part_of.ts, x.ts))} · ${esc(x.part_of.why)}</button>` : "";
+const STORYIC = {check: "check", config: "cfg"};
+function storyHtml(x) {
+  const st = x.story || [];
+  if (!st.length) return "";
+  return `<div class="tlstory"><div class="lab">The same story · ${st.length}</div>` + st.map(v =>
+    `<button class="tls${v.level === "critical" || v.level === "high" ? " hot" : ""}" type="button" data-act="tlgo" data-id="${esc(v.id)}">${ic(STORYIC[v.type] || "list")}<span class="t">${esc(hmd(v.ts, x.ts))} ${esc(v.where || "")}, ${esc(RISKW[v.level] || v.level || "")}${v.sid ? (v.handled ? " · handled" : " · to decide") : ""}: ${esc(v.text || "")}</span><span class="why">${esc(v.why)}</span></button>`).join("") + `</div>`;
+}
+function tlRow(d, x, inSheet) {
   let ico = "gray", i = "clock", t = "", m = [], more = "", attr = "";
   if (x.type === "incident") {
     const ms = x.members, n = ms.length, nm = v => devName(d, v.ip, v.name);
@@ -1918,7 +2028,7 @@ function tlRow(d, x) {
     }
     if (n > 1) more = `<div class="tlm">${ms.map(v => `<button class="ent" type="button" data-ip="${esc(v.ip)}">${esc(nm(v))}</button> <span class="fine">${v.open ? "still down" : esc(dur(v.b - v.a))}</span>`).join(" · ")}</div>`;
     else attr = ` data-ip="${esc(ms[0].ip)}"`;
-    for (const msg of x.told || []) more += `<div class="tlt">${ic("send")}<span>${esc(hm(msg.ts))} Telegram: ${esc(msg.text)}</span></div>`;
+    for (const msg of x.told || []) more += `<div class="tlt">${ic("send")}<span>${esc(hmd(msg.ts, x.ts))} Telegram: ${esc(msg.text)}</span></div>`;
   } else if (x.type === "wan") {
     ico = x.kind === "blip" ? "yellow" : "orange"; i = "globe";
     t = `${wanw(x.kind)} — ${wanLen(x)}`;
@@ -1926,20 +2036,38 @@ function tlRow(d, x) {
       x.cause && x.where === "unknown" ? "" : x.why || "");
     attr = ` data-wan="${esc(x.ts)}"`;
   } else if (x.type === "telegram") {
-    ico = "blue"; i = "send"; t = x.text; m.push(`Telegram · ${x.channel}`);
+    ico = "blue"; i = "send"; t = x.text; m.push("Telegram", x.attached ? "also under the event it is about" : "");
     const id = "tg:" + x.ts;
     more = `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>The whole message${ic("chev")}</summary><div class="bub" style="margin-top:6px"><div class="t">${tg(x.full)}</div></div></details>`;
   } else if (x.type === "security") {
     ico = x.handled ? "gray" : x.sev === "critical" ? "red" : "orange"; i = "shield";
     t = x.title + (x.count > 1 ? ` (${x.count} times)` : "");
-    m.push(x.source || "", x.handled ? `handled ${clock(x.handled.ts)}` : "open, under Needs you");
+    m.push(x.source || "", x.handled ? `handled ${clock(x.handled.ts)}` : "to decide, on Security");
     if (x.ip) attr = ` data-ip="${esc(x.ip)}"`;
+    for (const msg of x.told || []) more += `<div class="tlt">${ic("send")}<span>${esc(hmd(msg.ts, x.ts))} Telegram: ${esc(msg.text)}</span></div>`;
+  } else if (x.type === "config") {
+    ico = x.handled ? "gray" : x.risk === "critical" ? "red" : x.risk === "high" ? "orange" : "gray"; i = "cfg";
+    t = `${x.name}: ${x.what}`;
+    m.push(RISKW[x.risk] || x.risk || "", "its configuration, compared with the day before", x.sid ? (x.handled ? `handled ${clock(x.handled.ts)}` : "to decide, on Security") : "");
+    if (x.why) more += `<div class="rs" style="margin-top:4px">${esc(x.why)}</div>`;
+    if ((x.lines || []).length) { const id = "cfl:" + x.id; more += `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>What changed, line by line${ic("chev")}</summary><div class="wlog">${esc(x.lines.join("\n"))}</div></details>`; }
+    more += partOf(x);
+    if (x.ip) attr = ` data-ip="${esc(x.ip)}"`;
+  } else if (x.type === "owl") {
+    ico = x.health === "ok" ? "gray" : x.health === "critical" ? "red" : "orange"; i = "owl";
+    const first = String(x.summary || "").split(/(?<=[.!?])\s+/)[0];
+    t = `The owl: ${x.health || "no verdict"}${first ? " — " + first : ""}`;
+    m.push(x.changed ? "its verdict changed" : "", (x.issues || []).length ? `${x.issues.length} issue${x.issues.length > 1 ? "s" : ""}: ${x.issues.map(v => v.device).join(", ")}` : "");
+    for (const msg of x.told || []) more += tgLine(msg, x.ts);
+    if (String(x.summary || "").length > first.length + 2) { const id = "owl:" + x.ts; more += `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>All it said${ic("chev")}</summary><div class="rs" style="margin-top:4px">${linkify(d, x.summary)}</div></details>`; }
   } else if (x.type === "action") {
     const st = PST[x.status] || [x.status, "gray"];
     ico = x.status === "done" ? "green" : x.status === "failed" ? "red" : st[1]; i = "bolt";
     t = x.label ? `${x.title} — ${x.label.split(" (")[0]}` : x.title;
-    m.push(`#${x.id} · ${st[0].toLowerCase()}`, `from ${fromWho(x)}`);
-    if (x.ip) attr = ` data-ip="${esc(x.ip)}"`;
+    m.push(`#${x.id} · ${st[0].toLowerCase()}`, `from ${fromWho(x)}`, fromWhere(x));
+    for (const msg of x.told || []) more += tgLine(msg, x.ts);
+    // tapped: the action itself — its steps, what it found — not the device (10-08)
+    attr = ` data-act="openprop" data-pid="${esc(x.id)}" role="button" tabindex="0"`;
   } else if (x.type === "rename") {
     i = "compose";
     t = x.to ? `Renamed ${x.from ? `“${x.from}”` : x.mac} → “${x.to}”` : `Name taken back: “${x.from}”`;
@@ -1951,17 +2079,39 @@ function tlRow(d, x) {
     ico = "blue"; i = "plus";
     const priv = (x.vendor || "").startsWith("private");
     t = `New on ${x.site_name || x.site}: ${x.name || (priv ? "a phone or laptop hiding its MAC" : x.vendor || x.ip)}`;
-    m.push(x.ip, x.mac, x.guest ? "guest Wi-Fi" : "", x.status === "watched" ? "watched" : x.status === "known" ? "known" : "");
+    m.push(x.ip, x.mac, x.vendor && !priv && x.name ? x.vendor : "", x.guest ? "guest Wi-Fi" : "",
+      x.here ? "here now" : x.last && x.last - x.ts > 120 ? `heard ${hm(x.ts)}–${hmd(x.last, x.ts)}` : "",
+      x.status === "watched" ? "watched" : x.status === "known" ? "known" : "");
+    for (const msg of x.told || []) more += tgLine(msg, x.ts);
+    const o = x.owl || {};
+    if (o.said) more += `<div class="tlt">${ic("owl")}<span>The owl, ${esc(hmd(o.said_ts, x.ts))}: ${linkify(d, o.said)}${o.raised > 1 ? ` <span class="fine">· raised as an issue in ${o.raised} hourly audits</span>` : ""}</span></div>`;
+    more += storyHtml(x);
   } else if (x.type === "check") {
     ico = x.problem ? (SEV[x.severity] === "red" ? "red" : "orange") : "gray"; i = x.problem ? "warn" : "check";
     t = x.summary || ""; m.push(x.source || "", x.problem ? x.severity : "fine", fKind(x));
+    const lip = logIp(d, x);
+    if (lip && (d.devices || []).some(v => v.ip === lip)) attr = ` data-ip="${esc(lip)}"`;   // its log's machine
     if (x.problem && x.detail) more = `<div class="rs clamp" data-act="more">${esc(x.detail)}</div>`;
+    if ((x.log || []).length) { const id = "chl:" + x.id; more += `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>The ${x.log.length} line${x.log.length > 1 ? "s" : ""} it read${ic("chev")}</summary><div class="wlog">${esc(x.log.join("\n"))}</div></details>`; }
+    more += partOf(x);
   }
-  return `<div class="tlr${quietIt(x) ? " quiet" : ""}"${attr}><span class="tlh">${esc(hm(x.ts))}</span><span class="evi c-${ico}">${ic(i)}</span>
+  const tid = tlId(x);
+  // in a device's own sheet a row is already about it: no row reopens the sheet; elsewhere a
+  // row opens its device's sheet AT that row (10-08)
+  if (inSheet && /data-(ip|wan)=/.test(attr)) attr = "";
+  else if (/data-ip=/.test(attr) && tid != null) attr += ` data-focus="${esc(tid)}"`;
+  return `<div class="tlr${quietIt(x) ? " quiet" : ""}${tid != null && tid === LIT.id && Date.now() < LIT.until ? " lit" : ""}"${attr}${tid != null ? ` data-tid="${esc(tid)}"` : ""}><span class="tlh">${esc(hm(x.ts))}</span><span class="evi c-${ico}">${ic(i)}</span>
     <div class="tlc"><div class="tln">${esc(t)}</div><div class="tlx">${esc(m.filter(Boolean).join(" · "))}</div>${more}</div></div>`;
 }
 function tlLanes(d) {
-  const T = TL.d, t1 = T.now, t0 = T.since, w = d.wan || {}, ww = w.watch || {};
+  const T = TL.d;
+  // folded to one line by default: the events come first (the stranger scrolled 1.5 screens to the first one)
+  if (!S.lanes) {
+    const nb = T.items.filter(x => x.type === "incident" && x.cat === "down" && x.members.length > 1 && x.members.some(v => inSite(d, v.ip))).length;
+    const nd = T.items.filter(x => x.type === "incident" && x.cat === "down" && x.members.some(v => inSite(d, v.ip))).length;
+    return `<div class="card tlfold"><span class="rs"><b>Seven days at a glance</b> · ${nd} outage${nd === 1 ? "" : "s"}${nb ? `, ${nb} time${nb > 1 ? "s" : ""} several went down together` : ""}</span><button class="sbtn" type="button" data-act="lanes">Show the lanes</button></div>`;
+  }
+  const t1 = T.now, t0 = T.since, w = d.wan || {}, ww = w.watch || {};
   const st = w.state || (w.ok === false ? "down" : w.ok ? "ok" : "unknown");
   const ws = S.site === "all" || S.site === "home" ? (w.events || []).map(e => ({a: e.ts, b: e.ts + Math.max(e.s || 0, e.kind === "blip" ? 120 : 0),
     cls: e.kind === "blackout" ? "bad" : e.kind === "blip" ? "blip" : "warn"})) : null;
@@ -1989,7 +2139,7 @@ function tlLanes(d) {
   let lastGroup = null;
   const laneRows = lanes.map(l => (l.group !== lastGroup ? `<div class="lgrp">${esc((lastGroup = l.group) || "other")}</div>` : "") + lane(l.name, l.segs, l.rec, l.ip)).join("");
   const nq = Object.entries(T.lanes || {}).filter(([ip]) => inSite(d, ip)).reduce((t, [, l]) => t + l.segs.filter(v => v[2] !== "down").length, 0);
-  return `<div class="card"><div class="vizh" style="margin-top:0">Seven days at a glance<span class="r">${bands.length ? `${bands.length} time${bands.length > 1 ? "s" : ""} several went down together: shaded` : ""}</span></div>
+  return `<div class="card"><div class="vizh" style="margin-top:0">Seven days at a glance<span class="r">${bands.length ? `${bands.length} time${bands.length > 1 ? "s" : ""} several went down together: shaded · ` : ""}<button class="flnk" type="button" data-act="lanes">Fold</button></span></div>
     <div class="lanes"><div class="lrow"><span></span>${dayAxis(t0, t1, innerWidth < 700)}</div>${ws ? lane("Internet", ws, wrec, null, true) : ""}
     <div class="lbody">${laneRows || `<div class="fine">No device watched yet.</div>`}${lanes.length && !moved ? `<div class="fine">Nothing went down in 7 days${S.sched ? "" : ", schedules and pauses aside"}.</div>` : ""}
     <div class="lbands">${bands.map(x => `<i class="tlband" style="left:${pc(x.a).toFixed(3)}%;width:${(pc(x.b) - pc(x.a)).toFixed(3)}%"></i>`).join("")}</div></div></div>
@@ -2004,26 +2154,62 @@ function renderLog(d) {
     return;
   }
   if (S.tab === "log" && !TL.busy && Date.now() - TL.at > 60000) loadTimeline();
-  put("tl-lanes", tlLanes(d));
   const its = TL.d.items.filter(x => tlSite(d, x));
-  const cnt = k => its.filter(x => k === "all" ? !quietIt(x) : tlType(x) === k).length;
+  const cnt = k => its.filter(x => shownIn(x, k)).length;
   put("tl-filters", TLF.map(([k, t]) => `<button class="chip" type="button" data-tlf="${k}" aria-pressed="${S.tlf === k}">${t} <span class="cnt">${cnt(k)}</span></button>`).join(""));
-  const shown = its.filter(x => S.tlf === "all" ? !quietIt(x) : tlType(x) === S.tlf), hid = S.tlf === "all" ? its.length - shown.length : 0;
+  put("tl-lanes", tlLanes(d));
+  const shown = its.filter(x => shownIn(x, S.tlf));
   let h = "", day = "";
-  for (const x of shown.slice(0, 400)) {
+  for (const x of shown.slice(0, 500)) {
     const k = dayName(x.ts);
     if (k !== day) { h += `${day ? "</div>" : ""}<div class="sh">${esc(k)}</div><div class="list tll">`; day = k; }
     h += tlRow(d, x);
   }
   if (day) h += "</div>";
   if (!shown.length) h = `<div class="list"><div class="empty">Nothing here in 7 days.</div></div>`;
-  if (shown.length > 400) h += `<div class="fine" style="margin:6px 4px">…and ${shown.length - 400} older. Ask can search them all.</div>`;
-  if (hid) h += `<div class="fine" style="margin:8px 4px">${hid} quieter entries (scheduled sleep and pauses, Telegram's copies, routine log checks, refused requests) are under their own filters.</div>`;
+  if (shown.length > 500) h += `<div class="fine" style="margin:6px 4px">…and ${shown.length - 500} older. Ask can search them all.</div>`;
   if (S.tlf === "new") h += `<div id="tl-seen">${SEEN.open ? "" : `<button class="sbtn" type="button" data-act="seenall" style="margin:10px 0">Every device ever seen on the networks</button>`}</div>`;
   put("tl-body", h);
   if (S.tlf === "new" && SEEN.open) renderSeen(d);
+  if (S.tlGo) tlGoNow();
 }
-
+// an action: in the sheet, centered, from wherever it is tapped (10-08)
+function openProp(id) {
+  S.sheet = null; S.wan = null; S.sheetProp = id;
+  renderSheet();
+  const dlg = $("sheet");
+  if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add("modal"); }
+  dlg.scrollTop = 0;
+}
+// the row just jumped to stays lit for a moment, through the redraws that follow (the device's
+// history arriving, the next refresh)
+const LIT = {id: null, until: 0};
+function lightUp(el, id) {
+  LIT.id = id; LIT.until = Date.now() + 2600;
+  el.classList.add("lit"); setTimeout(() => el.classList.remove("lit"), 2600);
+}
+// every row's name on the Timeline: a story's lines and the search go to it by this
+const tlId = x => x.type === "owl" ? "owl:" + x.ts : x.type === "telegram" ? "tg:" + x.ts : x.type === "action" ? "act:" + x.id
+  : x.type === "incident" ? "inc:" + x.ts : x.type === "wan" ? "wan:" + x.ts : x.type === "rename" ? "ren:" + x.ts
+  : x.type === "refused" ? null : x.id != null ? String(x.id) : null;
+// "Open the story", a story's own lines, a search result: to that row on the Timeline, lit for a
+// moment — under Everything, or under the filter that shows it (a message under its event: Telegram)
+function tlGo(id, f = "all") {
+  S.tlGo = id;
+  if (S.tlf !== f) { S.tlf = f; save("tlf", f); }
+  if (S.site !== "all") setSite("all");
+  if (S.tab !== "log") setTab("log");
+  if (S.d) renderLog(S.d);              // drawn now: not at the next refresh, half a minute later
+  if (!TL.d && !TL.busy) loadTimeline();
+  if (!TL.d) toast("Finding it on the Timeline…");
+}
+function tlGoNow() {
+  const el = document.querySelector(`#tl-body [data-tid="${CSS.escape(S.tlGo)}"]`);
+  if (!el) { if (TL.d) S.tlGo = null; return; }
+  S.tlGo = null;
+  el.scrollIntoView({behavior: "auto", block: "center"});
+  lightUp(el, el.dataset.tid);
+}
 const SEEN = {rows: null, ts: 0, busy: false, err: "", open: false};
 async function loadSeen() {
   if (SEEN.busy) return;
@@ -2279,6 +2465,9 @@ const isLive = () => ((S.d || {}).actions || {}).mode === "live";
 const VIA = {telegram: "a Telegram question", dashboard: "a dashboard question", audit: "the audit"};
 // who asked: the model (from a question or the audit), or the owner's own press — which the page
 const fromWho = p => p.owner ? `you, on ${p.via === "telegram" ? "Telegram" : "the dashboard"}` : VIA[p.via] || p.via;
+// which browser approved it (actions.decide records it since 10-08): a login can be shared
+const fromWhere = p => { const w = p.decided_from || {}; const t = [w.addr, w.agent, w.browser ? "login " + w.browser : ""].filter(Boolean).join(", ");
+  return t ? `${p.status === "rejected" ? "rejected" : "approved"} from ${t}` : ""; };
 const PBUSY = {};
 function propById(id) { const A = (S.d || {}).actions || {}; return [...(A.pending || []), ...(A.recent || [])].find(p => p.id === id); }
 function stepHtml(p, x, i) {
@@ -2290,7 +2479,7 @@ function stepHtml(p, x, i) {
 function sessHtml(p) {
   const dry = p.mode !== "live", busy = PBUSY[p.id] ? " disabled" : "", o = p.outcome || {};
   const st = p.status === "done" ? ["Closed", "gray"] : PST[p.status] || [p.status, "gray"];
-  let h = `<div class="prop c-${st[1]}"><div class="ph"><span class="tagx">${esc(st[0])}</span><b>Investigation session</b><span class="pid">#${esc(p.id)} · ${esc(clock(p.ts))}</span></div>`;
+  let h = `<div class="prop c-${st[1]}" data-pcard="${esc(p.id)}"><div class="ph"><span class="tagx">${esc(st[0])}</span><b>Investigation session</b><span class="pid">#${esc(p.id)} · ${esc(clock(p.ts))}</span></div>`;
   if (p.label) h += `<div class="pdev">${esc(p.label)}</div>`;
   if (p.goal) h += `<div class="diag">${ic("owl")}<div><i>${esc(p.goal)}</i></div></div>`;
   if (p.status === "pending") {
@@ -2307,7 +2496,7 @@ function sessHtml(p) {
   if (steps.length) h += `<div class="psteps">${steps.map((x, i) => stepHtml(p, x, i)).join("")}</div>`;
   if (p.findings) h += `<div class="pfind">${md(p.findings)}</div>`;
   else if (p.findings_error) h += `<div class="pres bad">${esc(cap(p.findings_error))}</div>`;
-  else if (p.status === "open") h += `<div class="running"><span class="spin"></span>The model is investigating${steps.length ? "" : " — the first check is on its way"}…</div>`;
+  else if (p.status === "open") h += `<div class="running"><span class="spin"></span>The owl is investigating${steps.length ? "" : " — the first check is on its way"}…</div>`;
   if (p.status === "open") h += `<div class="pbtns"><button class="pbtn" type="button" data-act="endsess" data-pid="${esc(p.id)}"${busy}>${ic("stop")}End session</button></div>`;
   return h + `</div>`;
 }
@@ -2338,7 +2527,7 @@ function propHtml(p) {
   const dry = p.mode !== "live", o = p.outcome || {}, busy = PBUSY[p.id] ? " disabled" : "";
   const st = p.status === "done" && o.dry_run ? ["Approved · dry run", "green"] : p.status === "running" && dry ? ["Checking", "indigo"]
     : p.status === "running" && p.queued ? ["Queued", "blue"] : PST[p.status] || [p.status, "gray"];
-  let h = `<div class="prop c-${st[1]}"><div class="ph"><span class="tagx">${esc(st[0])}</span><b>${esc(p.title)}</b><span class="pid">#${esc(p.id)} · ${esc(clock(p.ts))}</span></div>
+  let h = `<div class="prop c-${st[1]}" data-pcard="${esc(p.id)}"><div class="ph"><span class="tagx">${esc(st[0])}</span><b>${esc(p.title)}</b><span class="pid">#${esc(p.id)} · ${esc(clock(p.ts))}</span></div>
     <div class="pdev">${esc(p.label)}</div>`;
   if (p.command) h += `<code class="pcmd">${esc(p.command)}</code>`;
   if (p.reason) h += `<div class="diag">${ic("owl")}<div><i>${esc(p.reason)}</i></div></div>`;
@@ -2359,9 +2548,9 @@ function propHtml(p) {
   } else if (o.ran !== undefined && (p.status === "done" || p.status === "failed")) {
     h += `<div class="pres${p.status === "failed" ? " bad" : ""}">${esc(cap(p.status === "done" ? o.result : o.error))}</div>` +
       ((o.lines || []).length ? `<pre class="pout">${esc(o.lines.join("\n"))}</pre>` : "") +
-      `<div class="pmeta">From ${esc(fromWho(p))} · approved on ${esc(BY[p.decided_by] || p.decided_by)} at ${esc(hm(p.decided_ts))}${o.secs != null ? " · took " + esc(dur(o.secs)) : ""}</div>`;
+      `<div class="pmeta">From ${esc(fromWho(p))} · approved on ${esc(BY[p.decided_by] || p.decided_by)} at ${esc(hm(p.decided_ts))}${fromWhere(p) ? " · " + esc(fromWhere(p)) : ""}${o.secs != null ? " · took " + esc(dur(o.secs)) : ""}</div>`;
   } else {
-    h += `<div class="pmeta">From ${esc(fromWho(p))}. ${esc(cap(p.words))}${p.status === "done" && o.check ? ". At approval: " + esc(o.check) : ""}.</div>`;
+    h += `<div class="pmeta">From ${esc(fromWho(p))}. ${esc(cap(p.words))}${p.status === "done" && o.check ? ". At approval: " + esc(o.check) : ""}.${fromWhere(p) ? " " + esc(cap(fromWhere(p))) + "." : ""}</div>`;
   }
   return h + `</div>`;
 }
@@ -2372,7 +2561,7 @@ function renderActs(d) {
   const r = all.filter(p => !(p.status === "refused" && !p.owner)), hid = all.length - r.length;
   put("act-n", !A.enabled ? "off" : (A.mode === "live" ? "live" : "dry run"));
   put("acts", !A.enabled ? `<div class="list"><div class="empty">Actions are off (actions.enabled).</div></div>` :
-    (r.length ? `<div class="card props">` + r.slice(0, 15).map(propHtml).join("") + `</div>` :
+    (r.length ? `<div class="card props">` + [...(S.propGo != null && !r.slice(0, 15).some(p => p.id === S.propGo) ? r.filter(p => p.id === S.propGo) : []), ...r.slice(0, 15)].map(propHtml).join("") + `</div>` :
     `<div class="list"><div class="empty">The model has not proposed anything yet.</div></div>`) +
     (hid ? `<div class="fine" style="margin:6px 4px 0">${hid} of the model's own request${hid > 1 ? "s" : ""} refused by the rules, not shown — ask about them in Ask if you want to know.</div>` : ""));
 }
@@ -2475,7 +2664,20 @@ function palOptions(q) {
       .forEach(m => { seen.add(m.ip); out.push({g: "Machines", i: "shield", t: m.name, v: m.ip, ip: m.ip}); });
     (d.sites || []).forEach(s => (((s.dhcp || {}).rows) || []).filter(r => !seen.has(r.ip) && (has(r.name) || has(r.ip) || has(r.mac) || has(r.vendor))).slice(0, 5)
       .forEach(r => out.push({g: "On the networks, not watched", i: "plus", t: r.name || r.vendor || r.ip, v: `${r.ip} · ${s.name}`, site: s.key})));
+    // a MikroTik's MAC says "Routerboard.com": "mikrotik" finds it too
+    if ("mikrotik".includes(n) && n.length >= 4) (d.sites || []).forEach(s => (((s.dhcp || {}).rows) || []).filter(r => /routerboard/i.test(r.vendor || "") && !out.some(o => o.t === (r.name || r.vendor || r.ip)))
+      .forEach(r => out.push({g: "On the networks, not watched", i: "plus", t: r.name || r.vendor || r.ip, v: `${r.ip} · ${s.name} · MikroTik`, site: s.key})));
     (d.sites || []).filter(s => has(s.name)).forEach(s => out.push({g: "Sites", i: "globe", t: s.name, v: `${s.up}/${s.total} answering`, site: s.key}));
+    // the Timeline's seven days: new devices, log checks, changes, the owl's words, messages, actions (10-08)
+    const TI = {new_device: ["plus", x => `${x.name || x.vendor || x.ip}`, x => [x.ip, x.mac, x.vendor, x.name].join(" ")],
+      check: ["check", x => x.summary, x => [x.summary, x.detail, x.source, ...(x.log || [])].join(" ")],
+      config: ["cfg", x => `${x.name}: ${x.what}`, x => [x.name, x.what, x.why, ...(x.lines || [])].join(" ")],
+      security: ["shield", x => x.title, x => [x.title, x.source].join(" ")],
+      owl: ["owl", x => String(x.summary || "").split(/(?<=[.!?])\s+/)[0], x => x.summary],
+      telegram: ["send", x => x.text, x => x.full], action: ["bolt", x => `${x.title} — ${x.label || ""}`, x => [x.title, x.label, x.words].join(" ")]};
+    if (TL.d) TL.d.items.filter(x => TI[x.type] && String(TI[x.type][2](x) || "").toLowerCase().includes(n)).slice(0, 10)
+      .forEach(x => out.push({g: "On the Timeline", i: TI[x.type][0], t: String(TI[x.type][1](x) || "").slice(0, 120),
+        v: `${hmd(x.ts, NOW)}${x.type === "telegram" ? " · Telegram" : ""}`, tl: tlId(x), tlf: x.type === "telegram" && x.attached ? "tg" : "all"}));
   }
   views.filter(v => !n || v[1].toLowerCase().includes(n)).forEach(v => out.push({g: "Go to", i: v[2], t: v[1], v: "", view: v[0]}));
   cmds.filter(c => !n || c[1].toLowerCase().includes(n)).forEach(c => out.push({g: "Do", i: c[2], t: c[1], v: "", act: c[0]}));
@@ -2496,6 +2698,7 @@ function renderPal() {
 }
 function openPal() {
   const dlg = $("pal");
+  if (!TL.d && !TL.busy) loadTimeline().then(() => { if ($("pal").open) renderPal(); });
   $("palq").value = ""; PAL.sel = 0; renderPal();
   if (!dlg.open) dlg.showModal();
   setTimeout(() => $("palq").focus(), 30);
@@ -2505,6 +2708,7 @@ function pickPal(o) {
   closePal();
   if (!o) return;
   if (o.ip) { openSheet(o.ip); return; }
+  if (o.tl) { tlGo(o.tl, o.tlf || "all"); return; }
   if (o.site) { S.group = null; setTab("devices"); setSite(o.site); return; }
   if (o.view === "model") { S.askp = "model"; save("askp", "model"); setTab("ask"); renderAskPanel(); return; }
   if (o.view) { setTab(o.view); return; }
@@ -2635,8 +2839,8 @@ async function forgetMem(btn) {
 function renderShell(d) {
   const x = d.shell || {}, y = d.shell_audit || {};
   if (!x.enabled && !y.enabled) { put("sh-n", "off"); put("shellv", `<div class="list"><div class="empty">The shell is off (shell.enabled).</div></div>`); return; }
-  put("sh-n", [x, y].filter(z => z.enabled).every(z => z.ok) ? "isolated" : [x, y].some(z => z.ok === false) ? "off" : "checking");
-  const head = (x.enabled ? boxRow(x, "Your questions'") : "") + (y.enabled ? boxRow(y, "The audit's (offline)") : "");
+  put("sh-n", [x, y].filter(z => z.enabled).every(z => z.ok) ? "fenced off" : [x, y].some(z => z.ok === false) ? "off" : "checking");
+  const head = (x.enabled ? boxRow(x, "For your questions") : "") + (y.enabled ? boxRow(y, "For the hourly audit") : "");
   const WHO = {telegram: "Telegram", dashboard: "dashboard", audit: "the audit"};
   const cmds = [...(x.recent || []), ...(y.recent || [])].sort((a, b) => b.ts - a.ts).slice(0, 15);
   const rows = cmds.map(c => `<div class="row"><span class="rt"><span class="rn wrap mono" style="font-size:13.5px">$ ${esc(c.cmd)}</span>
@@ -2686,20 +2890,20 @@ async function logout(everywhere) {
 // The Security tab (updates.py): what matters first — the findings that paged, red —
 // then each machine (Update where it can be updated from here), the updates that
 // do not page, and the monthly vulnerability scan.
-// A dismissed finding (updates.py dismiss): out of "What matters" until something new
+// A dismissed finding (updates.py dismiss): out of "To decide" until something new
 // shows up for it; an open insecure port until undone.
 const backWhen = k => k.startsWith("port:") ? "until you undo it" : k.startsWith("cve:") ? "back if a scan finds something new on it"
   : k.startsWith("reboot:") ? "back if a new reboot becomes pending" : k.startsWith("secupd:") ? "back if a new security update appears"
   : k.startsWith("ros:") ? "back when a newer RouterOS is out"
   : k.startsWith("exp:") || isLook(k) ? "until you undo it, or the problem is gone" : "back if something new shows up";
-const disWords = f => `Dismissed ${clock(f.dismissed.ts)}${f.dismissed.note ? " · " + f.dismissed.note : ""} — ${backWhen(f.key)}`;
+const disWords = f => `Accepted ${clock(f.dismissed.ts)}${f.dismissed.note ? " · " + f.dismissed.note : ""} — ${backWhen(f.key)}`;
 function openDis(key) {
   const f = [...(((S.d || {}).updates || {}).findings || []), ...(((S.d || {}).exposure || {}).findings || []),
              ...(((S.d || {}).drift || {}).findings || [])]
     .find(x => x.key === key), dlg = $("disdlg");
   if (!f) return;
   S.disFor = key;
-  $("dis-what").innerHTML = `${esc(f.text || `${f.name || lookWho(f)}: ${f.title}`)}<br><span class="fine">It leaves the list and pages nothing — ${esc(backWhen(key))}. The weekly review treats it as known, with your reason.</span>`;
+  $("dis-what").innerHTML = `${esc(f.text || `${f.name || lookWho(f)}: ${f.title}`)}<br><span class="fine">You accept it as it is: it leaves the list and pages nothing — ${esc(backWhen(key))}. The weekly review treats it as known, with your reason.</span>`;
   $("disq").value = ""; $("diserr").textContent = "";
   if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add("modal"); }
   setTimeout(() => $("disq").focus(), 60);
@@ -2714,15 +2918,15 @@ $("disf").addEventListener("submit", async e => {
   $("disb").disabled = true;
   const r = await post(isLook(key) ? "/api/reviews" : "/api/updates", {dismiss: key, note: $("disq").value.trim()}).catch(() => ({ok: false, error: "lanowl is not answering."}));
   $("disb").disabled = false;
-  if (r.ok) { closeDis(); toast(`Dismissed — ${backWhen(key)}.`); refresh(); }
-  else $("diserr").textContent = r.error || "Could not dismiss it.";
+  if (r.ok) { closeDis(); toast(`Accepted — ${backWhen(key)}.`); refresh(); }
+  else $("diserr").textContent = r.error || "Could not accept it.";
 });
 async function undismiss(key) {
   const r = await post(isLook(key) ? "/api/reviews" : "/api/updates", {undismiss: key}).catch(() => ({ok: false, error: "lanowl is not answering."}));
-  toast(r.ok ? (isLook(key) ? "Back in the list." : "Back in What matters.") : r.error || "Could not undo it.");
+  toast(r.ok ? (isLook(key) ? "Back in the list." : "Back in To decide.") : r.error || "Could not undo it.");
   refresh();
 }
-// A security event the logs showed (seclog.py): it stays in What matters until the
+// A security event the logs showed (seclog.py): it stays in To decide until the
 // owner marks it handled — a pick ("It was me" / "Fixed") and a note, both optional.
 function openHandle(id) {
   const x = (((S.d || {}).seclog || {}).open || []).find(v => v.id === id), dlg = $("hdlg");
@@ -2748,7 +2952,7 @@ $("hdf").addEventListener("submit", async e => {
 });
 async function unhandle(id) {
   const r = await post("/api/security", {unhandle: id}).catch(() => ({ok: false, error: "lanowl is not answering."}));
-  toast(r.ok ? "Back in What matters." : r.error || "Could not undo it.");
+  toast(r.ok ? "Back in To decide." : r.error || "Could not undo it.");
   refresh();
 }
 // Who gets in, what is exposed: the log checks' verdicts about ACCESS, the auth logs lanowl
@@ -2756,12 +2960,17 @@ async function unhandle(id) {
 // security or health by the model; one without a label counts as security from a host's auth
 // log, health from the router's.
 const fKind = x => x.kind || (String(x.source || "").startsWith("host log") ? "security" : "health");
-const secLogs = d => (d.findings || []).filter(f => fKind(f) === "security");
 function logsHtml(d, logs) {
-  // a problem the logs showed is in What matters; here, how much was read and the auth logs
-  const bad = logs.filter(f => f.problem).length;
-  return `<div class="sh">Logins &amp; logs <span class="r">48h</span></div><div class="list">` +
-    `<button class="row" type="button" data-act="lbchecks"><span class="rt"><span class="rs wrap">${logs.length} verdict${logs.length === 1 ? "" : "s"} about access in 48h${bad ? `, ${bad} a problem (in What matters)` : ", none a problem"} — every one is on the Timeline, under Log checks</span></span>${ic("chev", "chev")}</button></div>` + hostsHtml(d);
+  // every log check of the last 48 hours, the same count as the Timeline's: the problems, then
+  // the latest fine ones — each opens to the lines it read
+  const bad = logs.filter(f => f.problem), fine = logs.filter(f => !f.problem);
+  const row = f => `<div class="row"${logIp(d, f) && (d.devices || []).some(v => v.ip === logIp(d, f)) ? ` data-ip="${esc(logIp(d, f))}" data-focus="chk:${esc(Number(f.ts).toFixed(3))}"` : ""}><span class="sd c-${f.problem ? (SEV[f.severity] === "red" ? "red" : "orange") : "gray"}"></span><span class="rt"><span class="rn wrap">${esc(f.summary || "")}</span>
+    <span class="rs wrap">${esc(hmd(f.ts, NOW))} · ${esc(f.source || "")} · ${esc(f.problem ? f.severity : "fine")}</span>
+    ${(f.log || []).length ? `<details class="pkl" data-how="${esc("lgl:" + f.ts)}"${CH.how.has("lgl:" + f.ts) ? " open" : ""}><summary>The ${f.log.length} line${f.log.length > 1 ? "s" : ""} it read${ic("chev")}</summary><div class="wlog">${esc(f.log.join("\n"))}</div></details>` : ""}</span></div>`;
+  return `<div class="sh">Log checks <span class="r">48 h · ${logs.length} check${logs.length === 1 ? "" : "s"} · ${bad.length ? `${bad.length} a problem` : "none a problem"}</span></div><div class="list">` +
+    (logs.length ? [...bad, ...fine.slice(0, 3)].map(row).join("") : `<div class="empty">No log was read in 48 hours.</div>`) +
+    (fine.length > 3 ? `<button class="row" type="button" data-act="lbchecks"><span class="rt"><span class="rn" style="color:var(--blue-t)">${fine.length - 3} more, all fine: on the Timeline</span></span>${ic("chev", "chev")}</button>` : "") +
+    `</div>` + hostsHtml(d);
 }
 function hostsHtml(d) {
   const hs = (d.host_logs || {}).hosts || [];
@@ -2772,25 +2981,20 @@ function hostsHtml(d) {
       <span class="fine">${esc(h.ip)}${h.public ? " · public" : ""}</span><span class="fine" style="margin-left:auto">read ${esc(h.age_s != null ? dur(h.age_s) + " ago" : "never")}</span>${ic("chev", "chev")}</div>
       ${h.ok ? "" : `<div class="running" style="color:var(--red-t);background:color-mix(in srgb,var(--red) 10%,transparent)">${esc(h.error)}</div>`}
       <div class="stat3">${tile(h.established ?? "—", "connections")}${tile(h.peers ?? "—", "addresses")}${tile(h.failed_auths_window ?? 0, "failed logins", h.failed_auths_window ? "orange" : "")}</div>
-      ${nz ? `<div class="fine" style="margin-top:10px">Scanners since ${esc(nz.since ? clock(nz.since) : "?")}: ${Number(nz.attempts).toLocaleString()} failed passwords from ${esc(nz.sources)} addresses — counted, not triaged.</div>` : ""}</div>`;
+      ${nz ? `<div class="fine" style="margin-top:10px">Since ${esc(nz.since ? clock(nz.since) : "?")}: ${esc(nz.sources)} address${nz.sources === 1 ? "" : "es"} knocked on its ssh (scanners), ${nz.attempts ? `${Number(nz.attempts).toLocaleString()} password${nz.attempts === 1 ? "" : "s"} tried` : "none tried a password"} — counted, not read one by one.</div>` : ""}</div>`;
   }).join("") : `<div class="list" style="margin-top:10px"><div class="empty">Host-log watching is off.</div></div>`;
 }
-// Both sandboxes: the owner's questions' (internet open) and the audit's (offline). Proven at
-// start, daily with the security review, and when a sandbox restarted (shell.py).
+// Both sandboxes, on Ask's model side beside the commands they ran (10-08: lanowl checking
+// itself is not the house's security; a failed check reaches Needs you). Proven at start,
+// daily with the security review, and when a sandbox restarted (shell.py).
 const boxRow = (x, who) => `<div class="row"><span class="sd c-${x.ok ? "green" : x.ok === false ? "red" : "gray"}"></span><span class="rt"><span class="rn wrap">${esc(who)}: ${esc(x.why || "")}</span>
     <span class="rs wrap">${x.checked ? "proven " + esc(ago(x.checked)) : "not checked yet"} · again daily, and whenever it restarts</span></span></div>`;
-function sandboxHtml(d) {
-  const a = d.shell || {}, b = d.shell_audit || {};
-  if (!a.enabled && !b.enabled) return "";
-  return `<div class="sh">The model's sandboxes</div><div class="list">` + (a.enabled ? boxRow(a, "Your questions'") : "")
-    + (b.enabled ? boxRow(b, "The audit's") : "") + `</div><div class="fine" style="margin:-4px 4px 10px">The commands they ran are under Ask → The model.</div>`;
-}
 // ONE list of what matters: the update check's findings, the model's security review, the
 // security log problems and the DHCP devices nobody knows — by severity, each saying where it
 // came from, dismissed the same way wherever it came from.
 const openReview = d => (((d.exposure || {}).findings) || []).filter(f => !f.dismissed);
 const RANK = {critical: 0, high: 1, warning: 2, info: 3};
-const logIp = (d, f) => f.source === "router log" ? "192.168.10.1"
+const logIp = (d, f) => f.source === "router log" ? (d.router_ip || "")
   : ((((d.host_logs || {}).hosts) || []).find(h => f.source === "host log " + h.name) || {}).ip || "";
 function secItems(d, all) {
   const U = d.updates || {}, X = d.exposure || {}, out = [], here = ip => all || !ip || inSite(d, ip);
@@ -2799,13 +3003,13 @@ function secItems(d, all) {
               from: "the update check", sub: f.dismissed ? disWords(f) : "", dis: !!f.dismissed, can: true});
   for (const f of X.findings || []) if (here(f.ip))
     out.push({key: f.key, ip: f.ip, sev: f.severity, top: ["critical", "high"].includes(f.severity),
-              text: `${f.name}: ${f.title}`, from: "the model's review", fx: true,
+              text: `${f.name}: ${f.title}`, from: "the owl's review", fx: true,
               sub: f.dismissed ? disWords(f) : `${f.evidence}${f.fix ? " → " + f.fix : ""}`, dis: !!f.dismissed, can: true});
   // what the logs showed about access: until the owner marks it handled (seclog.py)
   for (const x of (d.seclog || {}).open || []) if (here(x.ip))
     out.push({ip: x.ip, sev: x.sev === "critical" ? "critical" : "high", top: true, sid: x.id,
               text: x.title + (x.count > 1 ? ` (${x.count} times)` : ""),
-              from: `${x.source}, ${clock(x.last || x.ts)}${x.by === "rule" ? "" : " · the model"}`,
+              from: `${x.source}, ${clock(x.last || x.ts)}${x.by === "rule" ? "" : " · the owl"}`,
               sub: logSub(x)});
   for (const s of d.sites || []) if (s.dhcp && s.dhcp.unknown && (all || S.site === "all" || S.site === s.key))
     out.push({sev: "info", top: false, go: s.key, from: "DHCP", sub: "Watch them, or mark them Known",
@@ -2814,14 +3018,14 @@ function secItems(d, all) {
 }
 // A log event's text: what the line said, the model's read of it when a rule paged first, and
 // whether Telegram heard of it (a login through the tunnel pages once a day, the rest are here).
-const logSub = x => [x.detail, x.model ? `The model (${x.model.sev}): ${x.model.summary}${x.model.detail ? " — " + x.model.detail : ""}` : "",
+const logSub = x => [x.detail, x.model ? `The owl (${x.model.sev}): ${x.model.summary}${x.model.detail ? " — " + x.model.detail : ""}` : "",
   x.paged ? "" : "Not sent to Telegram: already told today."].filter(Boolean).join("\n");
 const itemRow = x => `<div class="row"${x.ip ? ` data-ip="${esc(x.ip)}"` : x.go ? ` data-act="gosite" data-sk="${esc(x.go)}"` : ""}><span class="sd c-${x.dis ? "gray" : SEV[x.sev] || "gray"}"></span>
   <span class="rt"><span class="rn wrap" style="font-weight:${!x.dis && x.top ? 600 : 400}">${esc(x.text)}</span>` +
   (x.sid || x.hid ? `<span class="rs wrap">${esc(x.from)}</span>${x.sub ? `<span class="rs clamp" data-act="more">${esc(x.sub)}</span>` : ""}`
     : `<span class="rs wrap">${esc(x.from)}${x.sub ? " · " + esc(x.sub) : ""}</span>`) + `</span>` +
-  (x.fx ? `<button class="rowbtn" type="button" data-act="fix" data-fk="${esc(x.key)}">Fix</button>` : "") +
-  (x.can ? `<button class="rowbtn" type="button" data-act="${x.dis ? "undismiss" : "dismiss"}" data-fk="${esc(x.key)}">${x.dis ? "Undo" : "Dismiss"}</button>` : "") +
+  (x.fx ? `<button class="rowbtn ghost" type="button" data-act="fix" data-fk="${esc(x.key)}">How to fix</button>` : "") +
+  (x.can ? `<button class="rowbtn" type="button" data-act="${x.dis ? "undismiss" : "dismiss"}" data-fk="${esc(x.key)}">${x.dis ? "Undo" : "Accept"}</button>` : "") +
   (x.sid ? `<button class="rowbtn" type="button" data-act="handle" data-sid="${esc(x.sid)}">Handled</button>` : "") +
   (x.hid ? `<button class="rowbtn" type="button" data-act="unhandle" data-sid="${esc(x.hid)}">Undo</button>` : "") +
   (x.ip || x.go ? ic("chev", "chev") : "") + `</div>`;
@@ -2853,13 +3057,13 @@ function fleetHtml(d) {
     ...bks.filter(m => !(m.ip && have.has(m.ip)) && (S.site === "all" || (m.ip && inSite(d, m.ip)))).map(m => ({x: null, ip: m.ip, name: m.name, bk: m}))];
   if (!rows.length) return `<div class="list"><div class="empty">No machine is checked here.</div></div>`;
   const fc = (w, l) => `<span class="fc c-${w[0]}"><i></i><span class="l">${l} </span>${esc(w[1])}</span>`;
-  return `<div class="fleet"><div class="frow hd"><div>Machine</div><div class="fcells"><div>Updates</div><div>Backup</div><div>Review</div><div>Deep scan</div><div>Up for</div></div><div></div></div>` + rows.map(r => {
+  return `<div class="fleet"><div class="frow hd"><div>Machine</div><div class="fcells"><div>Updates</div><div>Backup</div><div>Findings</div><div>Deep scan</div><div>Up for</div></div><div></div></div>` + rows.map(r => {
     const x = r.x, bk = r.bk, xf = (X.findings || []).filter(f => f.ip === r.ip);
     const m = x ? machineState(d, x) : null, rb = r.ip ? rebootState(d, r.ip, x) : null;
     const useRb = rb && (rb.busy || (!(m && m.btn) && rb.pend && rb.can));
     const btn = useRb ? rb.btn : m ? m.btn : "", res = (m && m.res) || (rb && rb.res) || "";
     const uw = x ? updWord(x) : ["gray", "not checked"];
-    const bw = !bk ? ["gray", "not backed up"] : bk.busy ? ["blue", "backing up…"] : bk.ok === false ? ["red", "failed"]
+    const bw = !bk ? ["gray", "no backup set up"] : bk.busy ? ["blue", "backing up…"] : bk.ok === false ? ["red", "failed"]
       : bk.last_ok ? [NOW - bk.last_ok > 62 * 86400 ? "orange" : "green", agoShort(bk.last_ok)] : ["gray", "never"];
     const open = xf.filter(f => !f.dismissed), hi = open.filter(f => ["critical", "high"].includes(f.severity));
     const rw = open.length ? [hi.length ? "red" : "orange", `${open.length} open`] : xf.length ? ["gray", `${xf.length} accepted`] : X.reviewed ? ["green", "clean"] : ["gray", "—"];
@@ -2867,7 +3071,7 @@ function fleetHtml(d) {
     const sw = v ? (v.confirmed ? (cf ? ["gray", "accepted"] : ["red", `${v.confirmed} apply`]) : (v.counts || {}).unclear ? ["gray", `none apply · ${v.counts.unclear} unclear`] : ["green", "none apply"]) : sc.ts ? ["green", "nothing ≥ 7"] : ["gray", "not run"];
     const os = x && x.os ? String(x.os).split(" (")[0] : "";
     return `<div class="frow"${r.ip ? ` data-ip="${esc(r.ip)}"` : ""}><div class="fm"><b>${esc(r.name)}</b><span>${esc([r.ip, os].filter(Boolean).join(" · "))}</span>${res}</div>
-      <div class="fcells">${fc(uw, "Updates")}${fc(bw, "Backup")}${fc(rw, "Review")}${fc(sw, "Scan")}${x && x.uptime ? `<span class="fc fup"><span class="l">Up for </span>${esc(dur(x.uptime))}</span>` : `<span class="fc fup nil">—</span>`}</div>
+      <div class="fcells">${fc(uw, "Updates")}${fc(bw, "Backup")}${fc(rw, "Findings")}${fc(sw, "Scan")}${x && x.uptime ? `<span class="fc fup"><span class="l">Up for </span>${esc(dur(x.uptime))}</span>` : `<span class="fc fup nil">—</span>`}</div>
       <div class="fbtn">${btn}</div></div>`;
   }).join("") + `</div>`;
 }
@@ -2885,19 +3089,24 @@ function renderSec(d) {
   const reb = hs.filter(x => x.reboot_since).length, waiting = hs.reduce((t, x) => t + (x.error ? 0 : x.updates || 0), 0);
   const busy = R.check || X.running, unread = (X.machines || []).filter(m => !m.ok), conf = found.filter(([, v]) => v.confirmed).length;
   const kpi = (v, l, c) => `<div class="kpi${v && c ? " c-" + c : ""}"><b>${v}</b><span>${esc(l)}</span></div>`;
-  let h = `<div class="secgrid"><div class="card"><div class="mh">${ic("owl")}<b>The model's review</b><span class="fine" style="margin-left:auto">${X.reviewed ? esc(ago(X.reviewed)) : "not yet"}</span></div>
+  // what you accepted is said once, apart: the review must not call it "most pressing" every day
+  const accepted = (X.findings || []).filter(x => x.dismissed && inSite(d, x.ip));
+  const review = `<div class="sh">The owl's review</div><div class="secgrid"><div class="card"><div class="mh">${ic("owl")}<b>How exposed the network is</b><span class="fine" style="margin-left:auto">${X.reviewed ? esc(ago(X.reviewed)) : "not yet"}</span></div>
     ${X.summary ? `<p class="mtext">${linkify(d, X.summary)}</p>` : noModel ? `<p class="mtext muted">No model is set, so there is no review: the checks below run without it. <a class="lnk" href="#set/s/model">Settings → The model</a>.</p>` : U.enabled === false ? `<p class="mtext muted">No review yet: it follows the morning update check, which is off (Settings → Updates).</p>` : `<p class="mtext muted">No review yet: it runs every morning after the update check.</p>`}
-    <div class="fine" style="margin-top:8px">${U.last ? "Checked " + esc(ago(U.last)) : "Not checked yet"}${unread.length ? " · not read: " + esc(unread.map(m => m.name).join(", ")) : ""}${sc.ts ? " · deep scan " + esc(clock(sc.ts)) : ""}${X.enabled ? (X.paging ? " · a new critical finding pages you, once" : ` · nothing from the review goes to Telegram before ${esc(X.page_from)}`) : ""}</div>
+    <div class="fine" style="margin-top:8px">${U.last ? "Checked " + esc(ago(U.last)) : "Not checked yet"}${unread.length ? " · not read: " + esc(unread.map(m => m.name).join(", ")) : ""}${sc.ts ? " · deep scan " + esc(clock(sc.ts)) : ""}${X.enabled ? (X.paging ? " · a new critical finding pages you, once" : ` · its first two weeks are a trial: what it finds stays here, and from ${esc(X.page_from)} a new critical finding goes to Telegram, once`) : ""}</div>
+    ${accepted.length ? `<div class="fine" style="margin-top:6px">Accepted by you, not repeated: ${esc(accepted.map(x => `${x.name}: ${x.title}`).join(" · "))}</div>` : ""}
     <div class="ibtns"><button class="sbtn" type="button" data-act="updcheck"${busy ? " disabled" : ""}>${busy ? `<span class="spin"></span>${R.check ? "Checking…" : "Reviewing…"}` : ic("refresh") + "Check now"}</button>
       <button class="sbtn" type="button" data-act="updscan"${R.scan ? " disabled" : ""}>${R.scan ? '<span class="spin"></span>Scanning…' : ic("search") + "Deep scan"}</button></div>
-    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the model reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks every device which software answers on its ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so fragile groups are left out (${esc((sc.deny || ["security", "iot"]).join(", "))}: Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
+    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the owl reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks every device which software answers on its ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so fragile groups are left out (${esc((sc.deny || ["security", "iot"]).join(", "))}: Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
     <div class="kpis">${kpi(matters.length, "to decide", "red")}${kpi(waiting, "updates waiting", "orange")}${kpi(reb, "reboots pending", "orange")}${kpi(conf, "with a CVE ≥ 7 that applies", "orange")}</div></div>`;
-  h += `<div class="sh">To decide${matters.length ? ` <span class="r">${matters.length}</span>` : ""}</div><div class="card nbox">` + (matters.length ? matters.map(nitHtml).join("")
+  // the order follows urgency (10-08): what to decide, what changed, the review, the logs, then the rest
+  let h = `<div class="sh">To decide${matters.length ? ` <span class="r">${matters.length}</span>` : ""}</div><div class="card nbox">` + (matters.length ? matters.map(nitHtml).join("")
     : `<div class="nzero">${ic("check")}${U.last ? "Nothing to decide." : U.enabled === false ? "The morning check is off: Settings → Updates switches it on." : "The first check runs at " + esc(U.at || "06:30") + "."}</div>`) + `</div>`;
+  h += cfgHtml(d);
+  h += review;
+  h += logsHtml(d, (d.findings || []).filter(f => inSite(d, logIp(d, f))));
   if (later.length) h += `<div class="sh">Worth fixing, not urgent <span class="r">${later.length}</span></div><div class="list">` + later.map(itemRow).join("") + `</div>`;
   h += `<div class="sh">Machines <span class="r">tap one to update, reboot or back it up</span></div>` + fleetHtml(d);
-  h += cfgHtml(d);
-  h += logsHtml(d, secLogs(d).filter(f => inSite(d, logIp(d, f))));
   h += backupsHtml(d);
   if (dism.length || hand.length) h += `<details class="acc" data-how="secacc"${CH.how.has("secacc") ? " open" : ""}><summary>${ic("chev")}Accepted and handled<span class="fine">${dism.length} accepted · ${hand.length} handled this week</span></summary><div class="list">${[...dism, ...hand].map(itemRow).join("")}</div></details>`;
   if (sc.ts || sc.error) {
@@ -2909,7 +3118,6 @@ function renderSec(d) {
     `<div class="fine" style="margin-top:12px">${cveHow(K)}</div>
     <div class="ibtns"><button class="sbtn" type="button" data-act="cvecheck"${K.running ? " disabled" : ""}>${K.running ? '<span class="spin"></span>Checking…' : ic("refresh") + "Check again"}</button></div></div></details>`;
   }
-  h += sandboxHtml(d);
   put("sec", h);
 }
 
@@ -3074,7 +3282,7 @@ function secHtml(d, ip) {
   const bare = t => t.replace(/^.*?\(\d{1,3}(?:\.\d{1,3}){3}\):\s*/, "");
   let h = `<div class="sh">Security</div>`;
   if (xf.length) h += `<div class="list">` + xf.map(f => `<div class="row"><span class="sd c-${f.dismissed ? "gray" : SEV[f.severity] || "gray"}"></span>
-    <span class="rt"><span class="rn wrap" style="font-weight:${!f.dismissed && ["critical", "high"].includes(f.severity) ? 600 : 400}">${esc(cap(f.title))}</span><span class="rs wrap">${esc(f.dismissed ? disWords(f) : `the model's review · ${f.evidence}${f.fix ? " → " + f.fix : ""}`)}</span></span></div>`).join("") + `</div>`;
+    <span class="rt"><span class="rn wrap" style="font-weight:${!f.dismissed && ["critical", "high"].includes(f.severity) ? 600 : 400}">${esc(cap(f.title))}</span><span class="rs wrap">${esc(f.dismissed ? disWords(f) : `the owl's review · ${f.evidence}${f.fix ? " → " + f.fix : ""}`)}</span></span></div>`).join("") + `</div>`;
   if (fs.length) h += `<div class="list">` + fs.map(f => `<div class="row"><span class="sd c-${f.page ? "red" : "gray"}"></span>
     <span class="rt"><span class="rn wrap" style="font-weight:${f.page ? 600 : 400}">${esc(cap(bare(f.text)))}</span>${f.dismissed ? `<span class="rs wrap">${esc(disWords(f))}</span>` : ""}</span></div>`).join("") + `</div>`;
   const cf = (U.findings || []).find(f => f.key === "cve:" + ip && f.dismissed);
@@ -3158,7 +3366,10 @@ function backupsHtml(d) {
       <span class="rs wrap${x.ok === false ? " bad" : ""}">${esc(sub)}</span></span>
       <button class="rowbtn" type="button" data-act="bkone" data-bk="${esc(x.key)}"${B.running ? " disabled" : ""}>${x.busy ? '<span class="spin"></span>' : ""}Back up</button>${x.ip ? ic("chev", "chev") : ""}</div>`;
   }).join("") + `</div>`;
-  h += `<div class="card"><div class="fine">${bad.length ? `${ms.length - bad.length} of ${ms.length} machines backed up in the last two months` : `All ${ms.length} machines backed up in the last two months`}, onto the store: <span class="mono">${esc(B.where || "")}</span>. Every month (the last ${esc(B.keep || 6)} kept) and before every Update — no backup, no update. ${B.encrypted ? "Encrypted." : "<b>Not encrypted</b>: they hold the network's passwords and keys, readable by anyone who can read the store."}</div>
+  // the machines it does not back up are named, so "all 13" and the table's "no backup set up" agree
+  const inB = new Set(ms.map(x => x.ip).filter(Boolean));
+  const none = ((d.updates || {}).hosts || []).filter(x => x.ip && !inB.has(x.ip) && inSite(d, x.ip));
+  h += `<div class="card"><div class="fine">${bad.length ? `${ms.length - bad.length} of the ${ms.length} machines it backs up were backed up in the last two months` : `All ${ms.length} machines it backs up were backed up in the last two months`}${none.length ? ` (no backup set up for ${esc(none.map(x => x.name).join(", "))})` : ""}, onto the store: <span class="mono">${esc(B.where || "")}</span>. Every month (the last ${esc(B.keep || 6)} kept) and before every Update — no backup, no update. ${B.encrypted ? "Encrypted." : "<b>Not encrypted</b>: they hold the network's passwords and keys, readable by anyone who can read the store."}</div>
     <div class="ibtns"><button class="sbtn" type="button" data-act="bkall"${B.running ? " disabled" : ""}>${B.running ? '<span class="spin"></span>Backing up' + (B.current ? " " + esc(B.current) : "") + "…" : ic("refresh") + "Back up everything now"}</button></div></div>`;
   return h;
 }
@@ -3221,8 +3432,9 @@ function renderWan() {
 }
 
 // ---------------------------------------------------------------- device sheet
-function openSheet(ip) {
-  S.sheet = ip; S.wan = null; S.hist = null; S.histAt = 0;
+function openSheet(ip, focus) {
+  S.sheet = ip; S.wan = null; S.hist = null; S.histAt = 0; S.sheetProp = null; S.sheetFocus = focus || null;
+  if (!TL.d && !TL.busy) loadTimeline();
   renderSheet();
   const dlg = $("sheet");
   if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add("modal"); dlg.scrollTop = 0; }
@@ -3232,7 +3444,7 @@ function closeSheet() {
   const dlg = $("sheet");
   if (dlg.open) dlg.close();
 }
-$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; });
+$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; });
 $("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
 
 async function loadHist() {
@@ -3252,6 +3464,7 @@ async function loadHist() {
 // doing and its four numbers, the 24h chart, the week and its ups & downs, then Manage (the
 // Monitoring switch first), Security, Ask, and Details at the very end.
 function renderSheet() {
+  if (S.sheetProp != null) { renderPropSheet(); return; }
   const ip = S.sheet, d = S.d;
   if (!ip || !d) return;
   const sh = d.shadowed || {}, x = (d.devices || []).find(v => v.ip === ip);
@@ -3266,7 +3479,7 @@ function renderSheet() {
   const secH = secHtml(d, ip);
   const chips = x ? `<span class="shchip mono">${esc(ip)}</span><span class="shchip">${esc(GN(x.group))}</span><span class="shchip">${esc(siteName(d, x.site))}</span><span class="shchip">${esc(x.criticality)}</span>${x.listed ? `<span class="shchip">in the list: ${esc(x.listed)}</span>` : ""}${unsched ? `<span class="shchip warn">↓${unsched} this week</span>` : ""}`
     : `<span class="shchip mono">${esc(ip)}</span><span class="shchip">${known ? "not a watched device" : "no longer monitored"}</span>`;
-  const jumps = [["Overview", "sx-top"], ["Manage", "sx-manage"], secH ? ["Security", "sx-sec"] : null, ["Details", "sx-details"]].filter(Boolean);
+  const jumps = [["Overview", "sx-top"], ["What happened", "sx-what"], ["Manage", "sx-manage"], secH ? ["Security", "sx-sec"] : null, ["Details", "sx-details"]].filter(Boolean);
   let h = `<div class="shd" id="shd"><div class="grab"></div><div class="shd-row">${s ? `<span class="sd c-${DSTATE[s][1]}"></span>` : ""}
     <h2 id="sh-title">${esc(name)}</h2>${x ? `<button class="ren" type="button" data-act="rename" data-rip="${esc(ip)}" aria-label="Rename" title="Rename">${ic("compose")}</button>` : ""}<button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div>
     <div class="shchips">${chips}</div><div class="jumps">${jumps.map(j => `<button type="button" data-act="jump" data-to="${j[1]}">${j[0]}</button>`).join("")}</div></div><div id="sx-top"></div>`;
@@ -3285,19 +3498,22 @@ function renderSheet() {
         <div><b>${H ? pct(H.uptime_7d) : "…"}</b><span>answered · 7 days</span></div><div><b>${unsched}${extra ? `<small> ${esc(extra)}</small>` : ""}</b><span>outages · 7 days</span></div></div>
       <div class="card"><div class="vizh" style="margin-top:0">Latency · last 24 hours<span class="r">per 15 min</span></div><div class="chart" id="chart">${S.hist ? "" : '<div class="skel"></div>'}</div>
         <div class="keys" style="margin-top:6px"><span><i style="background:var(--blue);height:3px"></i>average</span><span><i style="background:color-mix(in srgb,var(--blue) 22%,transparent)"></i>up to the worst</span><span><i class="k-warn"></i>probes lost</span><span><i class="k-bad"></i>none answered</span></div></div>`;
-    // The switch. Every pause and resume made here is also said on Telegram: the page has
-    // no login, and a pause nobody hears about would quietly blind the monitor.
+    // The switch: its alerts. Every pause and resume made here is also said on Telegram: a
+    // pause nobody hears about would quietly blind the monitor, logged-in page or not.
     const P = d.pause || {}, p = (d.paused || []).find(v => v.ip === ip), self = P.self_ip === ip;
     const expl = self ? "This is lanowl itself — it cannot be paused."
-      : p ? `Paused since ${clock(p.ts)}${p.by ? " from " + (BY[p.by] || p.by) : ""}: no alerts, nothing in the digest. ${cap(pauseNote(p))}.`
-      : `Switched it off on purpose? Pause it and it is not reported until you switch this back on.${x.criticality === "critical" ? " It is critical: nothing about it will page you while paused." : ""} Telegram is told either way.`;
-    monRow = `<label class="row mon"><span class="sd c-${p ? "indigo" : "green"}"></span><span class="rt"><span class="rn">Monitoring</span><span class="rs wrap">${esc(expl)}</span></span>
-      <span class="sw"><input type="checkbox" id="mon" data-mon="${esc(ip)}" aria-label="Monitor this device"${p ? "" : " checked"}${self || S.monBusy ? " disabled" : ""}><span></span></span></label>`;
+      : p ? `Paused since ${clock(p.ts)}${p.by ? " from " + (BY[p.by] || p.by) : ""}. Still pinged and graphed, never an alert; the digest only reminds you it is paused. ${cap(pauseNote(p))}.`
+      : `Switched it off on purpose? Pause it: it stays on the graphs, but nothing about it alerts you until you switch this back on.${x.criticality === "critical" ? " It is critical: nothing about it will page you while paused." : ""} Telegram is told either way.`;
+    monRow = `<label class="row mon"><span class="sd c-${p ? "indigo" : "green"}"></span><span class="rt"><span class="rn">Alerts</span><span class="rs wrap">${esc(expl)}</span></span>
+      <span class="sw"><input type="checkbox" id="mon" data-mon="${esc(ip)}" aria-label="Alerts for this device"${p ? "" : " checked"}${self || S.monBusy ? " disabled" : ""}><span></span></span></label>`;
   }
   const rec7 = recFrom(O.rec0, S.hist && S.hist.ok ? S.hist.first_7d : undefined);
   h += `<div class="card"><div class="vizh" style="margin-top:0">Last 7 days</div>${strip(segs, O.t0, O.t1, rec7, "thin")}${dayAxis(O.t0, O.t1)}
     <div class="keys"><span><i class="k-ok"></i>up</span><span><i class="k-bad"></i>down</span><span><i class="k-sched"></i>asleep on schedule</span>${segs.some(v => v.cls === "paus") ? `<span><i class="k-paus"></i>paused</span>` : ""}${rec7 > O.t0 ? `<span><i class="k-nodata"></i>no record</span>` : ""}</div></div>`;
-  if (lbx.length) h += `<div class="sh">Ups &amp; downs</div><div class="list">` + lbx.slice(0, 12).map(e => evRow(e, null, !sameDay(e.ts, NOW))).join("") + `</div>`;
+  // What happened: its own seven days from the Timeline — outages, messages, log checks that
+  // name it, its configuration's changes, actions, the owl's words (10-08: "a click on a
+  // warning, logs, etc. opens the device sheet but with also everything happened")
+  h += `<div id="sx-what"></div>` + whatHtml(d, ip, lbx);
   const siteRow = x && x.can_site ? `<div class="row"><span class="sd c-gray"></span><span class="rt"><span class="rn">Another network</span><span class="rs wrap">behind this router? Make it a site: its own chip, its devices, its DHCP list</span></span>
     <button class="rowbtn" type="button" data-act="mksite">Make it a site</button></div>` : "";
   h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow + siteRow) + `<div id="sx-sec"></div>` + secH;
@@ -3306,11 +3522,52 @@ function renderSheet() {
   const keepY = $("sheet").scrollTop;
   const rebuilt = put("sheet-in", h);
   $("sheet").scrollTop = keepY;
+  sheetFocusNow();
+  // the row just opened at stays in view while what is above it grows (the chart arriving)
+  if (LIT.id && Date.now() < LIT.until) { const el = document.querySelector(`#sheet [data-tid="${CSS.escape(LIT.id)}"]`); if (el) el.scrollIntoView({block: "center"}); }
   // Redraw only when the sheet was rebuilt or new history came in — not on every poll, which
   // would drop the tooltip from under a finger.
   if (s && S.hist && (rebuilt || S.drawn !== S.histAt)) { drawChart(segs); S.drawn = S.histAt; }
 }
 
+
+function whatHtml(d, ip, lbx) {
+  if (!TL.d) return `<div class="sh">What happened <span class="r">7 days</span></div><div class="list"><div class="empty">Reading the week…</div></div>`;
+  const named = (x, rx) => rx.test([x.summary, x.detail, ...(x.log || [])].join(" "));
+  const rx = new RegExp("(^|[^\\d.])" + ip.replace(/\./g, "\\.") + "(?!\\d)");
+  const mine = TL.d.items.filter(x =>
+    x.type === "incident" ? x.members.some(m => m.ip === ip)
+    : x.type === "check" ? logIp(d, x) === ip || named(x, rx)
+    : x.type === "owl" ? (x.issues || []).some(v => rx.test(String(v.device || "")))
+    : ["security", "config", "action", "new_device"].includes(x.type) ? x.ip === ip : false);
+  if (!mine.length) return `<div class="sh">What happened <span class="r">7 days</span></div><div class="list"><div class="empty">${lbx.length ? "Nothing but what the week's bar shows." : "Nothing in seven days."}</div></div>`;
+  // by day, as on the Timeline: a row's time alone does not say which day it was
+  let h = `<div class="sh">What happened <span class="r">7 days · ${mine.length}</span></div>`, day = "";
+  for (const x of mine.slice(0, 60)) {
+    const k = dayName(x.ts);
+    if (k !== day) { h += `${day ? "</div>" : ""}<div class="fine shday">${esc(k)}</div><div class="list tll">`; day = k; }
+    h += tlRow(d, x, true);
+  }
+  return h + "</div>";
+}
+function sheetFocusNow() {
+  const f = S.sheetFocus;
+  if (!f) return;
+  const el = document.querySelector(`#sheet [data-tid="${CSS.escape(f)}"]`);
+  if (!el) { if (TL.d) S.sheetFocus = null; return; }
+  S.sheetFocus = null;
+  el.scrollIntoView({behavior: "auto", block: "center"});
+  lightUp(el, el.dataset.tid);
+}
+// 3. an action in the same sheet, from wherever it is tapped (10-08: no more the right edge)
+function renderPropSheet() {
+  const d = S.d || {}, p = propById(S.sheetProp);
+  let h = `<div class="shd" id="shd"><div class="grab"></div><div class="shd-row"><h2 id="sh-title">${p ? `#${esc(p.id)} ${esc(p.title)}` : "#" + esc(S.sheetProp)}</h2><button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div>
+    ${p && p.label ? `<div class="shchips"><span class="shchip">${esc(p.label)}</span></div>` : ""}</div>`;
+  h += p ? `<div class="card props" style="margin-top:6px">${propHtml(p)}</div>` : `<div class="list"><div class="empty">Older than the dashboard keeps: the Timeline has its line, Ask can tell you more.</div></div>`;
+  if (p && p.ip && (d.devices || []).some(x => x.ip === p.ip)) h += `<button class="btn ghost" type="button" data-ip="${esc(p.ip)}">${ic("grid")}Open ${esc(devName(d, p.ip, p.ip))}</button>`;
+  put("sheet-in", h);
+}
 
 function nice(v) { if (!(v > 0)) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
 
@@ -3397,10 +3654,11 @@ function renderAll() {
   if (!d) return;
   $("gdot").hidden = !((d.settings || {}).pending);
   renderHeader(d); tickAgo();
-  renderSites(d); renderStatus(d); renderInbox(d); renderPaused(d); renderNet(d); renderModel(d); renderLooks(d); renderLanes24(d); renderSys(d);
+  renderSites(d); renderStatus(d); renderInbox(d); renderPaused(d); renderNet(d); renderModel(d); renderSys(d);
   renderDevices(d); renderLog(d); renderSec(d); renderAsk(); renderAskPanel(); renderMore(d); renderMemory(d); renderShell(d); renderActs(d); renderScore(d);
   if ($("fixdlg").open) renderFix();
   if (S.sheet) { renderSheet(); if (Date.now() - S.histAt > 60000 && S.histAt) loadHist(); }
+  else if (S.sheetProp != null) renderSheet();
 }
 
 let busy = false, lastOk = 0;
@@ -3416,6 +3674,8 @@ async function refresh() {
     const r = await fetch("/api/state", {cache: "no-store"});
     if (!r.ok) throw new Error(r.status);
     applyState(await r.json());
+    // the Timeline read once in the background: "Open the story" and the search jump at once
+    if (!TL.d && !TL.busy && !TL.at) setTimeout(() => { if (!TL.d && !TL.busy) loadTimeline(); }, 1500);
   } catch (e) {
     if (Date.now() - lastOk > 20000) {
       const st = $("stale");
@@ -3442,55 +3702,51 @@ async function post(path, body) {
 // (configwatch.py), each finding's fix written out — never run (fixes.py), and
 // the model's track record on Ask's model side (scorecard.py). None of it pages: what is
 // new rides the next digest once.
-const LOOKS = [["drift", "Slowly changing", "timeline", "The model reads a week of the monitor's own samples every morning and says what is slowly getting worse"]];
 const isLook = k => /^drift:/.test(String(k || ""));
 const lookWho = f => `${f.name || ""} ${f.ip || ""}`.trim();
-function lookItem(f, title) {
-  const dis = !!f.dismissed, c = dis ? "gray" : SEV[f.severity] || "gray", who = lookWho(f);
-  const sub = dis ? disWords(f) : [f.evidence, f.why ? "Why: " + f.why : "", f.suggestion ? "→ " + f.suggestion : ""].filter(Boolean).join("\n");
-  return `<div class="nit c-${c}"${f.ip ? ` data-ip="${esc(f.ip)}"` : ""}><div class="k">${esc(f.severity)} · ${esc(title)}</div><div class="t">${esc(f.title)}</div>
-    ${who ? `<div class="m">${esc(who)}</div>` : ""}${sub ? `<div class="rs clamp" data-act="more">${esc(sub)}</div>` : ""}
-    <div class="ibtns"><button class="sbtn" type="button" data-act="${dis ? "undismiss" : "dismiss"}" data-fk="${esc(f.key)}">${dis ? "Undo" : "Dismiss"}</button><button class="sbtn" type="button" data-act="askabout" data-q="${esc("Tell me more about this: " + f.title + (who ? " (" + who + ")" : ""))}">Ask</button></div></div>`;
-}
-function renderLooks(d) {
-  const html = LOOKS.map(([k, title, icon, how]) => {
-    const L = d[k] || {};
-    if (!L.enabled) return "";
-    const fs = (L.findings || []).filter(f => !f.ip || inSite(d, f.ip)), open = fs.filter(f => !f.dismissed), dis = fs.filter(f => f.dismissed);
-    const shown = S.lookAll[k] ? open : open.slice(0, 3);
-    const when = L.running ? `<span class="spin"></span>looking…` : L.reviewed ? esc(ago(L.reviewed)) : "not yet";
-    return `<div class="card nbox"><div class="lkbox"><div class="lkhd">${ic(icon)}<b>${esc(title)}</b><span class="fine">${when}</span></div>
-      <p class="lksum">${L.summary ? linkify(d, L.summary) : esc(how) + "."}</p>${L.error ? `<p class="lksum" style="color:var(--orange-t)">${esc(L.error)}</p>` : ""}</div>` +
-      (open.length ? shown.map(f => lookItem(f, title)).join("")
-        : `<div class="nzero">${ic("check")}${L.reviewed ? "Nothing worth a look." : "The first look has not run yet."}</div>`) +
-      (open.length > shown.length ? `<button class="more" type="button" data-act="lookall" data-look="${k}">${open.length - shown.length} more</button>` : "") +
-      (dis.length ? `<details class="acc"><summary>${ic("chev")}Dismissed<span class="fine">${dis.length}</span></summary>${dis.map(f => lookItem(f, title)).join("")}</details>` : "") +
-      `<div class="lkfoot"><div class="ibtns"><button class="sbtn" type="button" data-act="lookrun" data-look="${k}"${L.running ? " disabled" : ""}>${ic("refresh")}Look now</button>
-        <span class="fine" style="align-self:center">${L.last ? "read " + esc(ago(L.last)) : ""}</span></div></div></div>`;
-  }).filter(Boolean);
-  put("looks", html.length ? `<div class="sh">The model also looks</div>` + html.join(`<div style="height:12px"></div>`) : "");
-}
-
 // What changed in the configurations (configwatch.py): a change is an event — listed for
-// 30 days; a risky one is also a security event in What matters, with Handled.
+// 30 days; a risky one is also a security event in To decide, with Handled.
 const RISK = {critical: ["red", "critical"], high: ["orange", "high"], low: ["gray", "low"], none: ["gray", "no real change"]};
 function cfgRow(c) {
   const r = RISK[c.risk] || RISK.low, hd = c.handled;
-  return `<div class="nit c-${hd ? "gray" : r[0]}" data-ip="${esc(c.ip)}"><div class="k">${esc(r[1])} · ${esc(c.name)} · ${esc(clock(c.ts))}${c.by === "rule" ? " · the rule" : ""}</div>
+  return `<div class="nit c-${hd ? "gray" : r[0]}" data-ip="${esc(c.ip)}" data-focus="${esc(c.tid || "")}"><div class="k">${esc(r[1])} · ${esc(c.name)} · ${esc(clock(c.ts))}${c.by === "rule" ? " · the rule" : ""}</div>
     <div class="t">${esc(c.what)}</div>${c.why ? `<div class="m">${esc(c.why)}</div>` : ""}
     ${(c.lines || []).length ? `<div class="rs clamp difl" data-act="more">${esc(c.lines.join("\n"))}</div>` : ""}
-    ${c.sid ? `<div class="ibtns">${hd ? `<span class="fine">Handled ${esc(clock(hd.ts))}</span>` : `<button class="sbtn" type="button" data-act="handle" data-sid="${esc(c.sid)}">Handled</button>`}</div>` : ""}</div>`;
+    ${c.sid ? `<div class="fine" style="margin-top:6px">${hd ? `Handled ${esc(clock(hd.ts))}` : "To decide, above"}</div>` : ""}</div>`;
+}
+// the changes of one story (timeline.story_index: a route that names a new device, the peer for
+// its network) as one card, its worst first; the rest one by one, the worst first (10-08)
+const RISKN = {critical: 0, high: 1, low: 2, none: 3};
+function cfgGroups(d, ch) {
+  const idx = ((d.stories || {}).cfg) || {}, groups = new Map(), lone = [];
+  for (const c of ch) {
+    const po = idx[c.sid] || idx[c.tid];
+    if (po) { if (!groups.has(po.id)) groups.set(po.id, {po, cs: []}); groups.get(po.id).cs.push(c); }
+    else lone.push(c);
+  }
+  const worst = cs => Math.min(...cs.map(c => c.handled ? 4 : RISKN[c.risk] ?? 2));
+  const out = [...groups.values()].map(g => ({g, w: worst(g.cs), ts: Math.max(...g.cs.map(c => c.ts))}))
+    .concat(lone.map(c => ({c, w: worst([c]), ts: c.ts})));
+  return out.sort((a, b) => a.w - b.w || b.ts - a.ts);
+}
+function cfgStory(x) {
+  const g = x.g, cs = [...g.cs].sort((a, b) => (RISKN[a.risk] ?? 2) - (RISKN[b.risk] ?? 2)), top = RISK[cs[0].risk] || RISK.low;
+  const open = cs.filter(c => c.sid && !c.handled);
+  return `<div class="nit c-${open.length ? top[0] : "gray"}"><div class="k">The story of ${esc(g.po.name)}, which joined ${esc(hmd(g.po.ts, NOW))} · ${cs.length} change${cs.length > 1 ? "s" : ""}</div>
+    ${cs.map(c => `<div class="t" style="font-weight:${c.risk === "critical" || c.risk === "high" ? 600 : 450}"><span class="tagx c-${(RISK[c.risk] || RISK.low)[0]}">${esc((RISK[c.risk] || RISK.low)[1])}</span> ${esc(c.name)}: ${esc(c.what)}</div>`).join("")}
+    ${cs[0].why ? `<div class="m">${esc(cs[0].why)}</div>` : ""}
+    <div class="ibtns">${open.length ? `<span class="fine" style="align-self:center">${open.length} to decide, above</span>` : ""}<button class="sbtn" type="button" data-act="tlgo" data-id="${esc(g.po.id)}">${ic("link")}Open the story</button></div></div>`;
 }
 function cfgHtml(d) {
   const C = d.configwatch || {};
   if (!C.enabled) return "";
-  const ch = (C.changes || []).filter(c => inSite(d, c.ip)), shown = S.cfgAll ? ch : ch.slice(0, 8);
+  const ch = (C.changes || []).filter(c => inSite(d, c.ip)), all = cfgGroups(d, ch), shown = S.cfgAll ? all : all.slice(0, 6);
   const bad = (C.machines || []).filter(m => !m.ok);
   return `<div class="sh">What changed <span class="r">${C.running ? "comparing…" : C.last ? "compared " + esc(ago(C.last)) : "not compared yet"}</span></div><div class="card nbox">
-    <div class="lkbox"><p class="lksum" style="margin:0">${C.summary && ch.length ? linkify(d, C.summary) : "Every morning after the update check, each router's and server's configuration is compared with the day before, and the model says what each change does and how it changes who can get in."}</p>
+    <div class="lkbox"><p class="lksum" style="margin:0">${C.summary && ch.length ? linkify(d, C.summary) : "Every morning after the update check, each router's and server's configuration is compared with the day before, and the owl says what each change does and how it changes who can get in."}</p>
     ${bad.length ? `<p class="fine" style="margin-top:6px">Not read this time: ${esc(bad.map(m => m.name + (m.error ? " — " + m.error : "")).join("; "))}</p>` : ""}${C.error ? `<p class="fine" style="margin-top:6px;color:var(--orange-t)">${esc(C.error)}</p>` : ""}</div>` +
-    (shown.length ? shown.map(cfgRow).join("") : `<div class="nzero">${ic("check")}${C.last ? "Nothing changed in the last 30 days." : "The first comparison is the baseline: nothing to say yet."}</div>`) +
-    (ch.length > shown.length ? `<button class="more" type="button" data-act="cfgall">${ch.length - shown.length} more</button>` : "") +
+    (shown.length ? shown.map(x => x.g ? cfgStory(x) : cfgRow(x.c)).join("") : `<div class="nzero">${ic("check")}${C.last ? "Nothing changed in the last 30 days." : "The first comparison is the baseline: nothing to say yet."}</div>`) +
+    (all.length > shown.length ? `<button class="more" type="button" data-act="cfgall">${all.length - shown.length} more</button>` : "") +
     `<div class="lkfoot"><div class="ibtns"><button class="sbtn" type="button" data-act="lookrun" data-look="configwatch"${C.running ? " disabled" : ""}>${C.running ? `<span class="spin"></span>Comparing…` : ic("refresh") + "Compare now"}</button></div></div></div>`;
 }
 
@@ -3540,7 +3796,7 @@ function scRow(c, kinds) {
   const v = VERD[fin] || ["gray", c.open ? "still going" : "not checked yet"];
   const said = c.last && c.last.cause !== c.first.cause ? `${c.first.cause}\nLater: ${c.last.cause}` : c.first.cause;
   const txt = "It said: " + said + (g.why ? "\nChecked" + (g.so_far ? " (so far)" : "") + ": " + g.why : "") + (g.evidence ? "\n" + g.evidence : "") + (o && o.note ? "\nYou: " + o.note : "");
-  return `<div class="row row2"><span class="sd c-${v[0]}"></span><span class="rt"><span class="rn wrap">${esc(c.device)} <span class="tagx c-${v[0]}">${esc(v[1])}</span>${o ? ` <span class="fine">your word</span>` : ""}</span>
+  return `<div class="row row2"><span class="sd c-${v[0]}"></span><span class="rt"><span class="rn wrap">${esc(c.device)} <span class="tagx c-${v[0]}">${esc(v[1])}</span>${o ? ` <span class="fine">your word${g.verdict && g.verdict !== o.verdict ? ` · the check said ${esc((VERD[g.verdict] || ["", g.verdict])[1])}` : ""}</span>` : ""}</span>
     <span class="rs wrap">${esc(clock(c.first.ts))} — ${esc(kinds[c.kind] || c.kind)}${c.seen > 1 ? ` · said ${c.seen}×` : ""}</span>
     <span class="rs clamp" data-act="more">${esc(txt)}</span></span>
     <span class="rbtns">${["right", "partly", "wrong"].map(x => `<button class="rowbtn" type="button" data-act="score" data-cid="${esc(c.id)}" data-v="${x}" aria-pressed="${!!(o && o.verdict === x)}">${esc(x)}</button>`).join("")}</span></div>`;
@@ -3565,6 +3821,12 @@ document.addEventListener("click", async e => {
   // outside a button used to land on "the current tab again" and scroll the page to the top
   const t = e.target.closest(".tab[data-tab],[data-pi],[data-askp],[data-ip],[data-wan],[data-act],[data-filter],[data-sort],[data-tlf],[data-pane],[data-suggest],a[href^='#']");
   if (!t) return;
+  // a click on something of its own inside a row — an expander, its lines, a link, a field, a
+  // text being selected — is that thing's, never the row's too ("What changed, line by line"
+  // opened the device sheet too)
+  const own = e.target.closest("summary,details,a,button,input,select,textarea,label,.wlog,.bub");
+  if (own && own !== t && t.contains(own) && (t.dataset.ip || t.dataset.wan || t.dataset.act === "openprop")) return;
+  if ((t.dataset.ip || t.dataset.wan) && String(window.getSelection() || "").trim()) return;
   if (t.dataset.tab) { setTab(t.dataset.tab); return; }
   if (t.dataset.pi != null) { pickPal(PAL.opts[+t.dataset.pi]); return; }
   if (t.dataset.askp) { S.askp = t.dataset.askp; save("askp", S.askp); renderAskPanel(); window.scrollTo(0, 0); return; }
@@ -3574,13 +3836,17 @@ document.addEventListener("click", async e => {
   if (t.dataset.tlf) { S.tlf = t.dataset.tlf; save("tlf", S.tlf); renderLog(S.d); return; }
   if (t.dataset.pane) { S.pane = t.dataset.pane; save("pane", S.pane); renderLog(S.d); return; }
   if (t.dataset.suggest) { $("askq").value = t.dataset.suggest; autosize(); $("askq").focus(); return; }
-  if (t.dataset.ip) { openSheet(t.dataset.ip); return; }
+  if (t.dataset.ip) { openSheet(t.dataset.ip, t.dataset.focus); return; }
   if (t.dataset.wan) { openWan(t.dataset.wan); return; }
   const act = t.dataset.act;
   if (act === "close") closeSheet();
   else if (act === "group") { S.group = t.dataset.g; S.filter = "all"; setTab("devices"); if (S.site !== "all") setSite("all"); else renderDevices(S.d); }
   else if (act === "clrgroup") { S.group = null; renderDevices(S.d); }
   else if (act === "seenall") { SEEN.open = true; renderLog(S.d); }
+  else if (act === "lanes") { S.lanes = !S.lanes; save("lanes", S.lanes); renderLog(S.d); }
+  else if (act === "tlgo") tlGo(t.dataset.id);
+  else if (act === "tlowl") { S.tlf = "owl"; save("tlf", "owl"); setTab("log"); }
+  else if (act === "openprop") openProp(+t.dataset.pid);
   else if (act === "pal") openPal();
   else if (act === "rename") openRename(t.dataset.rip ? {ip: t.dataset.rip} : {site: t.dataset.rsite, mac: t.dataset.rmac, name: t.dataset.rname, renamed: !!t.dataset.rren});
   else if (act === "rnclose") closeRename();
@@ -3659,7 +3925,7 @@ document.addEventListener("click", async e => {
                   sitescan: "Scanning every site's networks — a few minutes."}[act] : r.error || "Could not do it.");
     refresh();
   } else if (act === "lbchecks") {
-    S.tlf = "chk"; save("tlf", S.tlf); setTab("log"); renderLog(S.d);
+    S.tlf = "sec"; save("tlf", S.tlf); setTab("log"); renderLog(S.d);
   } else if (act === "updcheck" || act === "updscan") {
     const scan = act === "updscan";
     if ((S.d || {}).updates) { S.d.updates.running = {...(S.d.updates.running || {}), [scan ? "scan" : "check"]: true}; renderSec(S.d); }
@@ -3702,12 +3968,12 @@ document.addEventListener("click", async e => {
     if (r.ok) { closeSheet(); useChat(r.c); setTab("ask"); }
   } else if (act === "lookrun") {
     const k = t.dataset.look;
-    if ((S.d || {})[k]) { S.d[k].running = true; renderLooks(S.d); renderSec(S.d); }
+    if ((S.d || {})[k]) { S.d[k].running = true; renderModel(S.d); renderSec(S.d); }
     const r = await post("/api/reviews", {run: k}).catch(() => ({ok: false}));
     toast(!r.ok ? (r.error || "Could not start it.") : !r.started ? "It is already running."
       : k === "configwatch" ? "Comparing — a minute or two; the changes appear here." : "Looking — a few minutes; it appears here.");
     setTimeout(refresh, 1500);
-  } else if (act === "lookall") { S.lookAll[t.dataset.look] = true; renderLooks(S.d); }
+  }
   else if (act === "cfgall") { S.cfgAll = true; renderSec(S.d); }
   else if (act === "scall") { S.scAll = true; renderScore(S.d); }
   else if (act === "fix") openFix(t.dataset.fk);
@@ -3767,7 +4033,7 @@ document.addEventListener("change", async e => {
     const r = await post("/api/pause", {ip, paused}).catch(() => ({ok: false}));
     S.monBusy = false;
     const plain = t => String(t || "").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").split("\n")[0];
-    if (r.ok && r.changed) toast(paused ? "Paused — Telegram has been told." : "Watched again — Telegram has been told.");
+    if (r.ok && r.changed) toast(paused ? "Paused: no alerts. Telegram has been told." : "Alerts back on. Telegram has been told.");
     else { box.checked = !paused; box.disabled = false; toast(r.text ? plain(r.text) : "Could not change it — is lanowl running?"); }
     refresh();
   }
@@ -3982,7 +4248,7 @@ function fieldHtml(f) {
 function editCount() { return Object.keys(ST.edits).length; }
 function barHtml(n, act) {
   return `<div class="sbar" id="sbar"${n ? "" : " hidden"}><span class="cnt"><b>${n} change${n === 1 ? "" : "s"}</b>, not saved</span>
-    <button class="sbtn" type="button" data-sact="discard">Discard</button><button class="btn" type="button" data-sact="${act}">Review</button></div>`;
+    <button class="sbtn" type="button" data-sact="discard">Discard</button><button class="btn" type="button" data-sact="${act}">Check and save</button></div>`;
 }
 async function setSection(key) {
   const D = await setData();
@@ -4374,7 +4640,7 @@ async function setSitePage(rest) {
         `For the devices you Watch from its DHCP list: ${esc(CRITH[d.criticality] || "")}.`)) + `</div>`;
   if (T.orig && !home) h += `<button class="btn ghost" type="button" data-sact="siterm" data-k="${esc(T.key)}" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove this site</button>`;
   const changed = !T.orig || JSON.stringify(d) !== T.base;
-  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${T.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="sitereset">Discard</button><button class="btn" type="button" data-sact="sitereview">Review</button></div>`;
+  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${T.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="sitereset">Discard</button><button class="btn" type="button" data-sact="sitereview">Check and save</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
 }
 const CRITS_UI = ["critical", "high", "warning", "low", "info"];
@@ -4475,7 +4741,7 @@ async function setDevice(ip) {
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
   if (S2.orig) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);
   if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
-  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Review</button></div>`;
+  h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Check and save</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
   const pw = document.querySelector("#set input[data-dk=lpw]");
   if (pw) pw.value = S2.lpw || "";

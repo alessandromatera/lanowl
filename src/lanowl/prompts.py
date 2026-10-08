@@ -66,7 +66,15 @@ new device sends the owner ONE message about it, so raise one only when it is wo
 a real maker (not a private address) that does not look like a visitor's phone or laptop — \
 a single-board computer, a network or IoT device nobody added — or one that joined the \
 main LAN (not the guest Wi-Fi) at night. `info` normally; higher only with evidence against \
-it, such as a log check naming its address.
+it, such as a log check naming its address. `told_owner`: the owner already got that one \
+message — do NOT raise it as an issue again; name it in the summary at most, unless new \
+evidence against it appeared (a log check calling its address a problem). `mac_next_to`: a \
+device whose MAC differs from this one only in its last part, from the same maker — often \
+another port of the SAME box (routers and switches number their ports' MACs in a row), \
+sometimes a second unit of the same model. Decide which from the names, the times (one gone \
+just as the other appeared) and the logs, and say in the summary when you judge two entries \
+to be one box, and why. One box the owner was already told about (`told_owner` on its \
+neighbour) is not new news: no issue.
 Devices reported ASLEEP are on a daily schedule and are legitimately unpowered right now:
 PV-powered gear (solar inverter/meter) is dark at night, and dusk-to-dawn gear (outdoor
 lighting) is dark in daylight. They are NOT an issue, at any severity, ever. Do not list
@@ -158,7 +166,8 @@ def build_user_context(snapshot_dict: dict, anomalies: list, recent_transitions:
                        shadowed: Optional[dict] = None, wan_note: str = "",
                        new_devices: Optional[list] = None,
                        findings: Optional[list] = None,
-                       proposals: Optional[list] = None) -> str:
+                       proposals: Optional[list] = None,
+                       told: Optional[dict] = None) -> str:
     """Compact, structured context — anomalies only, plus a little history.
 
     `shadowed` = {ip: parent} from the deterministic report: down devices that are down
@@ -275,11 +284,50 @@ def build_user_context(snapshot_dict: dict, anomalies: list, recent_transitions:
                                   + time.strftime("%Y-%m-%d %H:%M", time.localtime(fs))} if fs else {})}
 
     new = new_devices if new_devices is not None else (discovery or {}).get("recent_new") or []
+    # Two facts the owl decides from — never the code (the owner, 10-08: "I don't want to force
+    # something that is not actually the same"): a MAC next to another one of the same maker
+    # (often another port of the same box, sometimes a second unit), and that the owner was
+    # already sent the one message about a device
+    told = {str(k).lower(): v for k, v in (told or {}).items()}
+    others = {str(x.get("mac") or "").lower(): x for x in
+              list(new) + list((discovery or {}).get("unknown") or []) + list((discovery or {}).get("ignored") or [])
+              if x.get("mac")}
+
+    def near(x: dict) -> list:
+        m = str(x.get("mac") or "").lower()
+        p = m.split(":")
+        if len(p) != 6:
+            return []
+        out = []
+        for om, o in others.items():
+            q = om.split(":")
+            if om == m or len(q) != 6 or q[:5] != p[:5]:
+                continue
+            try:
+                if abs(int(q[5], 16) - int(p[5], 16)) > 8:
+                    continue
+            except ValueError:
+                continue
+            out.append({k: v for k, v in (("mac", om), ("host", o.get("host") or ""), ("ip", o.get("ip") or ""),
+                                          ("first_seen", time.strftime("%Y-%m-%d %H:%M", time.localtime(o["first_seen"]))
+                                           if o.get("first_seen") else ""),
+                                          ("last_seen", time.strftime("%Y-%m-%d %H:%M", time.localtime(o["heard"]))
+                                           if o.get("heard") else ""),
+                                          ("told_owner", time.strftime("%Y-%m-%d %H:%M", time.localtime(told[om]))
+                                           if om in told else "")) if v})
+        return out
+
+    def newrow(x: dict) -> dict:
+        m = str(x.get("mac") or "").lower()
+        return {**dhcp(x),
+                **({"told_owner": time.strftime("%Y-%m-%d %H:%M", time.localtime(told[m]))} if m in told else {}),
+                **({"mac_next_to": near(x)} if near(x) else {})}
+
     if new:
         # apart, and first: the 12 below are by address and would hide a new one
         lines.append("NEW_DEVICES (never seen on that network before, first seen in the last day, "
                      "newest first; `site` when not the main site): "
-                     + json.dumps([dhcp(x) for x in new[:20]], ensure_ascii=False))
+                     + json.dumps([newrow(x) for x in new[:20]], ensure_ascii=False))
     if discovery and discovery.get("unknown"):
         lines.append(f"UNKNOWN_DHCP_DEVICES ({discovery['unknown_count']} not in inventory): " +
                      json.dumps([dhcp(x) for x in discovery["unknown"][:12]], ensure_ascii=False))
@@ -572,8 +620,8 @@ def build_qa_context(question: str, report: Optional[dict], wan_note: str = "",
     if c:
         lines.append(f"STATUS: {r.get('overall_health', '?')} — {c.get('up')}/{c.get('total')} "
                      f"up, {c.get('down')} down, {c.get('asleep', 0)} asleep by schedule, "
-                     f"{c.get('paused', 0)} paused by the owner (switched off on purpose, "
-                     f"not watched); "
+                     f"{c.get('paused', 0)} paused by the owner (switched off on purpose: still "
+                     f"pinged, never an issue); "
                      f"internet: {r.get('wan_state') or ('ok' if r.get('wan_ok') else 'down')}")
     if wan_note:
         lines.append(f"WAN_NOTE: {wan_note}")
