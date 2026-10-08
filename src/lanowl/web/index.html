@@ -2361,7 +2361,7 @@ async function chatRefresh() {
     const r = await fetch("/api/chat?c=" + encodeURIComponent(cid), {cache: "no-store"});
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
-    // another conversation was opened meanwhile (the drawer's "Ask the model about this"
+    // another conversation was opened meanwhile (the drawer's "Ask the owl about this"
     // switches tab and conversation at once): this answer is about the old one — and read as
     // "that one is gone" it used to clear the new one
     if ((CH.cid || "") !== cid) { CH.again = true; return; }
@@ -2681,7 +2681,7 @@ function palOptions(q) {
   }
   views.filter(v => !n || v[1].toLowerCase().includes(n)).forEach(v => out.push({g: "Go to", i: v[2], t: v[1], v: "", view: v[0]}));
   cmds.filter(c => !n || c[1].toLowerCase().includes(n)).forEach(c => out.push({g: "Do", i: c[2], t: c[1], v: "", act: c[0]}));
-  if (n) out.push({g: "Ask the model", i: "chat", t: `“${q.trim()}”`, v: "written into Ask, you send it", ask: q.trim()});
+  if (n) out.push({g: "Ask the owl", i: "chat", t: `“${q.trim()}”`, v: "written into Ask, you send it", ask: q.trim()});
   return out.slice(0, 40);
 }
 function renderPal() {
@@ -2796,7 +2796,7 @@ function renderMemory(d) {
   put("mem", `<div class="list">` + (ns.length ? ns.map(n => `<button class="row" type="button" data-act="memedit" data-mid="${n.id}">
     <span class="rt"><span class="rn wrap"><b>#${n.id}</b> ${esc(n.text)}</span>
     <span class="rs wrap">${n.by === "owner" ? "you" : "the model" + (n.q ? ` · asked “${esc(n.q.length > 60 ? n.q.slice(0, 60) + "…" : n.q)}”` : "")} · ${esc(clock(n.upd || n.ts))}</span></span></button>`).join("")
-    : `<div class="empty">Nothing yet. Tell the model “remember that …” in Ask or on Telegram, or add a note here.</div>`)
+    : `<div class="empty">Nothing yet. Tell the owl “remember that …” in Ask or on Telegram, or add a note here.</div>`)
     + `<button class="row" type="button" data-act="memadd"><span class="rn" style="color:var(--blue-t)">Add a note</span></button></div>`);
 }
 function openMem(id) {
@@ -3405,7 +3405,7 @@ function renderWan() {
   const v = x.verdict || {}, e = x.evidence, L = x.length || {};
   h += `<div class="card wv c-${WHERE_C[v.where] || "gray"}"><div class="mh">${ic("globe")}<b>${esc(cap(v.short))}</b></div>` +
     (v.lines || []).map(l => `<p class="mtext">${esc(l)}</p>`).join("") +
-    `<div class="fine" style="margin-top:8px">${esc(cap(L.how || ""))}.${x.kind !== "main-outage" ? ` ${x.paged ? "It passed" : "Under"} the ${esc(dur(x.floor_s))} paging floor.` : ""} The monitor's own reading, from what it kept — no model.</div></div>`;
+    `<div class="fine" style="margin-top:8px">${esc(cap(L.how || ""))}.${x.kind !== "main-outage" ? ` ${x.paged ? "It passed" : "Under"} the ${esc(dur(x.floor_s))} paging floor.` : ""} The monitor's own reading, from what it kept — not the owl's words.</div></div>`;
   const kv = (k, val) => val ? `<div class="kv"><span>${esc(k)}</span><span style="text-align:right">${val}</span></div>` : "";
   let facts = "";
   if (e) {
@@ -3427,7 +3427,7 @@ function renderWan() {
   h += `<div class="sh">The router's log around it</div><div class="card">` +
     ((x.log || []).length ? `<div class="wlog">${x.log.map(r => `<b>${esc(hms(r.ts))}</b> ${esc(r.message)}${r.n > 1 ? ` <span class="fine">×${r.n}, the last ${esc(hms(r.last))}</span>` : ""}`).join("\n")}</div>` : "") +
     (x.log_note ? `<div class="fine"${(x.log || []).length ? ' style="margin-top:8px"' : ""}>${esc(x.log_note)}</div>` : "") + `</div>`;
-  h += `<button class="btn ghost" type="button" data-act="askwan" data-wts="${esc(x.ts)}">${ic("chat")}Ask the model about this</button>`;
+  h += `<button class="btn ghost" type="button" data-act="askwan" data-wts="${esc(x.ts)}">${ic("chat")}Ask the owl about this</button>`;
   put("sheet-in", h);
 }
 
@@ -3517,7 +3517,7 @@ function renderSheet() {
   const siteRow = x && x.can_site ? `<div class="row"><span class="sd c-gray"></span><span class="rt"><span class="rn">Another network</span><span class="rs wrap">behind this router? Make it a site: its own chip, its devices, its DHCP list</span></span>
     <button class="rowbtn" type="button" data-act="mksite">Make it a site</button></div>` : "";
   h += `<div id="sx-manage"></div>` + manageHtml(d, ip, monRow + siteRow) + `<div id="sx-sec"></div>` + secH;
-  if ((d.model_switch || {}).on !== false) h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the model about it</button>`;
+  if ((d.model_switch || {}).on !== false) h += `<button class="btn ghost" data-act="askdev">${ic("chat")}Ask the owl about it</button>`;
   h += `<div id="sx-details"></div>` + detailsHtml();
   const keepY = $("sheet").scrollTop;
   const rebuilt = put("sheet-in", h);

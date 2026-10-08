@@ -10,7 +10,7 @@ each failed round, whether the router and the line's first hop answered in it, t
 netwatch counters as it started and ~75 s after it ended, and the router's log around it.
 This module turns that into the code's reading — where it broke, in one line for the Timeline
 and a few for the drawer — with no model involved. The model's reading is one button away
-(the drawer's "Ask the model about this"), and gets the same facts (`brief`).
+(the drawer's "Ask the owl about this"), and gets the same facts (`brief`).
 
 For an event with no evidence of its own, the router's counters as read now still answer one
 question: if none of its pings has failed since before the event, the network had internet.
