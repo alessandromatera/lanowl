@@ -1866,17 +1866,21 @@ function spark(b, w = 96, h = 24) {
   }
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${p}"/>${last ? `<circle cx="${last[0]}" cy="${last[1]}" r="1.8"/>` : ""}</svg>`;
 }
-// a new device's name that looks like a device you watch ("Office-main-router" beside the
-// watched "Office mikrotik router"): a word they share that few names have, never a common one
+// a new device's name that looks like a device you watch ("Cabin-main-router" beside the
+// watched "Cabin router"): a word few names have, and either another word in common or every word
+// of the watched name. One shared word alone is a place, not a look-alike ("EAP650-Garden" beside
+// "Cam Garden")
 const NAMEW = new Set(["router", "mikrotik", "shelly", "camera", "switch", "server", "iphone", "ipad", "android",
   "galaxy", "phone", "main", "home", "office", "living", "room", "lite", "plus", "mini", "pro", "the"]);
-const nameWords = n => String(n || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !NAMEW.has(w) && !/^\d+$/.test(w));
+const allWords = n => String(n || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 2 && !/^\d+$/.test(w));
+const nameWords = n => allWords(n).filter(w => w.length >= 4 && !NAMEW.has(w));
 function lookAlike(d, r) {
-  const devs = d.devices || [], mine = nameWords(r.name);
-  if (!mine.length) return null;
+  const devs = d.devices || [], mine = nameWords(r.name), all = new Set(allWords(r.name));
   for (const w of mine) {
     const hits = devs.filter(x => nameWords(x.name).includes(w));
-    if (hits.length && hits.length <= 2 && !hits.some(x => x.ip === r.ip)) return hits[0];
+    if (!hits.length || hits.length > 2 || hits.some(x => x.ip === r.ip)) continue;
+    const like = hits.find(x => { const t = allWords(x.name), n = t.filter(v => all.has(v)).length; return n >= 2 || n === t.length; });
+    if (like) return like;
   }
   return null;
 }

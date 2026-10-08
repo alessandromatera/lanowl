@@ -8,7 +8,7 @@ tools and writes the cause into the alert you already have: the switch, the line
 the Wi-Fi. It changes nothing by itself: a fix is a proposal that runs only when you press a
 button.
 
-![A minute on lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix, an internet blip, a device's page, the timeline, the security review, a question to the owl](docs/img/tour.gif)
+![A minute on lanowl's dashboard: an incident with the owl's diagnosis and a proposed fix, an internet blip, a device's page, the timeline with a new device's story, the security review, a question to the owl](docs/img/tour.gif)
 
 Free and open source (AGPL-3.0). Self-hosted, no account, no telemetry. The model runs on
 your own [Ollama](https://ollama.com); everything else works without it.
@@ -120,7 +120,7 @@ device, and nothing that changes a device runs without your button.
 - A sandboxed shell, with no keys in it, when a hunch needs one.
 - It grades its own diagnoses once a problem is over, so you know how far to trust it.
 
-<img src="docs/img/does-ask.png" width="600" alt="Asked why the internet dropped on Sunday, the owl answers: the fibre failed at 19:41, LTE took over within a minute, back at 19:47">
+<img src="docs/img/does-ask.png" width="600" alt="Asked why the internet dropped, the owl answers: the fibre failed at 19:41, LTE took over within a minute, back at 19:47">
 
 ### Around it
 

@@ -243,7 +243,7 @@ class Auditor:
                                    model_on=lambda: not self.no_llm,
                                    on_event=self._on_event, seclog=self.seclog)
         # the last 24 h of blips, from the record: the digest and the Internet card counted
-        # only those since the start, and a deploy made "0 short blips" out of one at 03:19
+        # only those since the start, and a deploy made "0 short blips" out of one in the night
         try:
             self.wanwatch.blips = [(e["ts"], e["ts"] + e["s"]) for e in
                                    wanexplain.moments(self.state, time.time() - 86400) if e["kind"] == "blip"]
