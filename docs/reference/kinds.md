@@ -36,6 +36,25 @@ Any kind, `generic` included, can be rebooted through a Home Assistant button:
 | `shelly` | None | The Shelly's own HTTP API. A reboot restarts its controller; relays never switch. lanowl refuses one whose relay would come back off. |
 | a profile | lanowl's key, or a password | ssh, with your commands ([Profiles](profiles.md)). |
 
+## What the owl can read
+
+In your own questions (Telegram, or the dashboard's Ask tab), the owl can read a device
+itself, logged in with the login lanowl has for it: a device with a `kind` below and its
+`credentials:` (Home Assistant: its token). No `manage` is needed. Each read is one fixed,
+read-only command: the owl picks the read, never the command. Every read is listed under the
+answer.
+
+| kind | Reads |
+|---|---|
+| `mikrotik` | `system` (model, version, uptime, CPU, memory) · `ports` (each port's link state and link-downs; each ethernet port's negotiated rate and duplex, and what the other end offers) · `log` · `clients` (the Wi-Fi clients in every Wi-Fi menu, `wifi`, `wireless` or `wifiwave2`, and the MAC addresses on each bridge port) |
+| `openwrt` | `system` · `ports` (link, speed, duplex; the switch ports on a device with a switch chip) · `log` (logread) · `clients` (Wi-Fi clients, ARP table) |
+| `linux` | `system` (OS, uptime, memory, disks, failed services) · `ports` · `log` (the journal: through sudo when the login is not root, else what the login itself may read) |
+| `esxi` | `system` · `ports` (each NIC's link, speed, duplex, error and drop counters) · `log` (vobd.log) · `vmkernel` · `vms` (every VM and whether it is on) |
+| `unifi` | `system` · `ports` · `log` · `clients` |
+| `homeassistant` | `system` · `log` · `unavailable` (every entity that is unavailable, and since when) |
+| `reolink` | `system` (model, firmware; an NVR's disks) · `sessions` (who is connected) · `channels` (an NVR's cameras online) |
+| a profile | Its operations, except `reboot` and `backup` |
+
 ## What each feature does
 
 | Feature | What lanowl does | Switch in config.yaml |

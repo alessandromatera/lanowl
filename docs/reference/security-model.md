@@ -15,6 +15,10 @@ The owl is useful, and treated as if anything it reads could steer it.
   fills with a device and a reason. lanowl builds the command from validated data: nmap runs
   without a shell, a service restart takes a unit from that device's allow-list, a Shelly
   reboot is one request to its own endpoint. The model's words are only ever shown.
+- **It reads a device only by name.** In your own questions, never in the audit or a log
+  check, it can read a device lanowl has a login for: one fixed read-only command per read (a
+  print, a log tail, an API read), picked by name. What it searches for is filtered on lanowl's
+  side, so nothing it writes reaches the device.
 - **Every change waits for a person.** A proposal is checked against the rules and the device
   itself before you see it, and again when you approve. Approval is a Telegram button from an
   allowed user, or the dashboard behind its login, after a sheet that says what runs.

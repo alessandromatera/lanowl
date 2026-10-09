@@ -70,6 +70,11 @@ inventory device, and everything lanowl has kept: what it sent you, the update c
 security review, the backups, earlier conversations. An address outside your inventory is
 refused.
 
+**Read a device itself**, in your questions: the speed a port really linked at, its own log,
+its Wi-Fi clients. lanowl logs in with the device's own login, the one it uses for updates and
+backups, and runs one fixed read-only command per read; the owl picks the read, never the
+command. What each kind offers: [Device kinds](../reference/kinds.md#what-the-owl-can-read).
+
 **Run diagnostics**, from a fixed catalog: `mtr`, `traceroute`, DNS and TLS checks, a port
 scan, the router's own ping, a packet capture, each internet link on its own, a check from
 another LAN host or from your VPS. When you ask a question, the ones it needs run at once and

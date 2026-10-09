@@ -13,6 +13,9 @@ catalog — mtr, DNS, TLS, scans, a host's health, the tunnels — that run only
 investigation session the owner opened with a button. Both are offered only while a model
 turn is allowed to propose (`Actions.source`).
 
+And `device_read` (devread.py): one device read by the owl itself, with lanowl's own login for
+it — a fixed read-only command per read, in the owner's own questions only.
+
 And `lanowl_records` (records.py): not the network but lanowl itself —
 what it knows, did, decided and sent, everything its dashboard shows. Read-only, from memory
 and its own database.
@@ -64,7 +67,9 @@ TOOL_SPECS = [
     {"type": "function", "function": {
         "name": "mikrotik_read",
         "description": "GET a RouterOS /rest path (e.g. 'system/resource', 'interface', "
-                       "'ip/dhcp-server/lease') from a MikroTik router. Read-only GET only.",
+                       "'ip/dhcp-server/lease') from the main MikroTik router, with its read-only "
+                       "login. Read-only GET only. Another MikroTik with a login of its own: "
+                       "device_read.",
         "parameters": {"type": "object", "properties": {
             "ip": {"type": "string"}, "path": {"type": "string"}
         }, "required": ["ip", "path"]}}},
@@ -213,11 +218,13 @@ class ToolExecutor:
         # cves.py: one CVE looked up (NVD, the machine's own build) — every turn with
         # tools, like the records: it reads, and only a CVE id and package versions leave
         self.cves = None
+        # devread.py: a device read with lanowl's own login for it — the owner's questions only
+        self.devices = None
 
     def tool_specs(self) -> list:
         """What the model is offered this turn: the read-only tools, plus `propose_action`
-        and `run_check` while the turn is allowed to propose, plus the memory's tools while
-        it is the owner's conversation. lanowl's own records are always there: reading
+        and `run_check` while the turn is allowed to propose, plus the memory's tools and
+        `device_read` while it is the owner's conversation. lanowl's own records are always there: reading
         what it knows and decided is never a risk."""
         out = self.specs
         if self.records is not None:
@@ -231,6 +238,8 @@ class ToolExecutor:
         sh = self._shell()
         if sh is not None:
             out = out + [sh.spec()]
+        if self.devices is not None and self.devices.offered():
+            out = out + [self.devices.spec()]
         return out
 
     def _shell(self):
@@ -589,6 +598,11 @@ class ToolExecutor:
             return {"tool": name, "result": await self.cves.lookup(str(args.get("cve") or ""),
                                                                    str(args.get("ip") or ""))}
 
+        if name == "device_read":
+            if self.devices is None:
+                return {"tool": name, "error": "devices cannot be read here"}
+            return {"tool": name, "result": await self.devices.call(args)}
+
         if name == "lanowl_records":
             if self.records is None:
                 return {"tool": name, "error": "lanowl's records are not available here"}
@@ -669,6 +683,13 @@ class ToolExecutor:
             base = (dev.attrs.get("mikrotik_rest") if dev else None) or f"http://{ip}"
             path = str(args.get("path", "system/resource"))
             router = routeros.shared(self.cfg)
+            dv = self.devices
+            if ip != router.host and dv is not None and dv.offered() and dv.reads_of(ip):
+                # the router's login is not on it: a refused login, written in the device's
+                # own log as critical — its own login reads it, over ssh
+                return {"tool": name, "error": f"{ip} has a login of its own: read it with "
+                                               "device_read — mikrotik_read carries the main "
+                                               "router's read-only login"}
             if ip == router.host:
                 r = await router.read(path)      # the main router: its kept API connection
             else:

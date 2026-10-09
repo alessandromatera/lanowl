@@ -434,6 +434,24 @@ def with_shell(system: str) -> str:
     return system + "\n" + _SHELL
 
 
+# A device read by the owl itself (devread.py), in the owner's questions. Its devices are listed
+# by name: told only "you have no ssh", it said so of a device lanowl logs in to every day.
+_DEVICE_READS = """
+DEVICE READS — `device_read` logs in to one device with lanowl's own login for it (the one
+lanowl also uses for its updates, configuration and backups) and runs one fixed read-only
+command: you pick the device and the read, never the command. It answers what only the device
+itself knows — the speed a port really linked at, its own log, its Wi-Fi clients. The devices
+you can read this way, and their reads:
+{devices}
+Any other device has no login lanowl can use: say so of that device only — never that you cannot
+log in to devices at all. Quote what a read returns as it is, a log line word for word; never
+give a reason the output does not show."""
+
+
+def with_device_reads(system: str, devices: str) -> str:
+    return system + "\n" + _DEVICE_READS.replace("{devices}", devices)
+
+
 # The audit's own shell: a second sandbox with no internet and no DNS at all.
 _SHELL_OFFLINE = """
 SHELL — `shell` runs a bash command in the audit's OFFLINE sandbox beside lanowl (Debian, an

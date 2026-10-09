@@ -42,6 +42,7 @@ from . import wanexplain
 from .agent import LlmAgent
 from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .chat import Chat
+from .devread import DeviceReads
 from .memory import Memory
 from .names import Names, clean as clean_name, mac_key
 from .model import (NO_MODEL, load_config, load_inventory, model_name, model_report, model_set,
@@ -329,6 +330,10 @@ class Auditor:
         # did or decided
         self.records = Records(self)
         self.executor.records = self.records
+        # ...and a device read by the owl itself, with lanowl's own login for it (devread.py):
+        # in the owner's questions only, a fixed read-only command per read
+        self.devreads = DeviceReads(self)
+        self.executor.devices = self.devreads
         rec = self.state.load_record("telegram_chat") or {}
         self.poller = TelegramPoller(
             cfg, self.chat.on_telegram, offset=int(rec.get("offset") or 0),

@@ -18,13 +18,17 @@ Good questions are the ones you would ask someone who had watched the network al
 - "Is the VPS being attacked?"
 - "What did you send me on Sunday, and why no digest this morning?"
 - "Show me the exact log of the home server around 03:00."
+- "Is the attic access point linked at 1 Gbps?"
 
 ## How it answers
 
 It looks first, then answers: a device's history, the internet's evidence, the router's log,
 a machine's log, MQTT values, and everything lanowl keeps (every message it sent you and why
 a digest was held back, the update check, the security review, the backups, earlier
-conversations). For more it runs diagnostics from a fixed catalog: `mtr`, DNS, TLS, a scan,
+conversations). It reads a device itself too, with the login lanowl has for it: the speed a
+port linked at, the device's own log, its Wi-Fi clients
+([what each kind offers](../reference/kinds.md#what-the-owl-can-read)). For more it runs
+diagnostics from a fixed catalog: `mtr`, DNS, TLS, a scan,
 a packet capture, a check from the router, from another LAN host or from your VPS. Asking is
 the approval: they run at once, and each is listed under the answer (🔧 on Telegram). Anything
 that would change something is only proposed, with a button

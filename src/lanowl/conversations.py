@@ -94,6 +94,9 @@ def describe_tool(name: str, args: dict, inv) -> str:
         what = f" for “{s('search')}”" if args.get("search") else ""
         unit = f" ({s('unit')})" if args.get("unit") else ""
         return f"Reading the log of {who}{unit}{what}, last {_span(args.get('hours', 24))}"
+    if name == "device_read":
+        what = f" for “{s('search')}”" if args.get("search") else ""
+        return f"Reading {s('read') or '?'} on {who}{what}"
     if name == "cve_lookup":
         return f"Looking up {s('cve')}" + (f" for {who}" if who else "")
     if name == "propose_action":

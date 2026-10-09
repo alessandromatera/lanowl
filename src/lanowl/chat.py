@@ -44,7 +44,8 @@ from .memory import strip_footer
 from .model import NO_MODEL
 from .pause import find_devices
 from .prompts import (QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
-                      investigation_brief, with_actions, with_memory_tools, with_shell)
+                      investigation_brief, with_actions, with_device_reads, with_memory_tools,
+                      with_shell)
 from .report import _clock, _html, format_digest, label, ran_lines
 from .sinks import telegram_call, telegram_direct
 
@@ -512,6 +513,9 @@ class Chat:
             shell = owned and await a.shell.ready()
             if shell:
                 system = with_shell(system)
+            devices = a.devreads.prompt_list() if owned else ""
+            if devices:
+                system = with_device_reads(system, devices)
             t0 = time.time()
             changes: list = []
             ran: list = []
@@ -520,6 +524,7 @@ class Chat:
                 with (a.actions.source(**src) if acts else contextlib.nullcontext()), \
                         (a.shell.turn(via, (source or {}).get("question") or question, ran)
                          if shell else contextlib.nullcontext()), \
+                        (a.devreads.turn(via, ran) if owned else contextlib.nullcontext()), \
                         (a.memory.turn(via, (source or {}).get("question") or question)
                          if owned else contextlib.nullcontext()) as mt:
                     try:
