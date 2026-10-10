@@ -105,14 +105,15 @@ Without a model, digests still go out: the monitor's own report, without the �
 
 ## A port slower, a device's own log
 
-Read every hour on each device lanowl has a login for, every minute on the main router
-(`devwatch`, [Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)). Both come at once.
+Read every hour on each device lanowl has a login for, every minute on the main router over its
+API connection (`devwatch`, [Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)).
+Both come at once.
 
 | What happened | What you get |
 |---|---|
 | A port runs slower than usual, read twice a minute apart | 🟡 **LINK SLOWER**: the port, its speed, its usual one, and on a MikroTik what the other end offers |
-| It is back at its usual speed | 🟢 **LINK BACK**, with how long it was slower — only if you were told it dropped |
-| The same port drops and comes back twice in a week | The second LINK BACK says the device behind it changes the link by itself; then nothing more about that port |
+| It is back at its usual speed | 🟢 **LINK BACK**, with how long it was slower — only if you were told it dropped. A port slower for a week runs at its new speed: that is its usual from then on |
+| The same port drops and comes back twice in a week | The second LINK BACK says the device behind it changes the link by itself; then nothing more about that port until a month passes with no change |
 | Its log shows something that is not normal | 🟡 or 🔴 **DEVICE LOG**: one 🦉 text from the owl, with the device's own words. Nothing for the first `quiet_days` (7): kept on the Timeline instead |
 
 ## What never reaches you

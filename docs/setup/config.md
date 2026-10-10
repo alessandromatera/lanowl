@@ -4,7 +4,8 @@ One file says everything lanowl does. A new install has a short one, written by 
 first start, and the dashboard's gear changes it: [Settings](../using/settings.md) shows every
 section as a form, from `config.example.yaml`, and keeps the file's comments. Or copy
 `config.example.yaml` to `config/config.yaml` and edit it: the essentials come first, and
-every optional feature starts switched off.
+every optional feature starts switched off — except `devwatch`, which reads the devices'
+ports and logs with the logins you give lanowl.
 
 - **No secrets here.** Logins, tokens and lanowl's ssh key live in
   [`secrets.yaml`](secrets.md), so this file can be shared or kept in git.
@@ -278,7 +279,9 @@ instead. See [Logs and lanowl's own state](../running/state.md).
 ## The optional features
 
 Each is off until you switch it on, and each acts only on the devices whose `manage` list
-names it ([Devices](inventory.md)). `lanowl --check` shows the plan.
+names it ([Devices](inventory.md)). `lanowl --check` shows the plan. One exception: `devwatch`
+is on unless you switch it off, and reads the Ethernet ports of every device lanowl has a login
+for, with no `manage` needed (its logs only with `manage: [logs]`).
 
 | Section | What it does | Where it is explained |
 |---|---|---|

@@ -21,9 +21,9 @@
 # manage:      what lanowl does with it besides watching it — each only where its kind can:
 #                logs      reads its own log every hour; the owl tells what is not routine
 #                          (mikrotik, openwrt, esxi, unifi, linux; the main router's log is
-#                          always read). A Linux box by lanowl's key: its auth log every two
-#                          minutes too. Every device with a login also has its Ethernet ports'
-#                          speed read hourly (devwatch in config.yaml), with no `manage`.
+#                          always read). A Linux box by lanowl's key, with hostlog on: its auth
+#                          log every two minutes too. Every device with a login also has its
+#                          Ethernet ports' speed read hourly (devwatch), with no `manage`.
 #                updates   checks its updates every morning
 #                upgrade   may propose installing them                     (mikrotik, linux)
 #                reboot    may propose a reboot
@@ -34,7 +34,7 @@
 #              Anything that CHANGES something is only ever a proposal you approve with a button.
 # A feature's options sit under its own name (restart: {units}, backup: {paths}, reboot:
 # {risk, hold_min, also_hold, ha_button}, upgrade: {risk; a router's hold_min, also_hold},
-# logs: {public, about, trusted}).
+# logs: {about; and public, trusted for a Linux box's two-minute auth log by lanowl's key}).
 #
 # `lanowl --check` says what it will do with each device, and why not.
 

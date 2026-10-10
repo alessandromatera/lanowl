@@ -2,7 +2,8 @@
 # lanowl writes its own short config.yaml at its first start, and Settings on the dashboard
 # adds keys from here, with these comments. Or copy it to config/config.yaml and edit.
 #
-# The essentials come first; everything optional is switched off and says what it needs.
+# The essentials come first; everything optional is switched off and says what it needs —
+# except devwatch (the devices' ports and logs, read with the logins you give lanowl).
 # Secrets never go in this file: every one of them (device logins, tokens, the router's and
 # the broker's logins, lanowl's ssh key) lives in secrets.yaml beside it — see
 # secrets.example.yaml — or in the environment.
@@ -238,11 +239,12 @@ actions:
 # Every device lanowl has a login for, read once an hour with one login: each Ethernet port's
 # speed (told when one runs slower than usual, and when it is back), and, with `manage: [logs]`,
 # its own log: the routine is dropped, the owl tells what is not normal. The main router's ports
-# are read every `router_every_s` over its connection, with no login.
+# are read every `router_every_s` over its API connection (mikrotik.api), with no login; without
+# the API every REST read is a login in its log, so then hourly. On unless switched off.
 devwatch:
   enabled: true
   every_h: 1                       # each device's round; never more often than hourly
-  router_every_s: 60               # the main router's ports
+  router_every_s: 60               # the main router's ports, over its API connection
   ports: true                      # tell when a port runs slower than usual
   logs: true                       # read the logs of the devices with `manage: [logs]`
   quiet_days: 7                    # the first days: the owl's verdicts are kept, not sent

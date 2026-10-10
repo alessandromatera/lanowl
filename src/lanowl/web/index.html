@@ -4847,7 +4847,7 @@ async function setDevice(ip) {
         : (S2.lmode || "").startsWith("use:") ? "Shared with the devices that use it; change it in Settings → Secrets." : GIVES[d.kind] ? `lanowl only watches it. With a login: ${GIVES[d.kind]}.` : "lanowl only watches it.") : "") +
     fld("manage", can.length ? `<div class="schips">${can.map(f => `<button class="schip" type="button" data-sact="man" data-f="${f}" aria-pressed="${(d.manage || []).includes(f)}">${f}</button>`).join("")}</div>` : `<span class="fine">${d.kind ? "a " + esc(d.kind) + " device is watched only" : "pick a kind first"}</span>`,
       (d.manage || []).filter(f => V.switches && (V.switches[f] === false || (V.running || {})[f] === false)).map(f => V.switches[f] === false
-        ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc({logs: "hostlog", updates: "updates", upgrade: "actions", reboot: "actions", restart: "actions", config: "configwatch", security: "exposure", backup: "backups"}[f])}.enabled)</span>`
+        ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc((V.switch_names || {})[f] || f)}.enabled)</span>`
         : `<span class="muted">${esc(f)}: switched on, from the next restart</span>`).join("<br>")) +
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
   if (S2.orig && !inSheet) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);   // the sheet has its own row

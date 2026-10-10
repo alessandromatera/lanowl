@@ -43,8 +43,8 @@ device, and nothing that changes a device runs without your button.
 - Once a day the owl reads the week's numbers and names what is slowly getting worse: a camera
   that drops every night at 02:00, a line that flaps a little more each week.
 - Every hour, the speed of each Ethernet port on the devices it logs in to (MikroTik, OpenWrt,
-  ESXi, UniFi, Linux), every minute on the router: a port that drops from 1 Gbps to 100 Mbps is
-  one message, and one when it is back.
+  ESXi, UniFi, Linux), every minute on the router over its API: a port that drops from 1 Gbps
+  to 100 Mbps is one message, and one when it is back.
 - Every hour, their own logs: the routine is dropped, and the owl says something only when it is
   not normal (a power cut, a link that flaps, a disk error).
 - A weekly review: the internet's week, the devices that kept falling off, what joined.

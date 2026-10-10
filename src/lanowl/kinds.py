@@ -53,12 +53,22 @@ FEATURES = {
     "security": "reviews what it exposes, every day",
     "backup": "backs it up, monthly and before updates",
 }
-# the config switch each feature runs under
+# the config switch each feature runs under; `logs` on a Linux machine by lanowl's key is read by
+# `hostlog` too (its auth log every two minutes), so either switch counts there (derive)
 SWITCH = {"logs": "devwatch", "updates": "updates", "upgrade": "actions", "reboot": "actions",
           "restart": "actions", "config": "configwatch", "security": "exposure",
           "backup": "backups"}
 
 # kind -> feature -> how (the feature module's `via`); linux is decided by its login (_linux)
+# the switches that are on when config.yaml leaves them out (schema.DEFAULTS says the same)
+ON_BY_DEFAULT = {"devwatch"}
+
+
+def switched_on(cfg: dict, sw: str) -> bool:
+    c = (cfg or {}).get(sw)
+    return bool((c if isinstance(c, dict) else {}).get("enabled", sw in ON_BY_DEFAULT))
+
+
 KINDS = {
     "mikrotik": {"logs": "routeros", "updates": "routeros", "upgrade": "routeros", "reboot": "routeros",
                  "config": "routeros", "security": "routeros", "backup": "routeros"},
@@ -326,8 +336,9 @@ def derive(cfg: dict, inv, access, profiles: dict) -> list:
                 pl.features[f] = how
             else:
                 pl.problems.append(why)
-        for f in pl.features:
-            if not (cfg.get(SWITCH[f]) or {}).get("enabled", False):
+        for f, how in pl.features.items():
+            on = switched_on(cfg, SWITCH[f]) or (f == "logs" and how == "key" and switched_on(cfg, "hostlog"))
+            if not on:
                 pl.off[f] = f"{SWITCH[f]}.enabled"
     return plans
 

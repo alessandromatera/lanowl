@@ -114,7 +114,7 @@ with a login in [`secrets.yaml`](secrets.md):
 
 | Feature | What lanowl does | Switched on by |
 |---|---|---|
-| `logs` | Reads its own log every hour; the owl tells what is not routine (MikroTik, OpenWrt, ESXi, UniFi, Linux; by lanowl's key, a Linux auth log every two minutes too) | `devwatch.enabled` |
+| `logs` | Reads its own log every hour; the owl tells what is not routine (MikroTik, OpenWrt, ESXi, UniFi, Linux). A Linux machine by lanowl's key: its auth log every two minutes too, with `hostlog.enabled` | `devwatch.enabled` (on unless switched off) |
 | `updates` | Checks its updates every morning | `updates.enabled` |
 | `upgrade` | May propose installing them | `actions.enabled` |
 | `reboot` | May propose a reboot | `actions.enabled` |
@@ -147,9 +147,9 @@ A feature's options sit under its own name on the device:
 | `hold_min` | How long its alerts are held while it restarts (default 5 minutes). |
 | `also_hold` | Other addresses held with it, or `wan` for the internet. |
 | `reboot.ha_button` | Reboot it by pressing a Home Assistant button entity, such as its smart plug's. |
-| `logs.public` | It is on the internet: the scanners' constant knocking is filtered out. |
 | `logs.about` | A sentence for the owl about what this machine is. |
-| `logs.trusted` | Networks a login may come from without being news. |
+| `logs.public` | It is on the internet: the scanners' constant knocking is filtered out. Linux by lanowl's key, in the two-minute auth log (`hostlog`). |
+| `logs.trusted` | Networks a login may come from without being news. Linux by lanowl's key, in the two-minute auth log (`hostlog`); the hourly read of the other devices leaves logins to the owl. |
 
 A reboot through a Home Assistant button works for any device, but it still needs a `kind`
 (`generic` is enough), `manage: [reboot]`, and Home Assistant's address and token

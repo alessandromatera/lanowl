@@ -373,8 +373,7 @@ class SettingsRoutes:
                         "groups": inv_groups(raw), "kinds": self._kinds(), "key_kinds": self._key_kinds(),
                         "features": FEATURES,
                         # as the file says now (a save shows at once), and as lanowl runs
-                        "switches": {f: bool((fcfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
-                        "running": {f: bool((self.a.cfg.get(sw) or {}).get("enabled")) for f, sw in SWITCH.items()},
+                        "switches": _switches(fcfg), "running": _switches(self.a.cfg), "switch_names": SWITCH,
                         "logins": [{"name": n, "type": ("key + password" if lg.key and lg.password else
                                                         "key" if lg.key else "password"),
                                     "how": "key" if lg.key else "password", "user": lg.user,
@@ -1118,7 +1117,7 @@ class SettingsRoutes:
         if ha_tok and str((self.a.cfg.get("access") or {}).get("ha_url") or "") != f"http://{ha_ip}:8123":
             cops.append({"op": "set", "path": ["access", "ha_url"], "value": f"http://{ha_ip}:8123"})
         for sec, fs in (("updates", {"updates"}), ("exposure", {"security"}), ("configwatch", {"config"}),
-                        ("actions", {"reboot", "upgrade"}), ("devwatch", {"logs"})):
+                        ("actions", {"reboot", "upgrade"})):
             if on & fs and not (self.a.cfg.get(sec) or {}).get("enabled"):
                 cops.append({"op": "set", "path": [sec, "enabled"], "value": True})
                 if sec == "actions":
@@ -1225,6 +1224,16 @@ class SettingsRoutes:
 _FORM_KEYS = {"ip", "name", "mac", "group", "criticality", "role", "note", "site", "depends_on",
               "expect_offline", "debounce_fails", "kind", "credentials", "manage", "restart", "logs",
               "reboot", "upgrade", "backup", "checks"}
+
+
+def _switches(cfg: dict) -> dict:
+    """feature -> its switch is on (kinds.SWITCH), with lanowl's own default when the file leaves
+    it out. `logs` is on when either reader is: hourly (devwatch), or a Linux machine's auth log
+    by lanowl's key (hostlog) — `lanowl --check` says which, per device."""
+    from .kinds import SWITCH, switched_on
+    out = {f: switched_on(cfg, sw) for f, sw in SWITCH.items()}
+    out["logs"] = out["logs"] or switched_on(cfg, "hostlog")
+    return out
 
 
 def setup_line(devs: list, cfg_router: bool, chat: bool, ip: str) -> str:

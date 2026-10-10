@@ -60,7 +60,7 @@ DEFAULTS = {
     ("cves", "after_review"): True, ("exposure", "enabled"): False, ("drift", "enabled"): False,
     ("configwatch", "enabled"): False, ("fixes", "enabled"): True, ("scorecard", "enabled"): True,
     ("backups", "enabled"): False, ("shell", "enabled"): False, ("shell", "audit", "enabled"): False,
-    ("devwatch", "enabled"): False, ("devwatch", "ports"): True, ("devwatch", "logs"): True,
+    ("devwatch", "enabled"): True, ("devwatch", "ports"): True, ("devwatch", "logs"): True,
 }
 # paths inside the container and other plumbing: under "Advanced" in their section
 ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file"),

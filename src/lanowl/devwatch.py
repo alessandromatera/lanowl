@@ -8,7 +8,8 @@ from outside.
 Two reads, one login a device:
 
     ports   each physical Ethernet port's negotiated speed and duplex. The main router's over its
-            kept API connection (routeros.py) every `router_every_s`, with no login; every other
+            kept API connection (routeros.py) every `router_every_s`, with no login — without the
+            API each REST read is a login in its log, so then hourly like the rest; every other
             device lanowl has a login for, every `every_h` hours (never more often than hourly). A
             port that comes up slower than it usually runs (1 Gbps → 100 Mbps, or half duplex) is
             read again a minute later and, still slower, told once in lanowl's own words: the
@@ -457,7 +458,7 @@ class DevWatch:
 
     def __post_init__(self):
         c = self.cfg
-        self.enabled = bool(c.get("enabled", False))
+        self.enabled = bool(c.get("enabled", True))           # on unless switched off
         self.ports_on = self.enabled and bool(c.get("ports", True))
         self.logs_on = self.enabled and bool(c.get("logs", True))
         self.every_s = max(1.0, float(c.get("every_h") or 1)) * 3600      # never more often
@@ -530,15 +531,19 @@ class DevWatch:
             log.info("devwatch: off (devwatch.enabled)")
             return
         self.rec.setdefault("started", time.time())
-        log.info("devwatch: %d device(s) every %gh, the main router's ports every %ds%s",
-                 len(self.targets()), self.every_s / 3600, self.router_every_s,
+        log.info("devwatch: %d device(s) every %gh, the main router's ports every %ds over its API "
+                 "(hourly without it)%s", len(self.targets()), self.every_s / 3600, self.router_every_s,
                  "" if self.ports_on else " (ports off)")
         await asyncio.sleep(20)
         rounds: Optional[asyncio.Task] = None
         while not self._stop:
             now = time.time()
-            if self.ports_on and now - self._router_last >= self.router_every_s:
+            rh = router_host(self.a.cfg)
+            again = self._recheck.get(rh)
+            if self.ports_on and (now - self._router_last >= self.router_every()
+                                  or (again is not None and now >= again)):
                 self._router_last = now
+                self._recheck.pop(rh, None)
                 try:
                     await self.router_round()
                 except Exception:
@@ -572,12 +577,22 @@ class DevWatch:
             log.exception("devwatch: a round failed")
 
     # --- the main router, over its connection --------------------------------------------------
-    async def router_round(self):
+    @staticmethod
+    def _api(cfg):
         from . import routeros
+        return routeros.shared(cfg)
+
+    def router_every(self) -> float:
+        """Every `router_every_s` while its API connection is up; hourly otherwise: over REST each
+        read is a login in the router's own log (routeros.py)."""
+        r = self._api(self.a.cfg)
+        return self.router_every_s if (r.enabled and r.up) else self.every_s
+
+    async def router_round(self):
         ip = router_host(self.a.cfg)
         if not ip:
             return
-        r = routeros.shared(self.a.cfg)
+        r = self._api(self.a.cfg)
         eth = await r.request("GET", "interface/ethernet", None, 20)
         if isinstance(eth, dict):
             self._router_error = str(eth.get("error") or "no answer")
@@ -596,8 +611,10 @@ class DevWatch:
                     rows.append({**x[0], "name": x[0].get("name") or n})
         self._router_error = ""
         dev = self.a.inv.get(ip)
+        # every minute, its next read is the second one; hourly (no API), read again in a minute
         self._ports(Target(ip, dev.name if dev is not None else "the main router", "mikrotik", True,
-                           False), parse_ros_monitor(rows), time.time(), recheck=False)
+                           False), parse_ros_monitor(rows), time.time(),
+                    recheck=self.router_every() > CONFIRM_S)
         self._save()
 
     # --- a device's round ----------------------------------------------------------------------
