@@ -103,11 +103,25 @@ Without a model, digests still go out: the monitor's own report, without the �
 | No internet for longer | One 🔴 alert, queued and delivered when the line is back, then a recovery with how long it lasted. |
 | On the backup line | One 🔴 alert and one 🟢 when the main link is back ([A backup internet line](../setup/backup-line.md)). |
 
+## A port slower, a device's own log
+
+Read every hour on each device lanowl has a login for, every minute on the main router
+(`devwatch`, [Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)). Both come at once.
+
+| What happened | What you get |
+|---|---|
+| A port runs slower than usual, read twice a minute apart | 🟡 **LINK SLOWER**: the port, its speed, its usual one, and on a MikroTik what the other end offers |
+| It is back at its usual speed | 🟢 **LINK BACK**, with how long it was slower — only if you were told it dropped |
+| The same port drops and comes back twice in a week | The second LINK BACK says the device behind it changes the link by itself; then nothing more about that port |
+| Its log shows something that is not normal | 🟡 or 🔴 **DEVICE LOG**: one 🦉 text from the owl, with the device's own words. Nothing for the first `quiet_days` (7): kept on the Timeline instead |
+
 ## What never reaches you
 
 - A single missed ping.
 - A device asleep on schedule, paused, or rebooting because you approved it.
 - Twelve cameras behind one switch: that is one incident.
+- A device's log when it is normal: Wi-Fi clients, DHCP, a port going down and up once, your own
+  logins from home, lanowl's own.
 - Latency alone, a recovery of something you were never told about, a problem already over by
   the next digest.
 - "All is well".

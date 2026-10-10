@@ -235,8 +235,22 @@ actions:
     router_lan_bridge: "bridge"
     vps_iface: "eth0"
 
-# The auth logs of the devices that `manage: [logs]` (Linux, by lanowl's ssh key), read for
-# security events. lanowl's ssh key (secrets.yaml `ssh_key`) is how every key login connects.
+# Every device lanowl has a login for, read once an hour with one login: each Ethernet port's
+# speed (told when one runs slower than usual, and when it is back), and, with `manage: [logs]`,
+# its own log: the routine is dropped, the owl tells what is not normal. The main router's ports
+# are read every `router_every_s` over its connection, with no login.
+devwatch:
+  enabled: true
+  every_h: 1                       # each device's round; never more often than hourly
+  router_every_s: 60               # the main router's ports
+  ports: true                      # tell when a port runs slower than usual
+  logs: true                       # read the logs of the devices with `manage: [logs]`
+  quiet_days: 7                    # the first days: the owl's verdicts are kept, not sent
+  triage: {timeout_s: 120, max_lines: 60, notify_severities: ["critical", "warning"]}
+
+# The auth logs of the Linux devices that `manage: [logs]` by lanowl's ssh key, every two
+# minutes, for security events. lanowl's ssh key (secrets.yaml `ssh_key`) is how every key
+# login connects.
 hostlog:
   enabled: false
   interval_s: 120

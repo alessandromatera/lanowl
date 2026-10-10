@@ -8,11 +8,11 @@ its switch on in `config.yaml`. `lanowl --check` shows the result per device.
 
 | kind | logs | updates | upgrade | reboot | restart | config | security | backup |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `mikrotik` | | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
-| `openwrt` | | ✓ | | ✓ | | | ✓ | |
+| `mikrotik` | ✓ | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
+| `openwrt` | ✓ | ✓ | | ✓ | | | ✓ | |
 | `linux` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `esxi` | | ✓ | | | | | ✓ | ✓ |
-| `unifi` | | ✓ | | ✓ | | | | |
+| `esxi` | ✓ | ✓ | | | | | ✓ | ✓ |
+| `unifi` | ✓ | ✓ | | ✓ | | | | |
 | `homeassistant` | | ✓ | | ✓ | | | | ✓ |
 | `reolink` | | | | ✓ | | | | |
 | `shelly` | | | | ✓ | | | | ✓ |
@@ -59,7 +59,7 @@ answer.
 
 | Feature | What lanowl does | Switch in config.yaml |
 |---|---|---|
-| `logs` | Reads its auth log for security events: failed-login bursts, logins from unknown places, connection floods. The owl reads lines no rule explains. | `hostlog.enabled` |
+| `logs` | Reads its own log every hour, with one login: the routine is dropped (Wi-Fi clients, DHCP, lanowl's own logins), and the owl says something only when it is not normal — a power cut, a link that flaps, a disk error, a login that does not fit. A Linux machine by lanowl's key: its auth log every two minutes too (failed-login bursts, logins from unknown places, connection floods; `hostlog.enabled`). | `devwatch.enabled` |
 | `updates` | Checks its updates every morning. A security update waiting two days, or a reboot pending three, gets one message. | `updates.enabled` |
 | `upgrade` | May propose installing them. With backups on for that machine, it is backed up first, and a failed backup stops the update. | `actions.enabled` |
 | `reboot` | May propose a reboot. Its alerts, and those of the devices on its Wi-Fi or listed in `also_hold`, are held while it restarts. | `actions.enabled` |
@@ -69,3 +69,35 @@ answer.
 | `backup` | Backs it up monthly, and before every update. | `backups.enabled` |
 
 Everything that changes a device is a proposal you approve: [Actions and approvals](../using/actions.md).
+
+## Every hour: its ports, and its log
+
+With `devwatch.enabled`, every `mikrotik`, `openwrt`, `linux`, `esxi` and `unifi` device with a
+login is read once an hour, with one login (never more often: a device writes each login in its
+own log). The main router is never logged in to: its ports are read every minute over its
+connection, and its log is always read.
+
+- **Its ports**, with no `manage` needed: each physical Ethernet port's negotiated speed and
+  duplex. A port that comes up slower than it usually runs (1 Gbps → 100 Mbps, or half duplex)
+  is read again a minute later and, still slower, you get one message: the numbers, and on a
+  MikroTik what the other end offers. Back to its usual speed: one more. A port that does it
+  twice in a week has a device behind it that changes the link by itself (a computer going to
+  sleep drops it to 10/100): you are told so once, then it is left quiet. Its sheet still shows
+  it, and **Mute** there stops its messages.
+- **Its log**, with `manage: [logs]`: the lines written since the last read.
+
+| kind | Its ports | Its log |
+|---|---|---|
+| `mikrotik` | `/interface ethernet monitor` | `/log` (in memory: it starts again empty after a restart) |
+| `openwrt` | `/sys/class/net` | `logread` |
+| `linux` | `/sys/class/net` | The journal: every service's errors and the kernel's lines (links, disks); the auth lines too when lanowl's key does not read them every two minutes. Through sudo when the login needs it. |
+| `esxi` | `esxcli network nic list` | `vobd.log` (links, storage, hardware, logins) and `vmkwarning.log` |
+| `unifi` | `/sys/class/net` | `/var/log/messages` |
+
+The routine never reaches the owl: Wi-Fi clients joining and leaving, DHCP, ESXi's second copy of
+each event, a logout, and lanowl's own logins (by the address the device saw them come from). What
+is left is marked when lanowl recognises it — `[link]`, `[reboot]`, `[storage]`, `[hardware]`,
+`[memory]`, `[login]`, `[failed-login]`, `[config]` — and the owl reads it with what lanowl knows
+about the device: its ports, what lanowl itself did to it in that hour, and the internet at the
+time. Normal gets no message. For the first `quiet_days` (7) nothing is sent: what the owl would
+have said is on the Timeline and under **Log checks**, so you can read it first.

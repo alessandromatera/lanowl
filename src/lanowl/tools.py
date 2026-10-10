@@ -220,6 +220,7 @@ class ToolExecutor:
         self.cves = None
         # devread.py: a device read with lanowl's own login for it — the owner's questions only
         self.devices = None
+        self.devwatch = None          # devwatch.py: the devices' ports and logs, hourly
 
     def tool_specs(self) -> list:
         """What the model is offered this turn: the read-only tools, plus `propose_action`
@@ -487,7 +488,7 @@ class ToolExecutor:
         reads the verdicts, and a log tool of its own when it wants lines."""
         since = _time.time() - hours * 3600
         out = []
-        for src in (self.wanwatch, self.hostlog):
+        for src in (self.wanwatch, self.hostlog, self.devwatch):
             for f in (getattr(src, "findings", None) or []):
                 if f.get("ts", 0) >= since:
                     out.append({**({k: v for k, v in f.items() if k != "log"} if not lines else f),

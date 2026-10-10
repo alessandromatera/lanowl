@@ -42,6 +42,11 @@ device, and nothing that changes a device runs without your button.
   not down.
 - Once a day the owl reads the week's numbers and names what is slowly getting worse: a camera
   that drops every night at 02:00, a line that flaps a little more each week.
+- Every hour, the speed of each Ethernet port on the devices it logs in to (MikroTik, OpenWrt,
+  ESXi, UniFi, Linux), every minute on the router: a port that drops from 1 Gbps to 100 Mbps is
+  one message, and one when it is back.
+- Every hour, their own logs: the routine is dropped, and the owl says something only when it is
+  not normal (a power cut, a link that flaps, a disk error).
 - A weekly review: the internet's week, the devices that kept falling off, what joined.
 
 <img src="docs/img/does-watch.png" width="440" alt="A device's page: down right now, how much it answered in 24 hours and in 7 days, its latency and its week">
@@ -278,7 +283,7 @@ checks. What lanowl does with it besides is set on the device too:
 
 | feature | what lanowl does |
 |---|---|
-| `logs` | reads its auth log for security events |
+| `logs` | reads its own log every hour; the owl tells what is not routine |
 | `updates` | checks its updates every morning |
 | `upgrade` | may propose installing them |
 | `reboot` | may propose a reboot |
@@ -291,11 +296,11 @@ Built-in kinds and what each can do:
 
 | kind | logs | updates | upgrade | reboot | restart | config | security | backup |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `mikrotik` | | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
-| `openwrt` | | ✓ | | ✓ | | | ✓ | |
+| `mikrotik` | ✓ | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ |
+| `openwrt` | ✓ | ✓ | | ✓ | | | ✓ | |
 | `linux` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `esxi` | | ✓ | | | | | ✓ | ✓ |
-| `unifi` | | ✓ | | ✓ | | | | |
+| `esxi` | ✓ | ✓ | | | | | ✓ | ✓ |
+| `unifi` | ✓ | ✓ | | ✓ | | | | |
 | `homeassistant` | | ✓ | | ✓ | | | | ✓ |
 | `reolink` | | | | ✓ | | | | |
 | `shelly` | | | | ✓ | | | | ✓ |

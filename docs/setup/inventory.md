@@ -114,7 +114,7 @@ with a login in [`secrets.yaml`](secrets.md):
 
 | Feature | What lanowl does | Switched on by |
 |---|---|---|
-| `logs` | Reads its auth log for security events (Linux, by key) | `hostlog.enabled` |
+| `logs` | Reads its own log every hour; the owl tells what is not routine (MikroTik, OpenWrt, ESXi, UniFi, Linux; by lanowl's key, a Linux auth log every two minutes too) | `devwatch.enabled` |
 | `updates` | Checks its updates every morning | `updates.enabled` |
 | `upgrade` | May propose installing them | `actions.enabled` |
 | `reboot` | May propose a reboot | `actions.enabled` |

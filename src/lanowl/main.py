@@ -12,6 +12,7 @@ Three clocks, none of which can stall another:
     sweep loop     `cadence.sweep_interval_s`   devices, services, the report, digests
     WAN watcher    `wan.watch.interval_s`       wanwatch.py, its own task
     host logs      `hostlog.interval_s`         hostlog.py, its own task
+    device rounds  `devwatch.every_h`           devwatch.py, its own task (ports + logs)
     LLM audit      `cadence.llm_interval_s`     its own task, bounded by `llm_max_wall_s`
 """
 from __future__ import annotations
@@ -43,6 +44,7 @@ from .agent import LlmAgent
 from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .chat import Chat
 from .devread import DeviceReads
+from .devwatch import DevWatch
 from .memory import Memory
 from .names import Names, clean as clean_name, mac_key
 from .model import (NO_MODEL, load_config, load_inventory, model_name, model_report, model_set,
@@ -267,7 +269,8 @@ class Auditor:
         # first start with seclog.py: what the Security tab listed must not vanish
         self.seclog.seed(self.state.events(time.time() - 24 * 3600, "finding"),
                          lambda src: router_host(self.cfg) if src == "router log" else next(
-                             (h.ip for h in self.hostlog.hosts if src == f"host log {h.name}"), ""))
+                             (h.ip for h in self.hostlog.hosts if src == f"host log {h.name}"), "")
+                         or next((d.ip for d in self.inv.devices if src == f"device log {d.name}"), ""))
         # the model's tools read what the watchers already hold
         self.executor.wanwatch = self.wanwatch
         self.executor.hostlog = self.hostlog
@@ -334,6 +337,13 @@ class Auditor:
         # in the owner's questions only, a fixed read-only command per read
         self.devreads = DeviceReads(self)
         self.executor.devices = self.devreads
+        # ...and on a clock, with the same logins (devwatch.py): every device's ports and new log
+        # lines once an hour, the main router's ports every minute over its connection. Its own
+        # task; what it tells goes the way the host logs' findings go.
+        self.devwatch = DevWatch(self, self._wan_alert, agent=None if no_llm else agent,
+                                 llm_busy=lambda: self._llm_busy,
+                                 model_on=lambda: not self.no_llm, on_event=self._on_event)
+        self.executor.devwatch = self.devwatch
         rec = self.state.load_record("telegram_chat") or {}
         self.poller = TelegramPoller(
             cfg, self.chat.on_telegram, offset=int(rec.get("offset") or 0),
@@ -1787,6 +1797,7 @@ class Auditor:
         routeros.shared(self.cfg).start()      # the kept router connection (routeros.py)
         watcher = asyncio.ensure_future(self.wanwatch.run())
         hostlogs = asyncio.ensure_future(self.hostlog.run())
+        devices = asyncio.ensure_future(self.devwatch.run())
         chat = asyncio.ensure_future(self.poller.run()) if not self.no_telegram else None
         if self.dashboard.enabled and self.login.needed:
             # on by default: the page asks for the setup code and a password until there is one
@@ -1819,6 +1830,8 @@ class Auditor:
             watcher.cancel()
             self.hostlog.stop()
             hostlogs.cancel()
+            self.devwatch.stop()
+            devices.cancel()
             self.poller.stop()
             if chat is not None:
                 chat.cancel()

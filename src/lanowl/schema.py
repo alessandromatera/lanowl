@@ -60,6 +60,7 @@ DEFAULTS = {
     ("cves", "after_review"): True, ("exposure", "enabled"): False, ("drift", "enabled"): False,
     ("configwatch", "enabled"): False, ("fixes", "enabled"): True, ("scorecard", "enabled"): True,
     ("backups", "enabled"): False, ("shell", "enabled"): False, ("shell", "audit", "enabled"): False,
+    ("devwatch", "enabled"): False, ("devwatch", "ports"): True, ("devwatch", "logs"): True,
 }
 # paths inside the container and other plumbing: under "Advanced" in their section
 ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file"),
@@ -74,7 +75,7 @@ TITLES = {"network": "Your network", "timezone": "Time zone", "model": "The mode
           "access": "Access", "actions": "Actions", "hostlog": "Host logs", "updates": "Updates",
           "cves": "Vulnerabilities", "exposure": "Exposure", "drift": "Drift",
           "configwatch": "Config watch", "fixes": "Fixes", "scorecard": "Scorecard",
-          "backups": "Backups", "shell": "The model's shell"}
+          "backups": "Backups", "shell": "The model's shell", "devwatch": "Device ports and logs"}
 
 
 def env(var: str) -> str:

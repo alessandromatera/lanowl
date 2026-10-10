@@ -285,7 +285,8 @@ names it ([Devices](inventory.md)). `lanowl --check` shows the plan.
 | `profiles` | Device kinds of your own (default: `config/profiles/`) | [Profiles](profiles.md) |
 | `access` | Where `secrets.yaml` is, known hosts, Home Assistant's address | [Secrets](secrets.md) |
 | `actions` | What the owl may propose, and you approve | [Actions](../using/actions.md) |
-| `hostlog` | Linux auth logs read for security events | [Security](../using/security.md) |
+| `devwatch` | Every device's Ethernet ports and its own log, hourly (on in the example) | [Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log) |
+| `hostlog` | Linux auth logs, every two minutes, by lanowl's key | [Security](../using/security.md) |
 | `updates`, `cves` | Waiting updates every morning, a monthly scan | [Security](../using/security.md) |
 | `exposure` | The owl's daily review of what each machine exposes | [Security](../using/security.md) |
 | `drift`, `configwatch` | The owl's looks at what is slowly changing, and at config changes | [Security](../using/security.md) |

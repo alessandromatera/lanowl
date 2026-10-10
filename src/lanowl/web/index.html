@@ -3006,7 +3006,7 @@ const boxRow = (x, who) => `<div class="row"><span class="sd c-${x.ok ? "green" 
 // came from, dismissed the same way wherever it came from.
 const openReview = d => (((d.exposure || {}).findings) || []).filter(f => !f.dismissed);
 const RANK = {critical: 0, high: 1, warning: 2, info: 3};
-const logIp = (d, f) => f.source === "router log" ? (d.router_ip || "")
+const logIp = (d, f) => f.ip ? f.ip : f.source === "router log" ? (d.router_ip || "")
   : ((((d.host_logs || {}).hosts) || []).find(h => f.source === "host log " + h.name) || {}).ip || "";
 function secItems(d, all) {
   const U = d.updates || {}, X = d.exposure || {}, out = [], here = ip => all || !ip || inSite(d, ip);
@@ -3340,7 +3340,12 @@ function detailsHtml() {
   if (I.expect_offline) h += kv("Asleep", esc(EXPECT_OFF[I.expect_offline] || I.expect_offline));
   if (I.debounce_fails) h += kv("Counted down", esc(`after ${I.debounce_fails} missed sweeps in a row`));
   if (L.status) h += kv("DHCP", esc([L.dynamic === "false" || L.dynamic === false ? "static lease" : "dynamic lease", L.status, L.comment, L["last-seen"] ? "seen " + L["last-seen"] + " ago" : ""].filter(Boolean).join(" · ")));
-  h += kv("Its log", I.host_log ? "read and triaged by the model" : "");
+  // its own log, hourly (devwatch.py), and by lanowl's key its auth log every two minutes (hostlog.py)
+  const DL = I.devlog || {};
+  h += kv("Its log", esc([DL.read ? "read every hour; the owl tells what is not routine"
+    + (DL.quiet_until > NOW ? ` — kept, not sent, until ${dmy(DL.quiet_until)}` : "") : "",
+    I.host_log ? "its auth log every two minutes" : "",
+    DL.error ? "✗ " + DL.error : ""].filter(Boolean).join(" · ")));
   h += kv("Login", I.login_known ? "known — in secrets.yaml" : "none: lanowl cannot log in");
   h += kv("Reboot", esc(I.reboot ? cap(I.reboot) : "not from here"));
   h += kv("Updates", esc(I.update_check ? "checked every morning" + (I.update_here ? "; Update installs " + I.update_here : "; updated by hand") : "not checked"));
@@ -3354,6 +3359,23 @@ function detailsHtml() {
     const val = n.ok == null ? "" : n.ok ? (n.latency_ms != null ? fmtMs(n.latency_ms) + " ms" : "ok") : "failing";
     return `<div class="row"><span class="sd c-${st}"></span><span class="rt"><span class="rn">${esc(checkName(c))}</span>${n.detail ? `<span class="rs wrap">${esc(n.detail)}</span>` : ""}</span><span class="rv">${esc(val)}</span></div>`;
   }).join("") + `</div>`;
+  // its Ethernet ports: the speed each one runs at, and what it usually runs at (devwatch.py)
+  if ((I.ports || []).length) h += `<div class="sh">Ports<span class="r">${DL.last ? "read " + esc(ago(DL.last)) : ""}</span></div><div class="list">` + I.ports.map(p => {
+    const sp = (m, f) => (m >= 1000 ? m / 1000 + " Gbps" : m + " Mbps") + (f === false ? " HALF duplex" : "");
+    // slower than usual on this reading, told or not yet (a minute later it is read again)
+    const low = p.low_since > 0 || (p.up && p.usual && (p.mbps < p.usual || (p.mbps === p.usual && p.usual_full && p.full === false)));
+    const st = !p.up ? "gray" : low ? "orange" : "green";
+    const now_ = p.up == null ? "not read yet" : !p.up ? "no link" : sp(p.mbps, p.full);
+    const sub = [low ? `usually ${sp(p.usual, p.usual_full)}` + (p.low_since > 0 ? ` · slower since ${clock(p.low_since)}` : " · read again in a minute")
+                 : p.usual && !p.up ? "usually " + sp(p.usual, p.usual_full) : "",
+                 low && p.partner ? "the other end offers " + p.partner : "",
+                 p.changes_7d ? `changed speed ${p.changes_7d}× this week` : "",
+                 p.muted ? "muted: its changes are not told" : p.quiet ? "changes by itself: not told" : ""].filter(Boolean).join(" · ");
+    return `<div class="row"><span class="sd c-${st}"></span><span class="rt"><span class="rn">${esc(p.name)}</span>${sub ? `<span class="rs wrap">${esc(sub)}</span>` : ""}</span>
+      <span class="rv">${esc(now_)}</span>${p.usual || p.muted ? `<button class="rowbtn" type="button" data-act="portmute" data-pip="${esc(I.ip)}" data-port="${esc(p.name)}" data-mute="${p.muted ? "" : "1"}">${p.muted ? "Unmute" : "Mute"}</button>` : ""}</div>`;
+  }).join("") + `</div>`;
+  // the lines worth a look its log had, newest first: what the owl was given
+  if ((DL.recent || []).length) h += `<details class="pkl" style="margin-top:10px"><summary>Its log: the last ${DL.recent.length} line${DL.recent.length > 1 ? "s" : ""} that were not routine${ic("chev")}</summary><div class="wlog">${esc(DL.recent.map(x => x.line).join("\n"))}</div></details>`;
   // its named services ARE the named probes above — listed once, under Watched by
   if ((I.issues || []).length) h += `<div class="sh">Open alerts</div><div class="list">` + I.issues.map(x => `<div class="row"><span class="sd c-${SEV[x.severity] || "gray"}"></span><span class="rt"><span class="rn wrap">${esc(x.detail || "")}</span><span class="rs">${esc(x.severity || "")}${x.since ? " · since " + esc(clock(x.since)) : ""}</span></span></div>`).join("") + `</div>`;
   if ((I.actions || []).length) h += `<div class="sh">Last actions</div><div class="list">` + I.actions.map(x => `<div class="row"><span class="sd c-${x.status === "done" ? "green" : ["failed", "refused"].includes(x.status) ? "red" : "gray"}"></span><span class="rt"><span class="rn">#${x.id} ${esc(x.title)}</span><span class="rs wrap">${esc(x.words || x.status)}</span></span>${x.ts ? `<span class="rv">${esc(clock(x.ts))}</span>` : ""}</div>`).join("") + `</div>`;
@@ -3971,6 +3993,12 @@ document.addEventListener("click", async e => {
     const r = await post("/api/updates", {scan}).catch(() => ({ok: false}));
     toast(!r.ok ? (r.error || "Could not start it.") : scan ? "Scan started — it takes a while; the results appear here." : "Checking — the results appear here in a minute.");
     setTimeout(refresh, 1500);
+  } else if (act === "portmute") {
+    t.disabled = true;
+    const mute = !!t.dataset.mute;
+    const r = await post("/api/ports", {ip: t.dataset.pip, port: t.dataset.port, mute}).catch(() => ({ok: false, error: "lanowl is not answering."}));
+    toast(r.ok ? (mute ? "Muted — its speed changes are no longer told." : "Its speed changes are told again.") : r.error || "Could not do it.");
+    loadHist();
   } else if (act === "bkone" || act === "bkall") {
     const ip = act === "bkone" ? t.dataset.bk : null;
     if ((S.d || {}).backups) { S.d.backups.running = true; renderSec(S.d); if (S.sheet) renderSheet(); }

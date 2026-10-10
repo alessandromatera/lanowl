@@ -19,7 +19,11 @@
 #              macos ships as one)
 # credentials: its login, by name, in secrets.yaml (a password, lanowl's ssh key, or both)
 # manage:      what lanowl does with it besides watching it — each only where its kind can:
-#                logs      reads its auth log for security events          (linux, by key)
+#                logs      reads its own log every hour; the owl tells what is not routine
+#                          (mikrotik, openwrt, esxi, unifi, linux; the main router's log is
+#                          always read). A Linux box by lanowl's key: its auth log every two
+#                          minutes too. Every device with a login also has its Ethernet ports'
+#                          speed read hourly (devwatch in config.yaml), with no `manage`.
 #                updates   checks its updates every morning
 #                upgrade   may propose installing them                     (mikrotik, linux)
 #                reboot    may propose a reboot
@@ -65,7 +69,7 @@ devices:
     role: ap
     kind: openwrt
     credentials: routers
-    manage: [updates, reboot, security]
+    manage: [logs, updates, reboot, security]
     checks:
       - {type: icmp}
 

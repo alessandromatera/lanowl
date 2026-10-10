@@ -44,7 +44,7 @@ from .access import token as secret_token
 log = logging.getLogger("lanowl.kinds")
 
 FEATURES = {
-    "logs": "reads its auth log for security events",
+    "logs": "reads its own log every hour; the owl tells what is not routine",
     "updates": "checks its updates every morning",
     "upgrade": "may propose installing them",
     "reboot": "may propose a reboot",
@@ -54,18 +54,18 @@ FEATURES = {
     "backup": "backs it up, monthly and before updates",
 }
 # the config switch each feature runs under
-SWITCH = {"logs": "hostlog", "updates": "updates", "upgrade": "actions", "reboot": "actions",
+SWITCH = {"logs": "devwatch", "updates": "updates", "upgrade": "actions", "reboot": "actions",
           "restart": "actions", "config": "configwatch", "security": "exposure",
           "backup": "backups"}
 
 # kind -> feature -> how (the feature module's `via`); linux is decided by its login (_linux)
 KINDS = {
-    "mikrotik": {"updates": "routeros", "upgrade": "routeros", "reboot": "routeros",
+    "mikrotik": {"logs": "routeros", "updates": "routeros", "upgrade": "routeros", "reboot": "routeros",
                  "config": "routeros", "security": "routeros", "backup": "routeros"},
-    "openwrt": {"updates": "openwrt", "reboot": "ssh", "security": "openwrt"},
+    "openwrt": {"logs": "openwrt", "updates": "openwrt", "reboot": "ssh", "security": "openwrt"},
     "linux": {f: "linux" for f in FEATURES},
-    "esxi": {"updates": "esxi", "security": "esxi", "backup": "esxi"},
-    "unifi": {"updates": "unifi", "reboot": "ssh"},
+    "esxi": {"logs": "esxi", "updates": "esxi", "security": "esxi", "backup": "esxi"},
+    "unifi": {"logs": "unifi", "updates": "unifi", "reboot": "ssh"},
     "homeassistant": {"updates": "homeassistant", "reboot": "homeassistant",
                       "backup": "homeassistant"},
     "reolink": {"reboot": "reolink"},
@@ -251,8 +251,8 @@ def _login_words(lg) -> str:
 
 def _linux(f: str, lg, ip: str, store: str) -> str:
     key = lg is not None and bool(lg.key)
-    if f == "logs":
-        return "key"
+    if f == "logs":            # by the key, hostlog.py also reads its auth log every two minutes
+        return "key" if key else "sudo"
     if f in ("updates", "upgrade", "restart"):
         return "key" if key else "password"
     if f == "reboot":

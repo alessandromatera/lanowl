@@ -310,6 +310,10 @@ def device_info(a, ip: str) -> dict:
                    f"not scanned: the {grp} group is left out (version probes crash it)"
                    if grp in a.updates.scan_deny else "in the monthly vulnerability scan")
     out["host_log"] = any(h.ip == ip for h in (getattr(a.hostlog, "watched", None) or []))
+    dw = getattr(a, "devwatch", None)            # devwatch.py: its ports, its log, hourly
+    if dw is not None:
+        out["ports"] = dw.ports_of(ip)
+        out["devlog"] = dw.log_of(ip)
     out["login_known"] = a.access.login(ip) is not None
     out["actions"] = [{"id": p.get("id"), "title": ac.public(p)["title"], "status": p.get("status"),
                        "ts": p.get("done_ts") or p.get("ts"), "words": ac._status_words(p)}
@@ -819,6 +823,18 @@ class Dashboard:
         self._tl = (0.0, None)       # the Timeline shows it at once
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
+    async def api_ports(self, request):
+        """{"ip", "port", "mute": bool}: tell, or stop telling, when this port's speed changes
+        (devwatch.py). Said on Telegram, like a pause."""
+        body = await self._body(request)
+        if body is None:
+            return web.json_response({"ok": False, "error": "bad request"}, status=400)
+        dw = getattr(self.a, "devwatch", None)
+        if dw is None:
+            return web.json_response({"ok": False, "error": "ports are not read"}, status=409)
+        r = dw.set_mute(str(body.get("ip") or ""), str(body.get("port") or ""), bool(body.get("mute")))
+        return web.json_response(r, status=200 if r.get("ok") else 409)
+
     async def api_backups(self, request):
         """{"ip": a machine} or {"ip": null} for all of them — Back up now. It only
         copies configurations onto the homehub's disk."""
@@ -952,6 +968,7 @@ class Dashboard:
         app.router.add_post("/api/security", self.api_security)
         app.router.add_post("/api/memory", self.api_memory)
         app.router.add_post("/api/rename", self.api_rename)
+        app.router.add_post("/api/ports", self.api_ports)
         app.router.add_post("/api/reviews", self.api_reviews)
         app.router.add_post("/api/fix", self.api_fix)
         app.router.add_post("/api/scorecard", self.api_scorecard)

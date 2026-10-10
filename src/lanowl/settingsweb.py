@@ -1118,7 +1118,7 @@ class SettingsRoutes:
         if ha_tok and str((self.a.cfg.get("access") or {}).get("ha_url") or "") != f"http://{ha_ip}:8123":
             cops.append({"op": "set", "path": ["access", "ha_url"], "value": f"http://{ha_ip}:8123"})
         for sec, fs in (("updates", {"updates"}), ("exposure", {"security"}), ("configwatch", {"config"}),
-                        ("actions", {"reboot", "upgrade"})):
+                        ("actions", {"reboot", "upgrade"}), ("devwatch", {"logs"})):
             if on & fs and not (self.a.cfg.get(sec) or {}).get("enabled"):
                 cops.append({"op": "set", "path": [sec, "enabled"], "value": True})
                 if sec == "actions":

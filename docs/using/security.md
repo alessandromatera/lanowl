@@ -109,6 +109,11 @@ connections is an alert at once, without waiting for the model; the owl reads th
 explains. lanowl's own logins are recognised by user and address, so they are never mistaken
 for someone else. The router's log is read the same way.
 
+Every other device with `manage: [logs]` — a MikroTik access point, OpenWrt, UniFi, ESXi, a Linux
+machine by password — has its log read once an hour (`devwatch`): a login that does not fit and
+failed passwords again and again are the owl's to tell, with the device's own lines
+([Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)).
+
 Each security event stays in To decide until you mark it **handled**.
 
 ## Backups
