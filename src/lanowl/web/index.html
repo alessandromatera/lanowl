@@ -1248,6 +1248,10 @@ const P = {
   cfg: '<path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>',
   link: '<path d="M10 13.5a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10.5a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
 };
+// The owl's first sentence, for a one-line title. Its words open with its call ("Hoo."), a
+// sentence of its own: the title keeps the call and the sentence after it.
+const owlFirst = s => { const t = String(s || ""), m = t.match(/^Hoo\.\s+/);
+  return (m ? m[0] : "") + t.slice(m ? m[0].length : 0).split(/(?<=[.!?])\s+/)[0]; };
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
 // on what the monitor measured — that keeps its 🔴🟡🟢.
 const ic = (n, cls = "") => n === "owl" ? `<span class="ic owl ${cls}" aria-hidden="true">🦉</span>`
@@ -1800,7 +1804,7 @@ function renderModel(d) {
   // what it said before: each change of mind in the last day, one tap away
   const hist = (d.owl_history || []).filter(o => !l.at || Math.abs(o.ts - l.at) > 120);
   if (hist.length) h += `<details class="acc" data-how="owlh"${CH.how.has("owlh") ? " open" : ""}><summary>${ic("chev")}What it said before<span class="fine">${hist.length} change${hist.length > 1 ? "s" : ""} in 24 hours</span></summary>
-    <ul class="vlist">${hist.map(o => `<li><span class="w">${esc(hmd(o.ts, NOW))}</span><span><span class="tagx c-${(HEALTH[o.health] || HEALTH.unknown)[2]}">${esc(o.health || "?")}</span> ${esc(String(o.summary || "").split(/(?<=[.!?])\s+/)[0])}${o.told.length ? ` <span class="fine">→ Telegram</span>` : ""}</span></li>`).join("")}
+    <ul class="vlist">${hist.map(o => `<li><span class="w">${esc(hmd(o.ts, NOW))}</span><span><span class="tagx c-${(HEALTH[o.health] || HEALTH.unknown)[2]}">${esc(o.health || "?")}</span> ${esc(owlFirst(o.summary))}${o.told.length ? ` <span class="fine">→ Telegram</span>` : ""}</span></li>`).join("")}
     <li><span class="w"></span><button class="flnk" type="button" data-act="tlowl">Every verdict, on the Timeline${ic("chev")}</button></li></ul></details>`;
   put("model-top", h);
   // "More" only when the text is cut: at a wide screen four lines often hold it all (10-08)
@@ -2063,7 +2067,7 @@ function tlRow(d, x, inSheet) {
     if (x.ip) attr = ` data-ip="${esc(x.ip)}"`;
   } else if (x.type === "owl") {
     ico = x.health === "ok" ? "gray" : x.health === "critical" ? "red" : "orange"; i = "owl";
-    const first = String(x.summary || "").split(/(?<=[.!?])\s+/)[0];
+    const first = owlFirst(x.summary);
     t = `The owl: ${x.health || "no verdict"}${first ? " — " + first : ""}`;
     m.push(x.changed ? "its verdict changed" : "", (x.issues || []).length ? `${x.issues.length} issue${x.issues.length > 1 ? "s" : ""}: ${x.issues.map(v => v.device).join(", ")}` : "");
     for (const msg of x.told || []) more += tgLine(msg, x.ts);
@@ -2681,7 +2685,7 @@ function palOptions(q) {
       check: ["check", x => x.summary, x => [x.summary, x.detail, x.source, ...(x.log || [])].join(" ")],
       config: ["cfg", x => `${x.name}: ${x.what}`, x => [x.name, x.what, x.why, ...(x.lines || [])].join(" ")],
       security: ["shield", x => x.title, x => [x.title, x.source].join(" ")],
-      owl: ["owl", x => String(x.summary || "").split(/(?<=[.!?])\s+/)[0], x => x.summary],
+      owl: ["owl", x => owlFirst(x.summary), x => x.summary],
       telegram: ["send", x => x.text, x => x.full], action: ["bolt", x => `${x.title} — ${x.label || ""}`, x => [x.title, x.label, x.words].join(" ")]};
     if (TL.d) TL.d.items.filter(x => TI[x.type] && String(TI[x.type][2](x) || "").toLowerCase().includes(n)).slice(0, 10)
       .forEach(x => out.push({g: "On the Timeline", i: TI[x.type][0], t: String(TI[x.type][1](x) || "").slice(0, 120),

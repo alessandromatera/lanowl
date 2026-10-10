@@ -41,7 +41,7 @@ Everything raised in the same minute leaves as one message.
 Home Assistant (192.168.88.12)
 unreachable (icmp, Home Assistant)
 
-🦉 Likely cause (model, 07:13): Went quiet at 07:12 right after installing 2026.10.1;
+🦉 Hoo. Likely cause (the owl, 07:13): Went quiet at 07:12 right after installing 2026.10.1;
 nothing else dropped. The update's own restart.
 → Nothing to do: it should answer again within ten minutes.
 ```
@@ -81,7 +81,7 @@ there is something new to say**:
 ```text
 ⚪ lanowl digest — DEGRADED
 26/27 up · WAN OK
-🦉 Cam Garage needs a look; everything else answers as usual.
+🦉 Hoo. Cam Garage (192.168.88.23) is down and needs you.
 🟠 Cam Garage (192.168.88.23): unreachable (icmp) — since 13:35:00
    ↳ Stopped answering at 13:35; the four other cameras on the same PoE switch answer, so
      not the switch. Its DHCP lease is still bound: it lost power or hung. → Power-cycle it

@@ -66,8 +66,8 @@ not available. Docker is the supported way.
 ### Why an owl?
 
 It watches at night, sees in the dark, and is supposed to be wise: it tells you *why*. Its
-words are marked 🦉, so you can always tell the model's opinion from the monitor's
-measurements, which keep their 🔴🟡🟢.
+words are marked 🦉 and open with its call, "Hoo.", so you can always tell the model's opinion
+from the monitor's measurements, which keep their 🔴🟡🟢.
 
 ### Is it ready?
 

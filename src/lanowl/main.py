@@ -49,8 +49,8 @@ from .model import (NO_MODEL, load_config, load_inventory, model_name, model_rep
                     router_host)
 from .oui import vendor
 from .pause import Pauses, event_detail, intervals, overlaps
-from .prompts import (WEEKLY_SYSTEM, build_user_context, build_weekly_context, system_prompt,
-                      with_actions, with_shell_offline)
+from .prompts import (CALL_AUDIT, CALL_WEEKLY, WEEKLY_SYSTEM, build_user_context, call_block,
+                      build_weekly_context, system_prompt, with_actions, with_shell_offline)
 from .report import (_SEV_RANK, _html, build_report, digest_fingerprint, format_alerts,
                      format_diagnosis_note, format_digest, label, merge_llm, missed_checks,
                      wan_words)
@@ -1091,17 +1091,18 @@ class Auditor:
         come back gets the note appended before it leaves."""
         if not issues or not llm or self.no_telegram:
             return
+        owl = bool(call_block(self.agent.persona, CALL_AUDIT))   # the owl's voice: its call
         by_msg: dict = {}
         for key, issue in issues.items():
             rec = self._alert_msgs.get(key)
             if rec is None:
-                note = format_diagnosis_note([issue], llm, ran=ran)
+                note = format_diagnosis_note([issue], llm, ran=ran, owl=owl)
                 if note and self.outbox.annotate(key, note):
                     log.info("diagnosis added to the queued alert for %s", issue.get("device"))
                 continue
             by_msg.setdefault(rec["id"], (rec, []))[1].append(issue)
         for mid, (rec, its) in by_msg.items():
-            note = format_diagnosis_note(its, llm, ran=ran)
+            note = format_diagnosis_note(its, llm, ran=ran, owl=owl)
             if not note or "🦉" in rec["text"]:
                 continue
             text = rec["text"] + note
@@ -1249,7 +1250,7 @@ class Auditor:
             with self.actions.source("audit", ran=ran), \
                     (self.shell_audit.turn("audit", reason, ran) if shell
                      else contextlib.nullcontext()):
-                llm = await self.agent.run_audit(system, ctx)
+                llm = await self.agent.run_audit(system, ctx, call=CALL_AUDIT)
         num_ctx = int(self.agent.options.get("num_ctx") or 0)
         peak = self.agent.last_ctx_peak
         log.info("LLM audit done in %.1fs (tool calls=%s, ok=%s, ctx peak=%s/%s)",
@@ -1337,6 +1338,9 @@ class Auditor:
             if time.strftime("%Y%m%d", time.localtime(x["first_seen"])) != time.strftime("%Y%m%d"):
                 when = time.strftime("%d/%m %H:%M", time.localtime(x["first_seen"]))
             sev = str(i.get("severity") or "info").lower()
+            # the owl's one text about it (its `note`); a model that wrote none still has its
+            # cause and advice, as two plain lines
+            note = str(i.get("note") or "").strip()
             self._emit_telegram("digest", (
                 f"🆕 <b>NEW DEVICE</b> {time.strftime('%H:%M:%S')}"
                 + (" — <b>" + _html(sev) + "</b>" if sev not in ("info", "") else "") + "\n"
@@ -1347,8 +1351,9 @@ class Auditor:
                    else " · fixed address, no DHCP" if x.get("how") in ("arp", "scan") else "") + "\n"
                 + (f"<i>{_html(maker)}</i>\n" if x.get("host") and maker else "")
                 + f"First on the network at {when} — never seen here before.\n"
-                + (f"<i>{_html(str(i.get('root_cause') or ''))}</i>\n" if i.get("root_cause") else "")
-                + (f"<i>{_html(str(i.get('recommendation') or ''))}</i>" if i.get("recommendation") else "")
+                + (f"🦉 {_html(note)}" if note else
+                   (f"<i>{_html(str(i.get('root_cause') or ''))}</i>\n" if i.get("root_cause") else "")
+                   + (f"<i>{_html(str(i.get('recommendation') or ''))}</i>" if i.get("recommendation") else ""))
             ).rstrip())
         if told_any:
             # a device is new for a day: a week of record is plenty to never repeat one
@@ -1599,7 +1604,8 @@ class Auditor:
             async with self.model_turn():
                 t0 = time.time()
                 narrative = await self.agent.ask_text(WEEKLY_SYSTEM,
-                                                      build_weekly_context(facts), tools=False)
+                                                      build_weekly_context(facts), tools=False,
+                                                      call=CALL_WEEKLY)
                 log.info("weekly review (%s): model %s in %.1fs", reason,
                          "answered" if narrative else "did not answer", time.time() - t0)
         text = weekly.format_weekly(facts, narrative)

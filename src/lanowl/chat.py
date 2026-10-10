@@ -43,7 +43,7 @@ from .login import MAX_LEN, MIN_LEN, WAIT_S as PW_WAIT_S, hash_password
 from .memory import strip_footer
 from .model import NO_MODEL
 from .pause import find_devices
-from .prompts import (QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
+from .prompts import (CALL_ANSWER, QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
                       investigation_brief, with_actions, with_device_reads, with_memory_tools,
                       with_shell)
 from .report import _clock, _html, format_digest, label, ran_lines
@@ -531,7 +531,7 @@ class Chat:
                         text = await asyncio.wait_for(
                             a.agent.ask_text(system, ctx, history=history, on_event=on_event,
                                              max_iters=self.session_iters if session
-                                             else self.max_iters),
+                                             else self.max_iters, call=CALL_ANSWER),
                             timeout=self.session_wall_s if session else self.max_wall_s)
                     finally:
                         changes = list((mt or {}).get("changes") or [])

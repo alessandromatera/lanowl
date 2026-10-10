@@ -62,6 +62,7 @@ from . import probes, routeros, wanexplain
 from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .discovery import fetch_wan_path, resolve_mikrotik
 from .model import router_host, wan_links
+from .prompts import CALL_SUMMARY
 from .report import _html, human_duration
 
 log = logging.getLogger("lanowl.wanwatch")
@@ -138,8 +139,8 @@ Reply with ONLY this JSON object, no prose and no code fence:
 {"problem": true|false,
  "kind": "security"|"health",
  "severity": "critical"|"warning"|"info",
- "summary": "<one short line a person reads on a phone>",
- "detail": "<one or two sentences: what the lines show and what to check>"}
+ "summary": "<what the lines show, the likely why and what to check, in at most two short sentences: the only text the owner reads on the phone>",
+ "detail": "<the evidence, for the dashboard: what the lines show, their key words quoted>"}
 
 "kind" says what the lines are ABOUT, whether or not they are a problem: "security" for access
 — logins and failed logins, users, a configuration change, a service or port opened, anything
@@ -1133,7 +1134,7 @@ class WanWatcher:
                 TRIAGE_SYSTEM,
                 f"{prefix}Router log lines that are not part of normal background chatter "
                 f"({n} line(s)):\n\n{lines}",
-                timeout_s=float(t.get("timeout_s", 90)))
+                timeout_s=float(t.get("timeout_s", 90)), call=CALL_SUMMARY)
         except Exception as e:
             log.warning("router-log triage failed: %s", e)
             return
@@ -1159,8 +1160,10 @@ class WanWatcher:
             return                                   # logged and on the dashboard, but quiet
         emoji = {"critical": "🔴", "warning": "🟡"}.get(sev, "⚪")
         when = time.strftime("%H:%M:%S")
-        self.on_alert(f"{emoji} <b>ROUTER LOG</b> {when}\n{summary}"
-                      + (f"\n<i>{detail}</i>" if detail else "")
+        # The owl's one text: its summary, under its mark. The evidence (`detail`) stays on
+        # the dashboard: on the phone it repeated the line above it (owner, 2026-10-10).
+        said = str(verdict.get("summary", "")).strip()
+        self.on_alert(f"{emoji} <b>ROUTER LOG</b> {when}\n" + (f"🦉 {summary}" if said else summary)
                       + f"\n<i>from {n} new log line(s)</i>")
 
     def _note_finding(self, verdict: dict, n: int, lines: str = ""):

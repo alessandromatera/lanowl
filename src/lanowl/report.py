@@ -433,7 +433,7 @@ def merge_llm(report: dict, llm: Optional[dict]) -> dict:
         idx = _label_index(report)
         for i in issues:
             i["device"] = label(i.get("device"), i.get("ip"), idx)
-            for field_ in ("root_cause", "evidence", "recommendation"):
+            for field_ in ("root_cause", "evidence", "recommendation", "note"):
                 if isinstance(i.get(field_), str):
                     i[field_] = name_addresses(i[field_], idx)
         # ...and the prose, which is what the dashboard's assessment box actually shows
@@ -785,35 +785,42 @@ def ran_lines(ran: list, limit: int = 12) -> list:
 
 
 def format_diagnosis_note(issues: list, llm: Optional[dict], at: Optional[float] = None,
-                          ran: Optional[list] = None) -> str:
-    """The note, with what the model checked by itself to reach it (`ran`) under it."""
-    note = _diagnosis(issues, llm, at)
+                          ran: Optional[list] = None, owl: bool = False) -> str:
+    """The note, with what the model checked by itself to reach it (`ran`) under it. `owl`:
+    the persona speaks, so its block opens with the owl's call (see _diagnosis)."""
+    note = _diagnosis(issues, llm, at, owl)
     if note and ran:
         note += "\n" + "\n".join(ran_lines(ran, 6))
     return note
 
 
-def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None) -> str:
+def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None,
+               owl: bool = False) -> str:
     """What an incident triage adds to its alert — edited INTO that message, never a second one.
 
     The triage that runs on every new critical writes a root cause, the evidence and a
     recommendation; without this the phone gets the alert and never the why. Marked as the
     model's, with its own time, because it is an opinion that arrived later than the fact
-    above it."""
+    above it.
+
+    With the owl's voice (`owl`), the "Likely cause" block opens with its call: the model ran,
+    but its cause is a plain field, so the code says "Hoo." for it (owner, 2026-10-10: "only if
+    the model runs. otherwise no hoo"). The summary, when it stands in, has the model's own."""
     if not llm:
         return ""
     when = time.strftime("%H:%M", time.localtime(at or time.time()))
+    hoo = "Hoo. " if owl else ""
     rows = [(i, d) for i in issues for d in [match_diagnosis(i, llm.get("issues") or [])] if d]
     if not rows:
         s = _short(llm.get("summary"), 300)
         return f"\n\n🦉 <i>the owl, {when}:</i> {_html(s)}" if s else ""
     if len(rows) == 1:
         _, d = rows[0]
-        out = f"\n\n🦉 <b>Likely cause</b> <i>(the owl, {when})</i>: {_html(_short(d.get('root_cause')))}"
+        out = f"\n\n🦉 {hoo}<b>Likely cause</b> <i>(the owl, {when})</i>: {_html(_short(d.get('root_cause')))}"
         if d.get("recommendation"):
             out += f"\n→ {_html(_short(d['recommendation'], 140))}"
         return out
-    lines = ["", "", f"🦉 <b>Likely causes</b> <i>(the owl, {when})</i>"]
+    lines = ["", "", f"🦉 {hoo}<b>Likely causes</b> <i>(the owl, {when})</i>"]
     for i, d in rows[:6]:
         lines.append(f"• {label(i.get('device'), i.get('ip'))}: {_html(_short(d.get('root_cause'), 120))}")
     return "\n".join(lines)

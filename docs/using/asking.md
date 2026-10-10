@@ -6,9 +6,9 @@ data and lanowl's own records, and runs the diagnostics the question needs.
 
 > **Why did the internet drop on Friday?**
 >
-> 🦉 The fibre failed on Friday 19:41 and the router moved the traffic to LTE within a minute;
-> the fibre was back at 19:47, six minutes in all. Nothing answered from the internet for 45
-> seconds while LTE came up; after that every device kept working.
+> 🦉 Hoo. The fibre failed on Friday at 19:41 and the router moved the traffic to LTE within a
+> minute; the fibre was back at 19:47. Nothing answered from the internet for the 45 seconds
+> LTE took to come up; after that every device kept working.
 
 Good questions are the ones you would ask someone who had watched the network all week:
 

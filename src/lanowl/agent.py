@@ -13,7 +13,7 @@ import re
 from typing import Optional
 
 from .model import model_cfg, model_name
-from .prompts import DEFAULT_PERSONA, network_block, persona_block
+from .prompts import DEFAULT_PERSONA, call_block, network_block, persona_block
 from .tools import TOOL_SPECS, ToolExecutor
 
 log = logging.getLogger("lanowl.agent")
@@ -90,7 +90,8 @@ class LlmAgent:
         # added to every system prompt (_with_memory): the owner's words about the network,
         # and the voice ("owl" unless config.yaml says otherwise; "" for none)
         self.network = network_block(cfg)
-        self.voice = persona_block(o.get("persona", DEFAULT_PERSONA))
+        self.persona = o.get("persona", DEFAULT_PERSONA)
+        self.voice = persona_block(self.persona)
         self.executor = executor
         # Largest prompt (in tokens) any single call of the LAST audit sent, per Ollama's
         # own prompt_eval_count. Every tool result is appended to the conversation, so the
@@ -160,12 +161,14 @@ class LlmAgent:
             log.warning("model not unloaded (%s: %s)", type(e).__name__, e or "no message")
             return False
 
-    def _with_memory(self, system: str, asked_only: bool = False) -> str:
+    def _with_memory(self, system: str, asked_only: bool = False, call: str = "") -> str:
         """`system`, then the owner's description of the network and the persona's voice
         (both fixed by config), then the memory's notes. The notes go LAST, so the prompt's
         prefix — and the model server's cached work on it — stays the same when a note
-        changes. `asked_only`: the owner's notes only (Memory.block)."""
-        system = "\n\n".join(x for x in (system, self.network, self.voice) if x)
+        changes. `asked_only`: the owner's notes only (Memory.block). `call`: where the
+        owner's reading starts, for a prompt whose words open a message (prompts.CALLS)."""
+        system = "\n\n".join(x for x in (system, self.network, self.voice,
+                                         call_block(self.persona, call)) if x)
         try:
             block = self.memory.block(asked_only) if self.memory is not None else ""
         except Exception:
@@ -251,11 +254,11 @@ class LlmAgent:
         return {}
 
     async def ask_json(self, system: str, user_context: str,
-                       timeout_s: Optional[float] = None) -> Optional[dict]:
-        return await self._guard(self._ask_json(system, user_context, timeout_s))
+                       timeout_s: Optional[float] = None, call: str = "") -> Optional[dict]:
+        return await self._guard(self._ask_json(system, user_context, timeout_s, call))
 
     async def _ask_json(self, system: str, user_context: str,
-                        timeout_s: Optional[float] = None) -> Optional[dict]:
+                        timeout_s: Optional[float] = None, call: str = "") -> Optional[dict]:
         """One-shot, no tools, JSON back — or None.
 
         The full `run_audit` loop is the wrong shape for small verdict questions like
@@ -266,7 +269,8 @@ class LlmAgent:
         if aiohttp is None:
             return None
         # a verdict nobody watches: only the notes the owner asked for (Memory.block)
-        messages = [{"role": "system", "content": self._with_memory(system, asked_only=True)},
+        messages = [{"role": "system", "content": self._with_memory(system, asked_only=True,
+                                                                     call=call)},
                     {"role": "user", "content": user_context}]
         timeout = aiohttp.ClientTimeout(total=timeout_s or self.timeout_s)
         try:
@@ -332,15 +336,15 @@ class LlmAgent:
             return msg.get("content", "") or ""
         return ""
 
-    async def run_audit(self, system: str, user_context: str) -> Optional[dict]:
-        return await self._guard(self._run_audit(system, user_context))
+    async def run_audit(self, system: str, user_context: str, call: str = "") -> Optional[dict]:
+        return await self._guard(self._run_audit(system, user_context, call))
 
-    async def _run_audit(self, system: str, user_context: str) -> Optional[dict]:
+    async def _run_audit(self, system: str, user_context: str, call: str = "") -> Optional[dict]:
         if aiohttp is None:
             log.warning("aiohttp missing; skipping LLM audit.")
             return None
         messages = [
-            {"role": "system", "content": self._with_memory(system)},
+            {"role": "system", "content": self._with_memory(system, call=call)},
             {"role": "user", "content": user_context},
         ]
         self.last_ctx_peak = 0
@@ -374,13 +378,13 @@ class LlmAgent:
 
     async def ask_text(self, system: str, user_context: str, tools: bool = True,
                        max_iters: Optional[int] = None, history: Optional[list] = None,
-                       on_event=None) -> Optional[str]:
+                       on_event=None, call: str = "") -> Optional[str]:
         return await self._guard(self._ask_text(system, user_context, tools, max_iters,
-                                                history, on_event))
+                                                history, on_event, call))
 
     async def _ask_text(self, system: str, user_context: str, tools: bool = True,
                         max_iters: Optional[int] = None, history: Optional[list] = None,
-                        on_event=None) -> Optional[str]:
+                        on_event=None, call: str = "") -> Optional[str]:
         """A question in, prose out — for the owner's questions over Telegram and the dashboard.
 
         Same read-only tools and the same whitelist as the audit; the answer is plain text
@@ -389,7 +393,8 @@ class LlmAgent:
         messages placed before this question; `on_event` streams it (see `_tool_loop`)."""
         if aiohttp is None:
             return None
-        messages = [{"role": "system", "content": self._with_memory(system)}, *(history or []),
+        messages = [{"role": "system", "content": self._with_memory(system, call=call)},
+                    *(history or []),
                     {"role": "user", "content": user_context}]
         self.last_ctx_peak = 0
         self.last_tool_calls = 0

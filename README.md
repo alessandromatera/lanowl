@@ -201,8 +201,9 @@ Two settings shape how the owl thinks:
 
 - **`network.description`**: a few sentences about your network, in your own words: the
   links, the sites, what runs where, what you chose on purpose. Every prompt gets it.
-- **`model.persona`**: `owl` (the default), or `""` for plain prose. The owl's voice is
-  calm and brief and never changes a severity; its words carry 🦉, the monitor's keep 🔴🟡🟢.
+- **`model.persona`**: `owl` (the default), or `""` for plain prose. The owl speaks briefly,
+  opens its words with its call, "Hoo.", and never changes a severity; its words carry 🦉, the
+  monitor's keep 🔴🟡🟢.
 
 **A backup internet link** is optional. Without `wan.path.route_comment` lanowl assumes one
 line, and nothing speaks of failover. With it (a MikroTik dual-WAN), name your links

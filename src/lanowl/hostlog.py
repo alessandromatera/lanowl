@@ -49,6 +49,7 @@ from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
 
 from . import access
+from .prompts import CALL_SUMMARY
 from .records import kept_lines
 from .seclog import rank
 from .wanwatch import verdict_kind
@@ -183,8 +184,8 @@ Reply with ONLY this JSON object, no prose and no code fence:
 {"problem": true|false,
  "kind": "security"|"health",
  "severity": "critical"|"warning"|"info",
- "summary": "<one short line a person reads on a phone>",
- "detail": "<one or two sentences: what the lines show and what to check>"}
+ "summary": "<what the lines show, the likely why and what to check, in at most two short sentences: the only text the owner reads on the phone>",
+ "detail": "<the evidence, for the dashboard: what the lines show, their key words quoted>"}
 
 "kind" says what the lines are ABOUT, whether or not they are a problem: "security" for access
 — logins, sudo, users and keys, a service installed, anything like an intrusion attempt;
@@ -900,7 +901,7 @@ class HostLogWatcher:
                 f"{prefix}Host: {h.name} ({h.ip}), {where}.\n"
                 f"Log lines that are not part of its normal background chatter "
                 f"({len(batch)} line(s)):\n\n" + "\n".join(batch),
-                timeout_s=float(t.get("timeout_s", 90)))
+                timeout_s=float(t.get("timeout_s", 90)), call=CALL_SUMMARY)
         except Exception as e:
             log.warning("host-log triage failed: %s", e)
             return
@@ -953,9 +954,10 @@ class HostLogWatcher:
         if not notify:
             return                                    # logged and on the dashboard, but quiet
         emoji = {"critical": "🔴", "warning": "🟡"}.get(sev, "⚪")
+        # the owl's one text under its mark; the evidence stays on the dashboard (wanwatch.py)
+        said = str(verdict.get("summary", "")).strip()
         self.on_alert(f"{emoji} <b>HOST LOG</b> {time.strftime('%H:%M:%S')} — {h.name}\n"
-                      f"{summary}"
-                      + (f"\n<i>{detail}</i>" if detail else "")
+                      + (f"🦉 {summary}" if said else summary)
                       + f"\n<i>from {len(batch)} new log line(s) on {h.ip}</i>",
                       f"hostlog-triage:{h.ip}")
 

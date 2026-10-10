@@ -41,7 +41,7 @@ model:
 | `keep_alive` | How long the model stays loaded after a call. `0` frees the memory at once. |
 | `request_timeout_s` | The longest one call may take. |
 | `max_tool_iters` | The most tool calls in one audit. |
-| `persona` | The voice of its prose: `owl`, or `""` for plain prose. |
+| `persona` | The voice of its prose: `owl` (the owl's voice, opening with its call, "Hoo."), or `""` for plain prose. |
 
 **Which model.** Any Ollama model with tool calling works. A larger model reasons better; a
 27–35B model on a machine with 32–64 GB of memory is comfortable.
@@ -54,10 +54,29 @@ Only Ollama is supported for now; cloud models are on the [roadmap](../reference
 
 ## The owl's voice
 
-With `persona: owl`, the model writes the way a calm night watcher speaks: brief, precise,
-with times and numbers. It never changes a severity or invents a fact, and its words are
-marked 🦉 wherever they appear, so you can always tell the model's words from the monitor's
-measurements, which keep their 🔴🟡🟢.
+With `persona: owl`, the model speaks as the owl. Its words open with its call, "Hoo.", once
+in each message, and are marked 🦉 wherever they appear, so you can always tell the model's
+words from the monitor's measurements, which keep their 🔴🟡🟢. It says what happened and
+whether it needs you, in a sentence or two:
+
+> 🦉 Hoo. NAS (192.168.88.20) is down since 03:12 and needs you. Likely power: its switch port
+> dropped the same second as the UPS beside it.
+
+What it keeps to:
+
+- Only what you need. What is fine, and what the message already prints under its words, is
+  left out; what it told you before comes back only as "still" or "again".
+- Every device with its address. A device never seen before also with what it is: its maker,
+  and its hostname or MAC.
+- How sure it is, in one word: *likely* or *a guess*. One error in a log is one error, never a
+  dying disk.
+- Where it read the why: the router's log, the ARP table, a device's own log, quoted as
+  written.
+- "Needs you" only for a critical or high problem that is still open. It suggests and never
+  orders, and never offers something lanowl cannot do.
+- It never changes a severity and never invents a device, a number or a cause.
+
+With `persona: ""` the model writes plain prose, without the call.
 
 What makes its answers good is `network.description` in `config.yaml`: a few sentences about
 your network that every prompt includes. Say what no inventory says.

@@ -30,7 +30,7 @@ model:
   request_timeout_s: 300
   max_tool_iters: 10
   temperature: 0.2
-  persona: "owl"                    # the voice of the model's prose: "owl", or "" for none
+  persona: "owl"                    # the voice of the model's prose: "owl" (opens with "Hoo."), or "" for none
 
 # --- Telegram: alerts out, questions in ---------------------------------------------------
 telegram:
