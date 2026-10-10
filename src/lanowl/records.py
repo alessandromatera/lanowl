@@ -354,9 +354,10 @@ class Records:
                     "each month" + (f"; last attempt: {sc['error']}" if sc.get("error") else ""))
         return {"when": _at(sc["ts"]), "devices_scanned": sc.get("devices"),
                 **({"error": sc["error"]} if sc.get("error") else {}),
-                "left_out": f"the groups {', '.join(sorted(self.a.updates.scan_deny)) or 'none'} "
-                            "(version probes can crash such devices), lanowl's own host, anything "
-                            "outside the main LAN",
+                "left_out": "each device switched off on its settings (`scan: false`); without a "
+                            f"choice of its own, the groups {', '.join(sorted(self.a.updates.scan_deny)) or 'none'} "
+                            "(version probes can crash such devices); lanowl's own host; any address "
+                            "on no site's network",
                 "check": sc.get("check"),
                 "found": [{"device": label(v["name"], ip), "cvss7_matches": v["count"],
                            "summary": v.get("words"), "apply": v["confirmed"],

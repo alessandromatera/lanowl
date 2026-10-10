@@ -14,8 +14,8 @@ Only what each feature needs, to the place it needs it:
 - **The update check**: MikroTik's release list; and, for the monthly vulnerability check,
   package names, versions and CVE ids to OSV.dev and NVD, never an address or a name.
 - **The security review**: a port scan of your own public server, from your network, and of
-  your home's public address from that server; one HTTPS request to each of your own
-  `public_names`.
+  your home's public address from that server, and of each remote site's when its router
+  holds it; one HTTPS request to each of your own `public_names`.
 - **A speed test** from a remote site's router, only when you ask for one.
 - **The owl's diagnostics**, when a question or an approved session needs them: `mtr`, DNS
   lookups, `whois`, TLS checks, towards the hosts in question. Its sandboxed shell, when you

@@ -70,6 +70,11 @@ minute to come back from paging you.
 - **Checks from the router**, when the owl needs them: a ping from inside the site, its DHCP,
   and a speed test of its internet line. The speed test runs only when you ask: it is their
   bandwidth.
+- **Security, as at home**: the monthly vulnerability scan takes the site's devices through
+  the tunnel (each as its `scan` says), telnet and ftp are asked of them every morning, the
+  owl's port scans reach them, and the security review looks at the site from the internet:
+  its address as the VPN hub sees it, scanned only when the site's router holds it.
+  [Updates, backups and the security review](../using/security.md).
 - **New devices**: one never seen on the site's network before is marked new for a day
   (`discovery.new_window_h`). What was there the first time a site was read is not new.
 

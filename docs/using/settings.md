@@ -131,7 +131,9 @@ filled in with what lanowl knows of it.
   device's own answer. Home Assistant takes its token there instead (its address goes into
   `access.ha_url` with it); a Shelly needs no login. Then only the features its kind can do. A
   feature switched off in `config.yaml` says so; one switched on in the file but not yet
-  running says "from the next restart". A service it may restart is listed under it.
+  running says "from the next restart". A service it may restart is listed under it. Last,
+  `scan`, **on** or **off**: whether the monthly vulnerability scan and the owl's port scans
+  may ask its ports, chosen at setup; one never chosen says what its group gives it.
 - A `link` check takes the router port the device hangs off (`ether3`), typed in the box beside
   it: without one it could only ever read down, so it is refused.
 

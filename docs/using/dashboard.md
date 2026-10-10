@@ -109,8 +109,9 @@ What could let someone in, and whether every machine is patched and backed up.
 - **What changed**: configuration changes since yesterday, with the owl's reading of each, the
   worst first; the changes of one story (a route that names a new device, the VPN peer for its
   network) are one card. **Compare now** runs it.
-- **The owl's review**: this morning's summary (what you accepted is said once, apart), **Check
-  now** (updates, then the review) and **Deep scan** (the monthly vulnerability scan, now).
+- **The owl's review**: this morning's summary (what you accepted is said once, apart), what
+  each site looks like from the internet (**Seen from the internet**), **Check now** (updates,
+  then the review) and **Deep scan** (the monthly vulnerability scan, now).
 - **Log checks**: every one of the last 48 hours, the problems first, each opening to the lines
   it read; and each public host's ssh scanners, counted.
 - **Worth fixing, not urgent**: the rest. **How to fix** shows the owl's written fix for you

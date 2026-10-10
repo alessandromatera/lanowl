@@ -49,7 +49,7 @@ NAMES = {"config": "config.yaml", "inventory": "inventory.yaml", "secrets": "sec
 RESTART = ("config", "inventory")       # read at start; secrets.yaml is read again by itself
 # a device's keys, in the order the example writes them: where a new one goes
 DEVICE_ORDER = ["ip", "name", "mac", "group", "criticality", "role", "note", "site", "depends_on",
-                "expect_offline", "debounce_fails", "kind", "credentials", "manage", "restart",
+                "expect_offline", "debounce_fails", "scan", "kind", "credentials", "manage", "restart",
                 "logs", "reboot", "upgrade", "backup", "checks"]
 DEVICE_QUOTED = ("name", "note", "role", "about", "risk")
 

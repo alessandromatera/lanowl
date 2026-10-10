@@ -45,7 +45,7 @@ from typing import Optional
 from . import timeline, wanexplain
 from .conversations import Conversations
 from .login import COOKIE, SESSION_S, verify
-from .model import model_name, on_main_lan, router_host, wan_links
+from .model import Device, model_name, router_host, scan_state, wan_links
 from .report import label, match_diagnosis
 from .settingsweb import SettingsRoutes
 
@@ -303,12 +303,8 @@ def device_info(a, ip: str) -> dict:
     bm = a.backups.machine(ip) if a.backups.enabled else None
     out["backup"] = ({"what": BACKUP_WAYS.get(bm["via"], bm["via"]), "snapshot": bm.get("snapshot") or ""}
                      if bm else None)
-    obs = str((a.cfg.get("observer") or {}).get("host_ip") or "")
-    grp = dev.group if dev is not None else ""
-    out["scan"] = ("not scanned: lanowl's own host" if ip == obs else
-                   "not scanned: only the main LAN is" if not on_main_lan(a.cfg, ip) else
-                   f"not scanned: the {grp} group is left out (version probes crash it)"
-                   if grp in a.updates.scan_deny else "in the monthly vulnerability scan")
+    on, why = scan_state(a.cfg, dev if dev is not None else Device(ip, ip))
+    out["scan"] = "in the monthly vulnerability scan" if on else f"not scanned: {why}"
     out["host_log"] = any(h.ip == ip for h in (getattr(a.hostlog, "watched", None) or []))
     dw = getattr(a, "devwatch", None)            # devwatch.py: its ports, its log, hourly
     if dw is not None:

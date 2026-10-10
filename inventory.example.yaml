@@ -12,6 +12,8 @@
 # optional:    mac (follows it when DHCP moves it) · role · note · depends_on (an address, or
 #              "wan": down because what it is reached through is down — one message, not many)
 #              · expect_offline: sun (off at night) | day (off in daylight) · debounce_fails
+#              · scan: true | false — the monthly vulnerability scan and the owl's port scans
+#                (setup asks; without it, its group decides: updates.scan.deny_groups)
 #
 # --- managing (optional, per device) ---------------------------------------------------------
 # kind:        what it is — mikrotik | openwrt | linux | esxi | unifi | homeassistant |

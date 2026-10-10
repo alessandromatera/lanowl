@@ -7,7 +7,8 @@ shape:
 
   - the model gets ONE new tool, `propose_action`, over a fixed catalog (CATALOG). It never
     writes a command: it names an action and a device, and this module builds the command;
-  - every proposal is checked against the rules (inventory only, the main LAN only, never
+  - every proposal is checked against the rules (inventory only, the main LAN only for a
+    change — a port scan on any site's network, unless the device's `scan` is off — never
     lanowl's own machine, per-action deny lists, rate limits, a cooldown after anything
     that actually ran) and against the device itself, read-only, BEFORE anyone is asked
     (`_check`). A Shelly whose relay would come back OFF after a reboot is refused here — a
@@ -66,7 +67,7 @@ from .checks import PASSIVE, CheckError, Checks, KEEP_OUT, _exec, parse_nmap_xml
 from .reboot import Rebooter
 from .report import _html, label
 from .sinks import TelegramRejected, telegram_call, telegram_direct, telegram_edit
-from .model import on_main_lan
+from .model import on_main_lan, on_own_network, scan_choice
 
 log = logging.getLogger("lanowl.actions")
 
@@ -579,13 +580,21 @@ class Actions:
             if dev.criticality == "critical":
                 p["risk"].append(f"{dev.name} is a CRITICAL device: it is down while it restarts")
             return ""
-        if not on_main_lan(self.a.cfg, ip) or dev.attrs.get("depends_on"):
+        scan = action in ("nmap_scan", "nmap_service")
+        if scan:
+            # a port scan reaches every site's devices, a remote one's through its tunnel; the
+            # device's own `scan` (inventory.yaml, chosen at setup) decides before its group
+            if not on_own_network(self.a.cfg, ip):
+                return f"{dev.name} is on none of your networks — lanowl scans only those"
+            if scan_choice(dev) is False:
+                return f"{dev.name}'s scans are switched off on its settings"
+        elif not on_main_lan(self.a.cfg, ip) or dev.attrs.get("depends_on"):
             return f"{dev.name} is not on the main LAN — actions only apply there"
         if ip == str((self.a.cfg.get("observer") or {}).get("host_ip") or ""):
             return f"{dev.name} is lanowl's own machine"
         c = self._cfg(action)
         if ip in [str(x) for x in (c.get("deny_ips") or [])] or \
-                dev.group in (c.get("deny_groups") or []):
+                (dev.group in (c.get("deny_groups") or []) and not (scan and scan_choice(dev))):
             return f"{action} is not allowed on {dev.name} ({dev.group})"
         if action == "nmap_scan":
             p["command"] = " ".join(self._nmap_argv(p))
@@ -845,7 +854,7 @@ class Actions:
                 "check": {"type": "string", "enum": self.checks.available()},
                 "target": {"type": "string", "description": "an IP address or a full host name"},
                 "device": {"type": "string",
-                           "description": "the IP of a device in the inventory or on the main LAN"},
+                           "description": "the IP of a device in the inventory or on one of the owner's networks"},
                 "name": {"type": "string", "description": "a DNS name"},
                 "type": {"type": "string", "description": "DNS record type, default A"},
                 "ports": {"type": "array", "items": {"type": "integer"}},

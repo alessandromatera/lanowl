@@ -6,7 +6,8 @@ backed up and scanned for known vulnerabilities. Only what is new and matters re
 Telegram, once; everything is on the Security tab and in `/security`.
 
 Each part works on the devices whose `manage` list names it ([Devices](../setup/inventory.md)),
-with its switch on in `config.yaml`.
+with its switch on in `config.yaml`, on every site. The vulnerability scan needs no login: it
+takes every device whose `scan` is on.
 
 ## Updates
 
@@ -32,8 +33,24 @@ or the owl's proposal.
 
 ### The monthly vulnerability scan
 
-On `scan.day` at `scan.at` (or **Deep scan** now), the main LAN's devices are scanned for
-service versions with nmap's `vulners` script, outside the denied groups. A version scan
+On `scan.day` at `scan.at` (or **Deep scan** now), the devices of every site are scanned for
+service versions with nmap's `vulners` script: the main network's, a remote site's through its
+tunnel, your server on the internet at its own address. You choose which devices, one by one:
+at setup each device has a **Deep scan** choice (off for cameras, smart-home gear and phones,
+on for the rest, until you change it), and later its settings have a `scan` switch. Some cheap
+devices hang under a version scan; switch those off. A device you never chose for follows its
+group: the groups in `deny_groups` are left out. lanowl's own machine and an address on none of
+your sites' networks (a ping target on the internet) are never scanned. In the inventory:
+
+```yaml
+    - ip: 192.168.88.21
+      name: Garden camera
+      group: cameras
+      scan: false                  # never version-scanned, nor port-scanned by the owl
+```
+
+The daily telnet and ftp check asks every site's devices, switched off or not: two
+connection attempts, no nmap. A version scan
 matches many CVEs that are not real (Debian and Ubuntu fix flaws without changing the version
 a service announces), so each match is checked against fixed sources: the exact package
 installed, asked of OSV.dev (the distributions' own security data), or NVD's record of the
@@ -56,7 +73,13 @@ may log in and how, what listens, the firewall, which management services answer
 where, UPnP, an open resolver, the firmware's age. It never reads a password, a key, a Wi-Fi
 passphrase or a password hash. It also looks from outside: your public server is scanned from
 here, and your home's public address from that server, but only if that address is really your
-router's (behind a provider's shared NAT, nothing inbound can reach you anyway).
+router's (behind a provider's shared NAT, nothing inbound can reach you anyway). Each remote
+site the same way: when your server is the hub of the sites' WireGuard tunnels, it knows the
+address each tunnel comes from (`wg show`'s endpoints and allowed IPs: public keys only), and
+that address is scanned from the server only when the site's router holds it. Behind the
+provider's NAT, or behind a modem or the provider's router, it is said and not scanned: the
+address may be shared. The Security tab shows it under the review: **Seen from the internet**,
+one line per site.
 
 The owl reads it all and names each problem with one of a fixed set of checks (ssh accepts
 passwords, a management service exposed, a firmware out of support, and so on), so the same

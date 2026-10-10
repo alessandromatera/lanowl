@@ -11,8 +11,9 @@ Does anything need an update, a restart, or carry a known vulnerability?
     thing every day): a reboot pending more than 3 days, a security update still not installed
     after 2 days, a security release or a high/critical CVE for something installed, a newly
     opened insecure service (telnet, ftp). Everything else is on the dashboard only;
-  - once a month, a vulnerability scan: nmap -sV with the `vulners` script over the main
-    LAN's devices, CVSS 7 and up.
+  - once a month, a vulnerability scan: nmap -sV with the `vulners` script over every site's
+    devices (a remote site's through its tunnel, the VPS at its own address), CVSS 7 and up —
+    each device as its `scan` says (chosen at setup), else by its group (model.scan_state).
 
 How it gets in: the host-log watcher's key where it has one, everything else with the owner's
 logins (access.py). It only reads: `apt list --upgradable`, the reboot flag,
@@ -32,7 +33,7 @@ from typing import Optional
 
 from . import kinds, probes
 from .checks import _exec
-from .model import on_main_lan
+from .model import on_own_network, scan_deny, scan_state
 from .reboot import fmt_s, proc_uptime, routeros_field
 from .report import _html, label
 
@@ -230,7 +231,7 @@ class Updates:
         self.scan_day = int(s.get("day", 1))
         self.scan_at = str(s.get("at", "04:00"))
         self.scan_top = int(s.get("top_ports", 100))
-        self.scan_deny = set(s.get("deny_groups") or ["security", "iot"])
+        self.scan_deny = scan_deny(auditor.cfg)
         self._task: Optional[asyncio.Task] = None
         self._scan_task: Optional[asyncio.Task] = None
         try:
@@ -467,9 +468,10 @@ class Updates:
             fs[ip] = {p: old.get(p, now) for p in cur}
 
     async def _insecure_ports(self) -> dict:
-        """{ip: [port, …]} of the main LAN's devices — and of the hosts this check reads, remote
-        routers over their tunnels included — answering on telnet or ftp."""
-        ips = [d.ip for d in self.a.inv.devices if on_main_lan(self.a.cfg, d.ip)]
+        """{ip: [port, …]} of every site's devices — a remote site's through its tunnel — and of
+        the hosts this check reads, answering on telnet or ftp. Two connections each, whatever
+        its `scan` says: that switch is for nmap, which some devices do not survive."""
+        ips = [d.ip for d in self.a.inv.devices if on_own_network(self.a.cfg, d.ip)]
         ips += [h["ip"] for h in self.hosts if h["ip"] not in ips]
 
         async def one(ip, port):
@@ -739,12 +741,11 @@ class Updates:
 
     # --- the monthly scan -----------------------------------------------------------------
     async def scan(self, reason: str = "scheduled") -> dict:
-        """nmap -sV --script vulners over the main LAN's devices; CVSS >= 7 kept. Slow on
-        purpose (-T3, one run a month): cheap IoT has been known to fall over under -sV, so
+        """nmap -sV --script vulners over every site's devices whose `scan` is on (model.
+        scan_state); CVSS >= 7 kept. Slow on purpose (-T3, one run a month): cheap IoT has been
+        known to fall over under -sV, so the owner picks which devices, and without a choice
         the security and iot groups are left out, as for nmap_service."""
-        ips = [d.ip for d in self.a.inv.devices
-               if on_main_lan(self.a.cfg, d.ip) and d.group not in self.scan_deny
-               and d.ip != str((self.a.cfg.get("observer") or {}).get("host_ip") or "")]
+        ips = [d.ip for d in self.a.inv.devices if scan_state(self.a.cfg, d)[0]]
         t0 = time.time()
         log.info("updates: vulnerability scan of %d device(s) (%s)", len(ips), reason)
         rc, out, err = await _exec(

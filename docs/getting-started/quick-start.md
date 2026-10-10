@@ -78,7 +78,9 @@ already watches is marked so. **Add a device by address** asks one more the same
 Each ticked one gets a name (its DHCP name, a Shelly's own, else what it is and its number), a
 group, how much it matters, in words (*Message me at once, day or night* · *In the next digest,
 as a serious problem* · *In the next digest* · *Mentioned in the digest, never a problem* ·
-*Just noted, never a problem*), a kind, and its login:
+*Just noted, never a problem*), its **Deep scan** (may the monthly scan ask its ports which
+software answers, for known vulnerabilities: off for cameras, smart-home gear and phones, which
+can hang under it, on for the rest), a kind, and its login:
 
 - **A user and a password**, the usual user filled in (`admin` on a MikroTik or a Reolink, `root`
   on OpenWrt), **Show** to read back what you typed, and **Try**: one login the way lanowl will

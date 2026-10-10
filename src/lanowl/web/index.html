@@ -3087,6 +3087,23 @@ function fleetHtml(d) {
       <div class="fbtn">${btn}</div></div>`;
   }).join("") + `</div>`;
 }
+// What the internet reaches, per site (exposure.py): the network's public address, the server
+// on the internet, each remote site's — one short line each, for the sites the filter shows
+function outsideHtml(d) {
+  const O = ((d.exposure || {}).outside) || {}, sname = k => ((d.sites || []).find(s => s.key === k) || {}).name || k;
+  const words = x => x.error ? "not looked at: " + x.error
+    : x.behind === "provider" ? `${x.public_address}, the provider's shared address: nothing can connect in`
+    : x.behind === "box" ? `${x.public_address} is a modem or the provider's router in front of it: not scanned`
+    : x.note ? String(x.note).replace(/^UNKNOWN: /, "")
+    : (x.open || []).length ? `open: ${x.open.map(p => p.port ? `${p.port}${p.service ? " " + p.service : ""}` : p).join(", ")}`
+    : `nothing open of ${x.ports_tried || "its"} ports`;
+  const rows = [];
+  if (O.home && (S.site === "all" || S.site === "home")) rows.push([sname("home"), O.home]);
+  if (O.vps && O.vps.ip && inSite(d, O.vps.ip))
+    rows.push([((d.devices || []).find(x => x.ip === O.vps.ip) || {}).name || "Your server", O.vps]);
+  for (const x of O.sites || []) if (inSite(d, x.ip)) rows.push([x.site, x]);
+  return rows.length ? `<div class="fine" style="margin-top:6px"><b>Seen from the internet</b>${rows.map(([n, x]) => `<br>${esc(n)}: ${esc(words(x))}`).join("")}</div>` : "";
+}
 function renderSec(d) {
   const U = d.updates || {}, X = d.exposure || {}, b = $("b-sec");
   const top = secItems(d, true).filter(x => x.top && !x.dis).length;      // the badge: every site
@@ -3106,10 +3123,11 @@ function renderSec(d) {
   const review = `<div class="sh">The owl's review</div><div class="secgrid"><div class="card"><div class="mh">${ic("owl")}<b>How exposed the network is</b><span class="fine" style="margin-left:auto">${X.reviewed ? esc(ago(X.reviewed)) : "not yet"}</span></div>
     ${X.summary ? `<p class="mtext">${linkify(d, X.summary)}</p>` : noModel ? `<p class="mtext muted">No model is set, so there is no review: the checks below run without it. <a class="lnk" href="#set/s/model">Settings → The model</a>.</p>` : U.enabled === false ? `<p class="mtext muted">No review yet: it follows the morning update check, which is off (Settings → Updates).</p>` : `<p class="mtext muted">No review yet: it runs every morning after the update check.</p>`}
     <div class="fine" style="margin-top:8px">${U.last ? "Checked " + esc(ago(U.last)) : "Not checked yet"}${unread.length ? " · not read: " + esc(unread.map(m => m.name).join(", ")) : ""}${sc.ts ? " · deep scan " + esc(clock(sc.ts)) : ""}${X.enabled ? (X.paging ? " · a new critical finding pages you, once" : ` · its first two weeks are a trial: what it finds stays here, and from ${esc(X.page_from)} a new critical finding goes to Telegram, once`) : ""}</div>
+    ${outsideHtml(d)}
     ${accepted.length ? `<div class="fine" style="margin-top:6px">Accepted by you, not repeated: ${esc(accepted.map(x => `${x.name}: ${x.title}`).join(" · "))}</div>` : ""}
     <div class="ibtns"><button class="sbtn" type="button" data-act="updcheck"${busy ? " disabled" : ""}>${busy ? `<span class="spin"></span>${R.check ? "Checking…" : "Reviewing…"}` : ic("refresh") + "Check now"}</button>
       <button class="sbtn" type="button" data-act="updscan"${R.scan ? " disabled" : ""}>${R.scan ? '<span class="spin"></span>Scanning…' : ic("search") + "Deep scan"}</button></div>
-    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the owl reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks every device which software answers on its ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so fragile groups are left out (${esc((sc.deny || ["security", "iot"]).join(", "))}: Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
+    <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the owl reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks the devices on every site, a remote one through its tunnel, which software answers on their ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so each one's settings say whether it is scanned (chosen at setup); one never chosen follows its group, and ${esc((sc.deny || ["security", "iot"]).join(", "))} are left out (Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
     <div class="kpis">${kpi(matters.length, "to decide", "red")}${kpi(waiting, "updates waiting", "orange")}${kpi(reb, "reboots pending", "orange")}${kpi(conf, "with a CVE ≥ 7 that applies", "orange")}</div></div>`;
   // the order follows urgency (10-08): what to decide, what changed, the review, the logs, then the rest
   let h = `<div class="sh">To decide${matters.length ? ` <span class="r">${matters.length}</span>` : ""}</div><div class="card nbox">` + (matters.length ? matters.map(nitHtml).join("")
@@ -4772,6 +4790,8 @@ function devStart(ip) {
   return ST.dev;
 }
 const CRITH = CRIT_WORDS;
+// its ports scanned or not (model.scan_state): its own `scan`, else its group's default
+const scanOf = (d, V) => typeof d.scan === "boolean" ? d.scan : !((V || {}).scan_deny || ["security", "iot"]).includes(d.group || "misc");
 // The device's settings, on Settings → Devices or in its sheet (the sheet's gear): one form,
 // drawn where ST.devIn says, its fields and buttons looked up there
 const devRoot = () => $(ST.devIn === "sheet" ? "sheet-in" : "set");
@@ -4849,7 +4869,10 @@ async function setDevice(ip) {
       (d.manage || []).filter(f => V.switches && (V.switches[f] === false || (V.running || {})[f] === false)).map(f => V.switches[f] === false
         ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc((V.switch_names || {})[f] || f)}.enabled)</span>`
         : `<span class="muted">${esc(f)}: switched on, from the next restart</span>`).join("<br>")) +
-    ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") + `</div>`;
+    ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") +
+    fld("scan", `<div class="segc" role="group">${[[true, "on"], [false, "off"]].map(([v, l]) => `<button type="button" data-sact="scan" data-v="${v}" aria-pressed="${scanOf(d, V) === v}">${l}</button>`).join("")}</div>`,
+      "The monthly deep scan for known vulnerabilities, and the owl's port scans. Off for what may not survive one: some cameras and smart plugs hang." +
+      (typeof d.scan === "boolean" ? "" : ` Not chosen yet: ${scanOf(d, V) ? "on" : "off"}, by its group.`)) + `</div>`;
   if (S2.orig && !inSheet) h += routerSiteHtml((D || {}).sites || {}, S2.orig.ip);   // the sheet has its own row
   if (S2.orig) h += `<button class="btn ghost" type="button" data-sact="devdel" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove from inventory.yaml</button>`;
   h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${S2.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="devreset">Discard</button><button class="btn" type="button" data-sact="devreview">Check and save</button></div>`;
@@ -5074,9 +5097,14 @@ const GROUP_WORDS = {network: "Router and Wi-Fi", servers: "Servers", cameras: "
                      unknown: "Don't know yet", phones: "Phones, tablets, laptops"};
 const USER_OF = {mikrotik: "admin", openwrt: "root", reolink: "admin", shelly: "admin", esxi: "root", unifi: "", linux: "", homeassistant: ""};
 const invGroup = g => g === "unknown" ? "misc" : g || "misc";
+// the deep scan, chosen per device here: off for what may not survive a version scan (cheap
+// cameras and smart plugs) and for phones, on for the rest — until the owner picks
+const SCAN_OFF = ["cameras", "iot", "security", "phones"];
+const scanPreset = g => SCAN_OFF.includes(g) ? "off" : "on";
+const scanSel = (ip, P) => `<span class="fsw"><select class="fsel" data-pip="${esc(ip)}" data-pk="scan">${[["on", "monthly: known vulnerabilities on its ports"], ["off", "never: it may not survive a version scan"]].map(([v, l]) => `<option value="${v}"${v === (P.scan || "on") ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></span>`;
 function pickOf(x) {
   return {ip: x.ip, name: x.name || x.what || x.ip, group: invGroup(x.group), criticality: x.crit || "low", kind: x.kind || "",
-          lmode: defaultLmode(x.kind), user: USER_OF[x.kind] || ""};
+          lmode: defaultLmode(x.kind), user: USER_OF[x.kind] || "", scan: scanPreset(x.phone ? "phones" : invGroup(x.group))};
 }
 async function findDevices(withRouter, ips) {
   const lines = ips ? ["asking it on a few ports"] : [...(withRouter ? ["the router's DHCP list and its ARP table"] : []), "one ping to every address of your network", "a few ports asked on each: what it is"];
@@ -5088,7 +5116,7 @@ async function findDevices(withRouter, ips) {
   ST.rows = r; ST.picked = {};
   const RR = ST.router || {}, rok = RR.result && RR.result.ok && RR.credentials && ((RR.user && RR.password) || (ST.setup || {}).login_set);
   for (const x of r.rows) if (!x.watched && !x.phone && x.group !== "unknown" && x.ip !== r.router) ST.picked[x.ip] = pickOf(x);
-  if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", lmode: rok ? "use:" + RR.credentials : defaultLmode("mikrotik"), user: "admin", fixed: true};
+  if (r.router) ST.picked[r.router] = {ip: r.router, name: "Router", group: "network", criticality: "critical", kind: "mikrotik", lmode: rok ? "use:" + RR.credentials : defaultLmode("mikrotik"), user: "admin", fixed: true, scan: "on"};
 }
 async function setupPick() {
   if (!ST.router) { setNav("setup"); return; }
@@ -5106,6 +5134,7 @@ async function setupPick() {
       <span class="pkm">${fld("Name", `<input class="fin" data-pip="${esc(x.ip)}" data-pk="name" value="${esc(v.name)}" autocomplete="off" spellcheck="false">`, true)}
         ${fld("Group", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="group">${groupList(U.groups, v.group).map(g => `<option value="${esc(g)}"${g === v.group ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></span>`)}
         ${fld("How much it matters", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="criticality">${CRITS_UI.map(c => `<option value="${c}"${c === v.criticality ? " selected" : ""}>${esc(CRIT_WORDS[c])}</option>`).join("")}</select></span>`)}
+        ${fld("Deep scan", scanSel(x.ip, v), true)}
         ${fld("Kind", `<span class="fsw"><select class="fsel" data-pip="${esc(x.ip)}" data-pk="kind"><option value="">none: watched only</option>${GUESSABLE.map(g => `<option${g === v.kind ? " selected" : ""}>${g}</option>`).join("")}</select></span>`, true)}
         ${x.kind && v.kind === x.kind && !x.why ? `<span class="guess wide">kind guessed from the maker (${esc(x.vendor)}): yours to change</span>` : ""}
         ${v.kind ? fld("Login", loginBlock(x.ip, v), true) : `<span class="fhelp wide" style="margin-top:0">Choose its kind, and it can have a login: lanowl then checks its updates, backs it up, reboots it when you approve.</span>`}</span></span></div>`;
@@ -5123,6 +5152,7 @@ async function setupPick() {
       const P = ST.picked[R.router];
       lh += `<div class="pk on"><button class="cb" type="button" disabled aria-pressed="true">${ic("check")}</button><span class="rt"><span class="rn">The router itself</span><span class="meta"><span>${esc(R.router)}</span>·<span>always watched, kind mikrotik</span></span>
         <span class="pkm">${fld("How much it matters", `<span class="fsw"><select class="fsel" data-pip="${esc(R.router)}" data-pk="criticality">${CRITS_UI.map(c => `<option value="${c}"${c === P.criticality ? " selected" : ""}>${esc(CRIT_WORDS[c])}</option>`).join("")}</select></span>`, true)}
+        ${fld("Deep scan", scanSel(R.router, P), true)}
         <span class="fhelp wide" style="margin-top:0">A login that may do more than read lets lanowl check its updates and back it up: the one above if it may, or another. No login: lanowl only reads it.</span>${fld("Login", loginBlock(R.router, P), true)}</span></span></div>`;
     }
     h += `<div class="grp">${esc(GROUP_WORDS[g] || g)}<span class="r">${ticked} of ${gs.length}${g === "network" && R.router ? " + the router" : ""}</span></div><div class="list">${lh}${gs.map(one).join("")}</div>`;
@@ -5190,6 +5220,8 @@ function onPick(el) {
   if ((k === "user" || k === "password") && $("pcnt")) $("pcnt").innerHTML = pickCount();
   if (k === "user" || k === "password" || k === "token") P.tryRes = null;
   if (k === "kind") { P.lmode = defaultLmode(el.value); P.user = USER_OF[el.value] || ""; P.password = ""; P.token = ""; P.tryRes = null; setupPick(); }
+  if (k === "scan") P.scanSet = true;
+  if (k === "group" && !P.scanSet && P.scan !== scanPreset(el.value)) { P.scan = scanPreset(el.value); setupPick(); }
   if (k === "lmode") setupPick();
 }
 // the devices and the logins they bring: a device's own login is named after it (nvr,
@@ -5212,7 +5244,7 @@ function pickedDevices() {
     else if (P.kind && (P.lmode || "").startsWith("use:")) cred = P.lmode.slice(4);
     else if (P.kind && (P.lmode || "").startsWith("same:")) cred = own[P.lmode.slice(5)] || "";
     else if (P.kind) cred = own[P.ip] || "";
-    return {ip: P.ip, name: P.name, group: P.group, criticality: P.criticality, ...(P.kind ? {kind: P.kind} : {}),
+    return {ip: P.ip, name: P.name, group: P.group, criticality: P.criticality, scan: P.scan !== "off", ...(P.kind ? {kind: P.kind} : {}),
             ...(cred ? {credentials: cred} : {}), ...(x.mac && !x.static ? {mac: x.mac} : {}), checks: [{type: "icmp"}]};
   });
   return {devices, logins, ha};
@@ -5386,6 +5418,7 @@ document.addEventListener("click", async e => {
   const S2 = ST.dev;
   if (a === "crit" && S2) { S2.d.criticality = t.dataset.v; setDevice(S2.key); return; }
   if (a === "eo" && S2) { if (t.dataset.v) S2.d.expect_offline = t.dataset.v; else delete S2.d.expect_offline; setDevice(S2.key); return; }
+  if (a === "scan" && S2) { S2.d.scan = t.dataset.v === "true"; setDevice(S2.key); return; }
   if (a === "man" && S2) { const m = new Set(S2.d.manage || []); m.has(t.dataset.f) ? m.delete(t.dataset.f) : m.add(t.dataset.f); const can = ((ST.devs || {}).kinds || {})[S2.d.kind || ""] || []; S2.d.manage = can.filter(x => m.has(x)); if (!S2.d.manage.length) delete S2.d.manage; setDevice(S2.key); return; }
   if (a === "ckdel" && S2) { S2.d.checks.splice(+t.dataset.i, 1); setDevice(S2.key); return; }
   if (a === "ckadd" && S2) {

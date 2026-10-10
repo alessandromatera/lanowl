@@ -88,8 +88,9 @@ device, and nothing that changes a device runs without your button.
   alert at once.
 - What changed since yesterday: a firewall rule, a user, an ssh key, a port forward, a
   crontab, a VPN peer, with the owl's word on how risky it is.
-- A monthly vulnerability scan. Each CVE it matches is checked against the exact package
-  installed (OSV.dev, NVD) and against the machine's own settings: only the real ones page.
+- A monthly vulnerability scan of the devices you pick, on every site. Each CVE it matches is
+  checked against the exact package installed (OSV.dev, NVD) and against the machine's own
+  settings: only the real ones page.
 - An insecure service newly open (telnet, ftp) pages once.
 
 <img src="docs/img/does-security.png" width="500" alt="The fix for VPS: ssh accepts passwords from the whole internet, step by step, with how to check it and how to undo it">

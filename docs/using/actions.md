@@ -14,8 +14,8 @@ action from a fixed catalog and a device, and lanowl builds the command.
 | Update the system | `apt-get upgrade --with-new-pkgs`, non-interactive, config files kept | `manage: [upgrade]`, Linux |
 | Update RouterOS | Download the package, then reboot to install it | `manage: [upgrade]`, MikroTik |
 | Reboot the Shelly | Its own reboot endpoint. The relays never switch. | `kind: shelly` |
-| Scan the open ports | `nmap -sT` (no raw sockets) | Main LAN devices, except denied groups |
-| Identify the services | `nmap -sV` on 1 to 10 ports | Main LAN devices, except denied groups |
+| Scan the open ports | `nmap -sT` (no raw sockets) | Any site's devices whose `scan` is on; without a choice, outside the denied groups |
+| Identify the services | `nmap -sV` on 1 to 10 ports | Any site's devices whose `scan` is on; without a choice, outside the denied groups |
 
 ```yaml
 actions:
@@ -36,7 +36,9 @@ Before you are asked:
 
 - The device is in the inventory, and the action is allowed on it (its `manage` list, its
   kind, the catalog's deny lists).
-- Never lanowl's own machine. Scans only on the main LAN.
+- Never lanowl's own machine. A scan reaches any of your sites (a remote one through its
+  tunnel), never an address on none of them, and never a device whose `scan` is off. A change
+  (a Shelly restart) only on the main LAN.
 - Not too many: at most `max_pending` waiting at once (3) and `max_per_day` a day (20). An
   action that already ran on the device is not proposed again for 30 minutes (an hour for an
   update).

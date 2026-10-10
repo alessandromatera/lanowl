@@ -12,7 +12,8 @@ passes. So:
     host only if its public address is really the router's. Behind a provider's carrier-grade
     NAT (a 100.64.0.0/10 address on the router, another one seen from outside) the public
     address is the provider's box, shared, not ours to scan — and nothing inbound reaches the
-    network through it anyway;
+    network through it anyway. Each remote site (sites.py) the same way: its public address is
+    where the VPN hub sees its tunnel come from, scanned from the hub only if its router holds it;
   - the MODEL reads it all against what good looks like and names each problem with one of a
     fixed set of checks, so "VPS: ssh accepts passwords" keeps the same name every day however
     it is worded — which is what lets the owner dismiss it once;
@@ -154,7 +155,10 @@ needs it; DNS not answering the internet; firmware and OS still getting security
 with WPA2 or better.
 
 The OUTSIDE SCAN is what the internet reaches: an open port there on a public host is exposed \
-to anyone. The PUBLIC NAMES are the owner's own hostnames, looked up and requested from outside.
+to anyone. Its SITES are the owner's remote networks, each seen at the address its tunnel comes \
+from and scanned only when its own router holds that address: name a finding about one by its \
+router's address ("ip"). The PUBLIC NAMES are the owner's own hostnames, looked up and requested \
+from outside.
 
 Report only what the facts show — quote the fact. A risk the facts cannot show is not a finding. \
 Do not report what is fine. Severity: "critical" = someone on the internet can get in or nearly \
@@ -220,6 +224,47 @@ def _cgnat(addr: str) -> bool:
         return ipaddress.ip_address(addr) in ipaddress.ip_network("100.64.0.0/10")
     except ValueError:
         return False
+
+
+def parse_wg_peers(text: str) -> list:
+    """`wg show all endpoints; echo ---; wg show all allowed-ips` → [(endpoint address, [allowed
+    networks])], one per peer; "" for a peer that never connected."""
+    ends, nets, part = {}, {}, 0
+    for line in (text or "").splitlines():
+        if line.strip() == "---":
+            part += 1
+            continue
+        f = line.split("\t") if "\t" in line else line.split()
+        if len(f) < 3:
+            continue
+        peer = (f[0].strip(), f[1].strip())
+        if part == 0:
+            ep = f[2].strip()
+            ends[peer] = "" if ep in ("", "(none)") else ep.rsplit(":", 1)[0].strip("[]")
+        else:
+            ns = []
+            for n in " ".join(f[2:]).split():
+                try:
+                    ns.append(ipaddress.ip_network(n, strict=False))
+                except ValueError:
+                    pass
+            nets[peer] = ns
+    return [(ends.get(p, ""), nets.get(p, [])) for p in sorted(set(ends) | set(nets))]
+
+
+def endpoint_of(peers: list, ip: str) -> str:
+    """Where the hub sees the tunnel come from for an address behind it: the endpoint of the
+    peer whose allowed networks hold it most specifically (a catch-all 0.0.0.0/0 never counts)."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ""
+    best, plen = "", 0
+    for ep, nets in peers or []:
+        for n in nets:
+            if ep and a in n and n.prefixlen > plen:
+                best, plen = ep, n.prefixlen
+    return best
 
 
 def clip(text: str, n: int = FACTS_MAX) -> str:
@@ -375,13 +420,82 @@ class Exposure:
             out["home"] = {"note": "UNKNOWN: the network's public address is not known yet"}
         elif seen not in router_addrs:
             wan = next((a for a in sorted(router_addrs) if _cgnat(a)), "")
-            out["home"] = {"public_address": seen, "scanned": False,
+            out["home"] = {"public_address": seen, "scanned": False, "behind": "provider",
                             "note": f"behind the provider's NAT: the router's own WAN address is "
                                     f"{wan or 'private'}, so {seen} is the provider's and nothing "
                                     "on the internet can open a connection into the network"}
         else:
-            out["home"] = await self._scan_house_from_vps(seen)
+            out["home"] = await self._scan_from_hub(seen)
+        sites = await self._sites_outside()
+        if sites:
+            out["sites"] = sites
         return out
+
+    async def _sites_outside(self) -> list:
+        """Each remote site from outside, the way the network is looked at: its public address
+        is where the VPN hub sees its tunnel come from (the peer whose allowed IPs hold the
+        site's router), scanned from the hub only when the site's router holds that address
+        itself. Behind its provider's NAT or another box (a modem, the provider's router) the
+        address is not the site's to scan: shared, or a box lanowl cannot read."""
+        sites = [s for s in (getattr(getattr(self.a, "sites", None), "sites", None) or [])
+                 if s.get("router") and s.get("key") != "home"]
+        if not sites:
+            return []
+        hub = self._public_host()
+        peers = await self._hub_peers(hub) if hub else None
+        out = []
+        for s in sites:
+            row = {"site": s["name"], "ip": s["router"]}
+            pub = endpoint_of(peers, s["router"]) if peers else ""
+            if not pub:
+                row["note"] = ("UNKNOWN: no server on the internet to look from" if not hub else
+                               "UNKNOWN: the hub's WireGuard could not be read" if peers is None else
+                               "UNKNOWN: the hub knows no tunnel endpoint for its router")
+                out.append(row)
+                continue
+            row["public_address"] = pub
+            mine = await self._site_addrs(s)
+            if mine is None:
+                row.update(scanned=False, note="UNKNOWN: its router's own addresses could not be read")
+            elif pub in mine:
+                row.update(await self._scan_from_hub(pub))
+                row["scanned"] = "error" not in row
+            else:
+                wan = next((a for a in sorted(mine) if _cgnat(a)), "")
+                row.update(scanned=False, behind="provider" if wan else "box", note=(
+                    f"behind the provider's NAT: its router's WAN address is {wan}, so {pub} is the "
+                    "provider's, shared, and nothing on the internet can open a connection into the site"
+                    if wan else
+                    f"behind another box: its router holds no public address, so {pub} belongs to the "
+                    "box in front of it (a modem, the provider's router) — not scanned: it may be shared, "
+                    "and only that box's own port forwards could let anyone in"))
+            out.append(row)
+        return out
+
+    async def _hub_peers(self, hub: str) -> Optional[list]:
+        """The hub's WireGuard peers: [(endpoint address, [allowed networks])]. These two forms
+        of `wg show` print public keys only, never the interface's private one. None = not read."""
+        rc, out, err = await self.a.actions._ssh_run(
+            hub, "wg show all endpoints; echo ---; wg show all allowed-ips", 30, root=True)
+        if rc is None or "---" not in (out or ""):
+            log.info("exposure: the hub's WireGuard peers not read: %s", (err or "no answer").strip()[-160:])
+            return None
+        return parse_wg_peers(out)
+
+    async def _site_addrs(self, s: dict) -> Optional[set]:
+        """The site router's own IPv4 addresses, over its login (as sites.py reads it)."""
+        acc = self.a.access
+        if s.get("kind") == "openwrt":
+            rc, out, err = await acc.ssh(s["router"], "ip -4 -o addr show 2>/dev/null || ifconfig",
+                                         timeout_s=25)
+        elif s.get("kind") == "routeros":
+            rc, out, err = await acc.ssh(s["router"], "/ip address print terse without-paging",
+                                         user_suffix="+ct", timeout_s=30)
+        else:
+            return None
+        if rc != 0:
+            return None
+        return set(re.findall(r"(?:address=|inet (?:addr:)?)(\d{1,3}(?:\.\d{1,3}){3})", out or "")) or None
 
     async def _name_check(self, name: str) -> dict:
         """One of the owner's hostnames from outside: what it resolves to, and what one HTTPS
@@ -424,7 +538,7 @@ class Exposure:
         except Exception:
             return set()
 
-    async def _scan_house_from_vps(self, addr: str) -> dict:
+    async def _scan_from_hub(self, addr: str) -> dict:
         ports = " ".join(str(p) for p in top_ports(self.scan_ports))
         if not ports:
             return {"public_address": addr, "error": "no port list (nmap-services missing)"}
@@ -524,8 +638,9 @@ class Exposure:
         a known severity — and one finding per machine + check (the worst, with the others'
         titles folded in)."""
         by: dict = {}
-        known = set(facts) | {x.get("ip") for x in (self.rec.get("outside") or {}).values()
-                              if isinstance(x, dict)}
+        out = self.rec.get("outside") or {}
+        known = set(facts) | {x.get("ip") for x in out.values() if isinstance(x, dict)} \
+            | {x.get("ip") for x in out.get("sites") or [] if isinstance(x, dict)}
         for f in raw:
             if not isinstance(f, dict):
                 continue

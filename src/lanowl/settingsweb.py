@@ -58,6 +58,7 @@ import time
 
 from . import access, schema
 from .login import COOKIE, MAX_LEN, MIN_LEN, SESSION_S, hash_password, verify
+from .model import scan_deny
 from .settings import NAMES, digest
 from .yamledit import load
 
@@ -123,6 +124,10 @@ def clean_device(d: dict, kinds: dict) -> tuple:
             out["debounce_fails"] = max(1, int(d["debounce_fails"]))
         except (TypeError, ValueError):
             return None, "debounce_fails is a number"
+    if d.get("scan") not in (None, ""):          # the deep scan and the owl's port scans (model.scan_state)
+        if not isinstance(d["scan"], bool):
+            return None, "scan is true or false"
+        out["scan"] = d["scan"]
     if "kind" in out and out["kind"] not in kinds:
         return None, f"no kind {out['kind']!r}: one of {', '.join(sorted(kinds))}"
     man = [m for m in (d.get("manage") or []) if isinstance(m, str)]
@@ -371,7 +376,7 @@ class SettingsRoutes:
                                 "site": w.get("site")})
         return self._j({"ok": True, "base": digest(text), "devices": raw.get("devices") or [],
                         "groups": inv_groups(raw), "kinds": self._kinds(), "key_kinds": self._key_kinds(),
-                        "features": FEATURES,
+                        "features": FEATURES, "scan_deny": sorted(scan_deny(fcfg)),
                         # as the file says now (a save shows at once), and as lanowl runs
                         "switches": _switches(fcfg), "running": _switches(self.a.cfg), "switch_names": SWITCH,
                         "logins": [{"name": n, "type": ("key + password" if lg.key and lg.password else
@@ -1222,7 +1227,7 @@ class SettingsRoutes:
 
 # the keys the device form edits; anything else a device has in the file is kept as it is
 _FORM_KEYS = {"ip", "name", "mac", "group", "criticality", "role", "note", "site", "depends_on",
-              "expect_offline", "debounce_fails", "kind", "credentials", "manage", "restart", "logs",
+              "expect_offline", "debounce_fails", "scan", "kind", "credentials", "manage", "restart", "logs",
               "reboot", "upgrade", "backup", "checks"}
 
 

@@ -49,7 +49,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 from .report import label
-from .model import main_lans, router_host, wan_links
+from .model import main_lans, router_host, scan_choice, wan_links
 
 log = logging.getLogger("lanowl.checks")
 
@@ -339,9 +339,13 @@ class Checks:
             raise CheckError(f"device must be an IPv4 address, not {ip!r}")
         dev = self.a.inv.get(ip)
         if dev is None and not self._in_lan(ip):
-            raise CheckError(f"{ip} is neither in the inventory nor on the main LAN")
+            raise CheckError(f"{ip} is neither in the inventory nor on one of the owner's networks")
+        # nmap: the device's own `scan` (inventory.yaml, chosen at setup) decides before its group
+        own = scan_choice(dev) if dev is not None and check.startswith("nmap_") else None
+        if own is False:
+            raise CheckError(f"{dev.name}'s scans are switched off on its settings")
         deny = list(CATALOG[check].get("deny") or []) + list(self.deny_extra.get(check) or [])
-        if dev is not None and dev.group in deny:
+        if dev is not None and dev.group in deny and not own:
             raise CheckError(f"{check} is not allowed on {dev.name} ({dev.group})")
         return ip
 

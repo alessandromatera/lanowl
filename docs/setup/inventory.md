@@ -164,6 +164,22 @@ A reboot through a Home Assistant button works for any device, but it still need
     checks: [{type: icmp}]
 ```
 
+### Scanning its ports
+
+`scan` needs no kind and no login: may lanowl scan this device's ports? It decides the monthly
+vulnerability scan (nmap asks which software answers, on every site) and the owl's own port
+scans. The setup asks it for each device you pick (off for cameras, smart-home gear and phones,
+on for the rest); a device's settings change it later.
+
+```yaml
+    scan: false                   # some cheap cameras and smart plugs hang under a version scan
+```
+
+Without `scan`, the device follows its group: the groups in `updates.scan.deny_groups`
+(`security` and `iot` by default) are left out, the rest scanned. lanowl's own machine and an
+address on none of your sites' networks are never scanned. More in
+[Updates, backups and the security review](../using/security.md).
+
 ## Devices you add from the dashboard
 
 Once lanowl reads a router's DHCP, the dashboard lists the devices on each site's network

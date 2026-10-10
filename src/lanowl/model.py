@@ -302,6 +302,64 @@ def on_main_lan(cfg: dict, ip: str) -> bool:
     return any(a in n for n in main_lans(cfg)) and site_of(cfg, ip) == MAIN_SITE
 
 
+def on_own_network(cfg: dict, ip: str) -> bool:
+    """On a network the owner named as theirs: the main site's (main_lans, and the main
+    router's own /24 — a new install's 10.x or 172.16.x network names no `nets`) or any
+    site's `nets` — a remote site's LAN behind its tunnel, the VPS's own /32. An internet
+    address the inventory only watches (a ping target) is on none of them."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return False
+    if any(a in n for n in main_lans(cfg) + router_lan(cfg)):
+        return True
+    for s in ((cfg or {}).get("sites") or {}).get("list") or []:
+        for n in (s or {}).get("nets") or [] if isinstance(s, dict) else []:
+            try:
+                if a in ipaddress.ip_network(str(n), strict=False):
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
+# --- may lanowl scan a device's ports ---------------------------------------------------------
+SCAN_DENY = ("security", "iot")          # without a choice of its own: cheap IoT hangs under -sV
+
+
+def scan_choice(dev) -> Optional[bool]:
+    """The device's own `scan: true|false` in inventory.yaml (chosen at setup, changed on its
+    settings); None when it says nothing."""
+    v = (getattr(dev, "attrs", None) or {}).get("scan")
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower() if v is not None else ""
+    return True if s in ("true", "yes", "on") else False if s in ("false", "no", "off") else None
+
+
+def scan_deny(cfg: dict) -> set:
+    """The groups the monthly deep scan leaves out when a device has no `scan` of its own."""
+    s = (((cfg or {}).get("updates") or {}).get("scan") or {})
+    return set(s.get("deny_groups") or SCAN_DENY)
+
+
+def scan_state(cfg: dict, dev) -> tuple:
+    """(scanned, why not) for the monthly deep scan (updates.py) — on any site: never lanowl's
+    own host, never an address on no network of the owner's; then the device's own `scan`;
+    without one, its group (`updates.scan.deny_groups`)."""
+    if dev.ip == str(((cfg or {}).get("observer") or {}).get("host_ip") or ""):
+        return False, "lanowl's own host"
+    if not on_own_network(cfg, dev.ip):
+        return False, "not on a network of yours"
+    c = scan_choice(dev)
+    if c is not None:
+        return c, "" if c else "switched off on its settings"
+    if dev.group in scan_deny(cfg):
+        return False, f"the {dev.group} group is left out (version probes crash it)"
+    return True, ""
+
+
 _LAN_RANGES = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 
 

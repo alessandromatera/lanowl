@@ -271,6 +271,7 @@ hostlog:
 updates:
   enabled: false
   at: "06:30"
+  # every site's devices, each as its own `scan:` says (inventory); deny_groups for the rest
   scan: {enabled: true, day: 1, at: "04:00", top_ports: 1000, deny_groups: ["security", "iot"]}
 cves:
   after_review: true
