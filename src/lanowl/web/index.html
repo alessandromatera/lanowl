@@ -1248,13 +1248,11 @@ const P = {
   cfg: '<path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>',
   link: '<path d="M10 13.5a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10.5a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
 };
-// The owl's first sentence, for a one-line title. Its words open with its call ("Hoo."), a
-// sentence of its own: the title keeps the call and the sentence after it.
-const owlFirst = s => { const t = String(s || ""), m = t.match(/^Hoo\.\s+/);
-  return (m ? m[0] : "") + t.slice(m ? m[0].length : 0).split(/(?<=[.!?])\s+/)[0]; };
-// A log check's words without the call: "Hoo." is for Telegram only (owner, 10-11); the
-// dashboard shows what the owl read in the log, plainly
+// The owl's words without its call: "Hoo." is for Telegram only (owner, 10-11); the record
+// keeps it, the dashboard shows the words plainly, under 🦉
 const noCall = s => String(s || "").replace(/^\s*Hoo\.\s*/, "");
+// The owl's first sentence, for a one-line title
+const owlFirst = s => noCall(s).split(/(?<=[.!?])\s+/)[0];
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
 // on what the monitor measured — that keeps its 🔴🟡🟢.
 const ic = (n, cls = "") => n === "owl" ? `<span class="ic owl ${cls}" aria-hidden="true">🦉</span>`
@@ -1661,7 +1659,7 @@ function renderInbox(d) {
     const st = ((d.stories || {}).dev || {})[String(r.mac || "").toLowerCase()] || {}, o = st.owl || {};
     parts.push(`<div class="nit c-blue"><div class="k">New device · ${esc(r.site.name)}</div><div class="t">${esc(r.name || r.vendor || r.ip)}</div>
       <div class="m">${esc([r.ip, r.mac, r.name && r.vendor ? r.vendor : "", "first seen " + hmd(r.first_seen, NOW), r.here ? "here now" : r.heard ? "last heard " + hmd(r.heard, NOW) : ""].filter(Boolean).join(" · "))}</div>
-      ${o.said ? `<div class="m">${ic("owl")} ${linkify(d, o.said)}</div>` : ""}
+      ${o.said ? `<div class="m">${ic("owl")} ${linkify(d, noCall(o.said))}</div>` : ""}
       <div class="ibtns">${r.routed === false ? "" : `<button class="sbtn chg" type="button" data-act="watch" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}" data-nm="${esc(r.name || "")}">Watch</button><button class="sbtn chg" type="button" data-act="known" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}">Known</button>`}${st.id ? `<button class="sbtn" type="button" data-act="tlgo" data-id="${esc(st.id)}">${ic("link")}Open the story</button>` : ""}</div></div>`);
   }
   const rest = [...named.slice(3), ...phones];
@@ -1786,7 +1784,7 @@ function renderModel(d) {
   if (l.running) h += `<div class="running"><span class="spin"></span>${l.queued ? "Starting — a fresh sweep first, then the owl…" : "The owl is reading the network…"}</div>`;
   if (l.summary) {
     const long = l.summary.length > 240;
-    h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, l.summary)}</p>`;
+    h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, noCall(l.summary))}</p>`;
     if (long) h += `<button class="more" data-act="expand" id="owlmore">${S.expanded ? "Less" : "More"}</button>`;
   } else if (!l.running) h += `<p class="mtext muted">No assessment yet — the owl looks about hourly.</p>`;
   // the owl read the network a while ago; the monitor reads it every minute. When they differ
@@ -1908,7 +1906,7 @@ function newDevHtml(d) {
     return `<div class="row row2"><span class="sd c-blue"></span><span class="rt"><span class="rn">${esc(title)}</span>
       <span class="rs wrap mono">${esc(r.site.name)} · ${esc(r.ip)} · ${esc(r.mac)}</span>
       <span class="rs wrap">${esc([r.name && r.vendor && !priv(r) ? r.vendor : "", "first seen " + hmd(r.first_seen, NOW), r.here ? "here now" : r.heard ? "last heard " + hmd(r.heard, NOW) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · "))}</span>
-      ${o.said ? `<span class="rs wrap" style="color:var(--ink)">${ic("owl")} ${linkify(d, o.said)}${(st.told || []).length ? ` <span class="fine">· told on Telegram ${esc(st.told.map(t => hmd(t, NOW)).join(", "))}</span>` : ""}</span>` : ""}
+      ${o.said ? `<span class="rs wrap" style="color:var(--ink)">${ic("owl")} ${linkify(d, noCall(o.said))}${(st.told || []).length ? ` <span class="fine">· told on Telegram ${esc(st.told.map(t => hmd(t, NOW)).join(", "))}</span>` : ""}</span>` : ""}
       ${like ? `<span class="rs wrap" style="color:var(--orange-t)">${ic("warn")} Its name looks like <span class="ent" data-ip="${esc(like.ip)}">${esc(like.name)}</span> (${esc(like.ip)}), a device you watch. Only the name: whether they are one device is for you, or the owl, to say</span>` : ""}
       </span><span class="rbtns">${r.routed === false ? "" : `<button class="rowbtn" type="button" data-act="watch" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}" data-nm="${esc(r.name || "")}">Watch</button><button class="rowbtn" type="button" data-act="known" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}">Known</button>`}${st.id ? `<button class="rowbtn ghost" type="button" data-act="tlgo" data-id="${esc(st.id)}">Story</button>` : ""}</span></div>`;
   }).join("") + `</div>`;
@@ -2074,7 +2072,7 @@ function tlRow(d, x, inSheet) {
     t = `The owl: ${x.health || "no verdict"}${first ? " — " + first : ""}`;
     m.push(x.changed ? "its verdict changed" : "", (x.issues || []).length ? `${x.issues.length} issue${x.issues.length > 1 ? "s" : ""}: ${x.issues.map(v => v.device).join(", ")}` : "");
     for (const msg of x.told || []) more += tgLine(msg, x.ts);
-    if (String(x.summary || "").length > first.length + 2) { const id = "owl:" + x.ts; more += `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>All it said${ic("chev")}</summary><div class="rs" style="margin-top:4px">${linkify(d, x.summary)}</div></details>`; }
+    if (noCall(x.summary).length > first.length + 2) { const id = "owl:" + x.ts; more += `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>All it said${ic("chev")}</summary><div class="rs" style="margin-top:4px">${linkify(d, noCall(x.summary))}</div></details>`; }
   } else if (x.type === "action") {
     const st = PST[x.status] || [x.status, "gray"];
     ico = x.status === "done" ? "green" : x.status === "failed" ? "red" : st[1]; i = "bolt";
@@ -2099,7 +2097,7 @@ function tlRow(d, x, inSheet) {
       x.status === "watched" ? "watched" : x.status === "known" ? "known" : "");
     for (const msg of x.told || []) more += tgLine(msg, x.ts);
     const o = x.owl || {};
-    if (o.said) more += `<div class="tlt">${ic("owl")}<span>The owl, ${esc(hmd(o.said_ts, x.ts))}: ${linkify(d, o.said)}${o.raised > 1 ? ` <span class="fine">· raised as an issue in ${o.raised} hourly audits</span>` : ""}</span></div>`;
+    if (o.said) more += `<div class="tlt">${ic("owl")}<span>The owl, ${esc(hmd(o.said_ts, x.ts))}: ${linkify(d, noCall(o.said))}${o.raised > 1 ? ` <span class="fine">· raised as an issue in ${o.raised} hourly audits</span>` : ""}</span></div>`;
     more += storyHtml(x);
   } else if (x.type === "check") {
     ico = x.problem ? (SEV[x.severity] === "red" ? "red" : "orange") : "gray"; i = x.problem ? "warn" : "check";
@@ -2298,11 +2296,11 @@ function turnHtml(t, last) {
     const think = t.phase === "thinking" && t.think ? `<div class="think">…${esc(t.think.slice(-150).replace(/\s+/g, " ").trim())}</div>` : "";
     a = `<div class="a wip"><div class="phase"><span class="typing"><i></i><i></i><i></i></span>${esc(phaseText(t))}…<span class="el">${mmss(now() - (t.started || t.ts))}</span></div>` +
       (steps.length ? stepsHtml(steps, t.phase === "checking") : "") + think +
-      (t.draft ? `<div class="draft">${md(t.draft)}<span class="caret"></span></div>` : "") +
+      (t.draft ? `<div class="draft">${md(noCall(t.draft))}<span class="caret"></span></div>` : "") +
       `<button class="stopb" type="button" data-act="stop" data-t="${esc(t.id)}">${ic("stop")}Stop</button></div>`;
   } else {
     const took = t.done_ts && (t.started || t.ts) ? dur(t.done_ts - (t.started || t.ts)) : "";
-    const body = t.a ? md(t.a) : "";
+    const body = t.a ? md(noCall(t.a)) : "";
     const err = t.status === "failed" ? `<span class="err">${esc(t.error || "No answer.")}</span>` : t.status === "stopped" ? `<span class="muted">Stopped${t.a ? "" : " before it answered"}.</span>` : "";
     a = `<div class="a">${body ? `<span class="owlmark" aria-hidden="true">🦉</span> ` : ""}${body}${body && err ? "\n\n" : ""}${err}</div>`;
     const how = steps.length
@@ -3975,7 +3973,7 @@ document.addEventListener("click", async e => {
     chatRefresh();
   } else if (act === "copy") {
     const x = turnsOf().find(v => v.id === t.dataset.t);
-    if (x && x.a) copyText(x.a).then(() => toast("Copied."), () => toast("Could not copy — select the text instead."));
+    if (x && x.a) copyText(noCall(x.a)).then(() => toast("Copied."), () => toast("Could not copy — select the text instead."));
   } else if (act === "newchat") { closeChats(); useChat(null); askq.focus(); }
   else if (act === "chats") openChats();
   else if (act === "chatsclose") closeChats();
