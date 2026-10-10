@@ -1252,6 +1252,9 @@ const P = {
 // sentence of its own: the title keeps the call and the sentence after it.
 const owlFirst = s => { const t = String(s || ""), m = t.match(/^Hoo\.\s+/);
   return (m ? m[0] : "") + t.slice(m ? m[0].length : 0).split(/(?<=[.!?])\s+/)[0]; };
+// A log check's words without the call: "Hoo." is for Telegram only (owner, 10-11); the
+// dashboard shows what the owl read in the log, plainly
+const noCall = s => String(s || "").replace(/^\s*Hoo\.\s*/, "");
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
 // on what the monitor measured — that keeps its 🔴🟡🟢.
 const ic = (n, cls = "") => n === "owl" ? `<span class="ic owl ${cls}" aria-hidden="true">🦉</span>`
@@ -2100,7 +2103,7 @@ function tlRow(d, x, inSheet) {
     more += storyHtml(x);
   } else if (x.type === "check") {
     ico = x.problem ? (SEV[x.severity] === "red" ? "red" : "orange") : "gray"; i = x.problem ? "warn" : "check";
-    t = x.summary || ""; m.push(x.source || "", x.problem ? x.severity : "fine", fKind(x));
+    t = noCall(x.summary); m.push(x.source || "", x.problem ? x.severity : "fine", fKind(x));
     const lip = logIp(d, x);
     if (lip && (d.devices || []).some(v => v.ip === lip)) attr = ` data-ip="${esc(lip)}"`;   // its log's machine
     if (x.problem && x.detail) more = `<div class="rs clamp" data-act="more">${esc(x.detail)}</div>`;
@@ -2976,7 +2979,7 @@ function logsHtml(d, logs) {
   // every log check of the last 48 hours, the same count as the Timeline's: the problems, then
   // the latest fine ones — each opens to the lines it read
   const bad = logs.filter(f => f.problem), fine = logs.filter(f => !f.problem);
-  const row = f => `<div class="row"${logIp(d, f) && (d.devices || []).some(v => v.ip === logIp(d, f)) ? ` data-ip="${esc(logIp(d, f))}" data-focus="chk:${esc(Number(f.ts).toFixed(3))}"` : ""}><span class="sd c-${f.problem ? (SEV[f.severity] === "red" ? "red" : "orange") : "gray"}"></span><span class="rt"><span class="rn wrap">${esc(f.summary || "")}</span>
+  const row = f => `<div class="row"${logIp(d, f) && (d.devices || []).some(v => v.ip === logIp(d, f)) ? ` data-ip="${esc(logIp(d, f))}" data-focus="chk:${esc(Number(f.ts).toFixed(3))}"` : ""}><span class="sd c-${f.problem ? (SEV[f.severity] === "red" ? "red" : "orange") : "gray"}"></span><span class="rt"><span class="rn wrap">${esc(noCall(f.summary))}</span>
     <span class="rs wrap">${esc(hmd(f.ts, NOW))} · ${esc(f.source || "")} · ${esc(f.problem ? f.severity : "fine")}</span>
     ${(f.log || []).length ? `<details class="pkl" data-how="${esc("lgl:" + f.ts)}"${CH.how.has("lgl:" + f.ts) ? " open" : ""}><summary>The ${f.log.length} line${f.log.length > 1 ? "s" : ""} it read${ic("chev")}</summary><div class="wlog">${esc(f.log.join("\n"))}</div></details>` : ""}</span></div>`;
   return `<div class="sh">Log checks <span class="r">48 h · ${logs.length} check${logs.length === 1 ? "" : "s"} · ${bad.length ? `${bad.length} a problem` : "none a problem"}</span></div><div class="list">` +
@@ -3030,7 +3033,7 @@ function secItems(d, all) {
 }
 // A log event's text: what the line said, the model's read of it when a rule paged first, and
 // whether Telegram heard of it (a login through the tunnel pages once a day, the rest are here).
-const logSub = x => [x.detail, x.model ? `The owl (${x.model.sev}): ${x.model.summary}${x.model.detail ? " — " + x.model.detail : ""}` : "",
+const logSub = x => [x.detail, x.model ? `The owl (${x.model.sev}): ${noCall(x.model.summary)}${x.model.detail ? " — " + x.model.detail : ""}` : "",
   x.paged ? "" : "Not sent to Telegram: already told today."].filter(Boolean).join("\n");
 const itemRow = x => `<div class="row"${x.ip ? ` data-ip="${esc(x.ip)}"` : x.go ? ` data-act="gosite" data-sk="${esc(x.go)}"` : ""}><span class="sd c-${x.dis ? "gray" : SEV[x.sev] || "gray"}"></span>
   <span class="rt"><span class="rn wrap" style="font-weight:${!x.dis && x.top ? 600 : 400}">${esc(x.text)}</span>` +

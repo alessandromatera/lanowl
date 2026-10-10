@@ -55,7 +55,8 @@ Only Ollama is supported for now; cloud models are on the [roadmap](../reference
 ## The owl's voice
 
 With `persona: owl`, the model speaks as the owl. Its words open with its call, "Hoo.", once
-in each message, and are marked 🦉 wherever they appear, so you can always tell the model's
+in each message (on the dashboard, a log check shows its words without it), and are marked 🦉
+wherever they appear, so you can always tell the model's
 words from the monitor's measurements, which keep their 🔴🟡🟢. It says what happened and
 whether it needs you, in a sentence or two:
 
