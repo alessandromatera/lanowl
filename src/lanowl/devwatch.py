@@ -449,7 +449,6 @@ class DevWatch:
 
     rec: dict = field(default_factory=dict)
     findings: list = field(default_factory=list)
-    _live: dict = field(default_factory=dict)       # "ip|port" -> the last reading, not kept
     _recheck: dict = field(default_factory=dict)    # ip -> when to read its ports again
     _router_last: float = 0.0
     _router_error: str = ""
@@ -678,8 +677,10 @@ class DevWatch:
     def _ports(self, t: Target, ports: list, now: float, recheck: bool):
         for p in ports:
             key = f"{t.ip}|{p.name}"
-            self._live[key] = {"at": now, "up": p.up, "mbps": p.mbps, "full": p.full}
             st = self.rec["ports"].setdefault(key, {})
+            # kept with the port: a restart (a deploy, Restart to apply) must not leave every sheet
+            # saying "not read yet" until the device's next hourly round
+            st["last"] = {"at": now, "up": p.up, "mbps": p.mbps, "full": p.full}
             ev = step(st, p, now)
             if ev == "check" and recheck:
                 self._recheck[t.ip] = now + CONFIRM_S
@@ -840,8 +841,8 @@ class DevWatch:
         about = str(lo.get("about") or "") if isinstance(lo, dict) else ""      # its `logs: {about}`
         bits = [f"DEVICE: {label(t.name, t.ip)} — {ABOUT.get(t.kind, t.kind)}"
                 + (f"; the owner says: {about or dev.note}" if dev is not None and (about or dev.note) else "")]
-        ports = [f"{k.split('|', 1)[1]} {link_words(v['mbps'], v['full']) if v['up'] else 'no link'}"
-                 for k, v in self._live.items() if k.startswith(t.ip + "|")]
+        ports = [f"{k.split('|', 1)[1]} {link_words(v['last']['mbps'], v['last']['full']) if v['last']['up'] else 'no link'}"
+                 for k, v in self.rec["ports"].items() if k.startswith(t.ip + "|") and v.get("last")]
         if ports:
             bits.append("ITS PORTS NOW: " + "; ".join(ports))
         from .actions import CATALOG
@@ -923,7 +924,7 @@ class DevWatch:
         for k, st in sorted(self.rec["ports"].items()):
             if not k.startswith(ip + "|"):
                 continue
-            lv = self._live.get(k) or {}
+            lv = st.get("last") or {}
             out.append({"name": k.split("|", 1)[1], "up": lv.get("up"), "mbps": lv.get("mbps"),
                         "full": lv.get("full"), "at": lv.get("at"), "usual": st.get("usual"),
                         "usual_full": st.get("usual_full", True), "low_since": st.get("low_since") or 0,
