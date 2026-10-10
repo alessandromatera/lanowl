@@ -3129,11 +3129,12 @@ function renderSec(d) {
       <button class="sbtn" type="button" data-act="updscan"${R.scan ? " disabled" : ""}>${R.scan ? '<span class="spin"></span>Scanning…' : ic("search") + "Deep scan"}</button></div>
     <details class="how" data-how="sechow"${CH.how.has("sechow") ? " open" : ""}><summary>What the two buttons do${ic("chev")}</summary><div class="howbody"><b>Check now</b> reads every machine again (waiting updates, pending reboots, versions, telnet or ftp left open, how each can be logged into, its firewall), looks at a server you keep on the internet from here${noModel ? "" : ", and the owl reviews it all"}: a few minutes, and nothing is changed. By itself every morning at ${esc(U.at || "06:30")}.<br><br><b>Deep scan</b>: nmap asks the devices on every site, a remote one through its tunnel, which software answers on their ports and looks up known vulnerabilities (CVSS 7+). 10 to 30 minutes; it probes the devices, so each one's settings say whether it is scanned (chosen at setup); one never chosen follows its group, and ${esc((sc.deny || ["security", "iot"]).join(", "))} are left out (Settings → Updates). By itself on day ${esc(sc.day || 1)} of each month.</div></details></div>
     <div class="kpis">${kpi(matters.length, "to decide", "red")}${kpi(waiting, "updates waiting", "orange")}${kpi(reb, "reboots pending", "orange")}${kpi(conf, "with a CVE ≥ 7 that applies", "orange")}</div></div>`;
-  // the order follows urgency (10-08): what to decide, what changed, the review, the logs, then the rest
+  // the order follows urgency (10-08): what to decide, the review, what changed (10-11: after the
+  // review), the logs, then the rest
   let h = `<div class="sh">To decide${matters.length ? ` <span class="r">${matters.length}</span>` : ""}</div><div class="card nbox">` + (matters.length ? matters.map(nitHtml).join("")
     : `<div class="nzero">${ic("check")}${U.last ? "Nothing to decide." : U.enabled === false ? "The morning check is off: Settings → Updates switches it on." : "The first check runs at " + esc(U.at || "06:30") + "."}</div>`) + `</div>`;
-  h += cfgHtml(d);
   h += review;
+  h += cfgHtml(d);
   h += logsHtml(d, (d.findings || []).filter(f => inSite(d, logIp(d, f))));
   if (later.length) h += `<div class="sh">Worth fixing, not urgent <span class="r">${later.length}</span></div><div class="list">` + later.map(itemRow).join("") + `</div>`;
   h += `<div class="sh">Machines <span class="r">tap one to update, reboot or back it up</span></div>` + fleetHtml(d);
