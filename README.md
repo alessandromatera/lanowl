@@ -58,7 +58,8 @@ device, and nothing that changes a device runs without your button.
 - Every blip keeps its evidence, so "where did it break?" has an answer: your line, the
   provider, or lanowl's own view.
 - With no internet, messages wait and go out when it is back, with the real times in them.
-- A speed test of the line, or of a remote site's line, when you ask for one.
+- A speed test of the line (download, upload, and the delay it adds while busy), or of a
+  remote site's line, when you ask for one.
 
 <img src="docs/img/does-internet.png" width="600" alt="The internet card: online via the fibre, fibre drops and short blips in 24 hours, the last seven days">
 

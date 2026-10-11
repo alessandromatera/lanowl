@@ -44,6 +44,7 @@ import json
 import logging
 import re
 import shlex
+import signal
 import time
 import xml.etree.ElementTree as ET
 from typing import Optional
@@ -133,6 +134,86 @@ def clip(text: str, n: int = OUT_MAX) -> str:
     return text[:n].rstrip() + f"\n[… {len(text) - n} more characters cut]"
 
 
+# --- the speed test ---------------------------------------------------------------------
+# Cloudflare's speed endpoints: no account, and __down refuses 100 MB and more. One TCP stream
+# reads a fast line short (on a gigabit fibre line: one 25 MB stream ~240 Mbit/s, four at once
+# ~700), and a request's set-up is not the line's speed: four streams each way, timed from the
+# first byte. A slow line stops at SPEED_MAX_S and is timed on what arrived. The ping beside
+# them is the latency the line adds under load (bufferbloat: why calls stutter during a download).
+SPEED_DOWN = "https://speed.cloudflare.com/__down?bytes=25000000"
+SPEED_UP = "https://speed.cloudflare.com/__up"
+SPEED_STREAMS = 4
+SPEED_UP_BYTES = 10_000_000
+SPEED_MAX_S = 12
+SPEED_PING = "1.1.1.1"              # Cloudflare's own network, beside the test's servers
+_PING = ["ping", "-n", "-i", "0.2", "-W", "1"]
+
+
+async def _exec_while(argv: list, aw) -> tuple:
+    """Run `argv` (a ping) for as long as `aw` takes, then stop it the way Ctrl-C does, so it
+    prints its totals: ((returncode, stdout, stderr), what `aw` returned). rc None = did not run."""
+    try:
+        p = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.DEVNULL)
+    except (FileNotFoundError, PermissionError) as e:
+        return (None, "", f"{argv[0]} is not installed here ({type(e).__name__})"), await aw
+    try:
+        res = await aw
+    except BaseException:
+        with contextlib.suppress(ProcessLookupError):
+            p.kill()
+        raise
+    with contextlib.suppress(ProcessLookupError):
+        p.send_signal(signal.SIGINT)
+    try:
+        out, err = await asyncio.wait_for(p.communicate(), timeout=5)
+    except asyncio.TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            p.kill()
+        return (None, "", "ping did not stop"), res
+    return (p.returncode, out.decode(errors="replace"), err.decode(errors="replace")), res
+
+
+def _ping_words(out: str, what: str) -> tuple:
+    """(median ms or None, one line for the output) from ping's own lines."""
+    ms = sorted(float(x) for x in re.findall(r"time=([\d.]+) ?ms", out or ""))
+    m = re.search(r"(\d+) packets transmitted, (\d+) (?:packets )?received", out or "")
+    sent = int(m.group(1)) if m else len(ms)
+    if not ms:
+        return None, f"ping {what}: no reply" + (f" to {sent} sent" if sent else "")
+    med = ms[len(ms) // 2]
+    lost = f", {sent - len(ms)} of {sent} lost" if sent > len(ms) else ""
+    return med, f"ping {what}: {len(ms)} replies, median {med:.1f} ms (min {ms[0]:.1f}, max {ms[-1]:.1f}){lost}"
+
+
+def _speed_of(results: list, what: str) -> tuple:
+    """(Mbit/s or None, one line for the output) of parallel curls, each `-w` "start end bytes
+    ip": their bytes over the time from the first one's first byte to the last one's end."""
+    rows, why = [], ""
+    for rc, out, err in results:
+        try:
+            t0, t1, size, ip = out.split()[:4]
+            t0, t1, size = float(t0), float(t1), float(size)
+        except ValueError:
+            why = why or (err or out).strip()[:120] or f"exit {rc}"
+            continue
+        if rc not in (0, 28) and size <= 0:
+            why = why or (err or "").strip()[:120] or f"exit {rc}"
+            continue
+        rows.append((t0, t1, size, ip, rc == 28))
+    if not rows or sum(r[2] for r in rows) <= 0:
+        return None, f"{what}: UNKNOWN — {why or 'nothing arrived'}"
+    start, end = min(r[0] for r in rows), max(r[1] for r in rows)
+    total = sum(r[2] for r in rows)
+    if end <= start:
+        return None, f"{what}: UNKNOWN — no time to measure"
+    mbit = total * 8 / (end - start) / 1e6
+    cut = f", stopped at {SPEED_MAX_S}s: timed on what arrived" if any(r[4] for r in rows) else ""
+    return mbit, (f"{what}: {len(rows)} streams, {total / 1e6:.1f} MB in {end - start:.1f}s from the "
+                  f"first byte — {mbit:.0f} Mbit/s (server {rows[0][3]}){cut}")
+
+
 # --- the catalog ------------------------------------------------------------------------
 # name -> where it runs, what the model reads about it (one line: its slots, then what it
 # answers), and how long it may take. `test`: needs the router user's `test` policy.
@@ -150,7 +231,7 @@ CATALOG = {
     "port_check":     {"where": "here", "t": 60, "d": "device, ports (≤20) — open / closed / filtered, without nmap"},
     "whois":          {"where": "here", "t": 25, "d": "target (a public address) — who owns it: network, organisation, country, abuse contact"},
     "public_ip":      {"where": "here", "t": 15, "d": "— the network's public address and ISP right now, i.e. which link is carrying traffic"},
-    "speed_test":     {"where": "here", "t": 50, "d": "— download speed of the active link (25 MB from Cloudflare)"},
+    "speed_test":     {"where": "here", "t": 50, "d": "— download and upload speed of the active link, and the ping idle and while each runs: the delay the line adds under load. Four streams each way to Cloudflare, about 100 MB down and 40 MB up, at most 12s each"},
     "arping":         {"where": "here", "t": 20, "d": "device (LAN)[, count≤10] — ARP ping from here: is it on the wire even if it ignores ICMP and every port (sleeping phones, some IoT)? Its MAC too"},
     "capture":        {"where": "here", "t": 35, "d": "[target (an address to filter on), port, proto=tcp|udp|icmp|arp, count≤100, seconds≤20] — tcpdump on this host's LAN interface: packet headers only, never contents; lanowl's own ssh is left out"},
     "ping_sweep":     {"where": "here", "t": 60, "d": "subnet (/24 or smaller, on a known network: the main LAN's, a site's) — which addresses answer; names the known ones, lists the strangers and the inventory devices that stayed silent"},
@@ -191,7 +272,7 @@ CATALOG = {
 # The checks the hourly audit may run by itself, with no session:
 # PASSIVE — they look at a path, a resolver, a certificate, a tunnel's or a host's state, and
 # send a handful of packets at most. Not here, and still behind a session: nmap and port
-# scans, sweeps, packet captures (they read traffic), torch, the 25 MB speed test.
+# scans, sweeps, packet captures (they read traffic), torch, the speed test (~140 MB).
 PASSIVE = frozenset({
     "ping", "link_test", "mtr", "traceroute", "dns_compare", "dns_trace", "http_timing",
     "tls_cert", "whois", "public_ip", "arping",
@@ -676,7 +757,8 @@ class Checks:
         if name == "public_ip":
             return "curl https://ipinfo.io/json"
         if name == "speed_test":
-            return "curl https://speed.cloudflare.com/__down?bytes=25000000"
+            return (f"curl ×{SPEED_STREAMS} {SPEED_DOWN}; curl ×{SPEED_STREAMS} "
+                    f"{SPEED_UP_BYTES // 1_000_000} MB to {SPEED_UP}; ping {SPEED_PING}")
         if name == "ping_sweep":
             return f"fping -a -g {n['subnet']}"
         if name == "arping":
@@ -742,6 +824,42 @@ class Checks:
         if where == "site":
             return await self.a.sites.run_check(name, n, T)
         return await self._run_here(name, n, T)
+
+    async def _speed_test(self) -> dict:
+        """speed_test: the ping idle, then the downloads and the uploads, each with a ping
+        beside it. Each direction is told on its own: one that failed is UNKNOWN, the other
+        still counts."""
+        async def streams(argv: list, stdin: Optional[bytes] = None) -> list:
+            return await asyncio.gather(*[_exec(argv, SPEED_MAX_S + 5, stdin=stdin)
+                                          for _ in range(SPEED_STREAMS)])
+
+        curl = ["curl", "-sS", "-o", "/dev/null", "--max-time", str(SPEED_MAX_S)]
+        busy = _PING + ["-w", str(SPEED_MAX_S + 10), SPEED_PING]
+        _, out, _ = await _exec(_PING + ["-c", "10", SPEED_PING], 15)
+        idle, idle_line = _ping_words(out, "idle")
+        (_, dping, _), downs = await _exec_while(busy, streams(curl + [
+            "-w", "%{time_starttransfer} %{time_total} %{size_download} %{remote_ip}", SPEED_DOWN]))
+        (_, uping, _), ups = await _exec_while(busy, streams(curl + [
+            "-H", "Content-Type: application/octet-stream", "--data-binary", "@-",
+            "-w", "%{time_pretransfer} %{time_total} %{size_upload} %{remote_ip}", SPEED_UP],
+            bytes(SPEED_UP_BYTES)))
+        down, down_line = _speed_of(downs, "download")
+        up, up_line = _speed_of(ups, "upload")
+        dl, dl_line = _ping_words(dping, "while downloading")
+        ul, ul_line = _ping_words(uping, "while uploading")
+        output = "\n".join([down_line, up_line, idle_line, dl_line, ul_line])
+        if down is None and up is None:
+            return {"ok": False, "summary": "UNKNOWN — " + down_line.split("UNKNOWN — ", 1)[-1],
+                    "output": output}
+        pings = [f"{v:.0f} ms {w}" for v, w in ((idle, "idle"), (dl, "while downloading"),
+                                                 (ul, "while uploading")) if v is not None]
+        summary = (f"{down:.0f} Mbit/s down" if down is not None else "download UNKNOWN") + ", " \
+            + (f"{up:.0f} Mbit/s up" if up is not None else "upload UNKNOWN") \
+            + ("; ping " + ", ".join(pings) if pings else "")
+        on_backup = self._on_backup() if self.links.get("failover") else None
+        if on_backup is not None:
+            summary += f" — over the {self.links['backup' if on_backup else 'main']}"
+        return {"ok": down is not None and up is not None, "summary": summary, "output": output}
 
     async def _run_here(self, name: str, n: dict, T: int) -> dict:
         if name == "arping":
@@ -908,16 +1026,7 @@ class Checks:
                     f"{js.get('city', '?')} {js.get('country', '')}".strip(),
                     "output": json.dumps({k: js.get(k) for k in ("ip", "hostname", "org", "city", "region", "country")})}
         if name == "speed_test":
-            rc, out, err = await _exec(["curl", "-sS", "-o", "/dev/null", "--max-time", "40", "-w",
-                                        "%{speed_download} %{size_download} %{time_total} %{remote_ip}",
-                                        "https://speed.cloudflare.com/__down?bytes=25000000"], T)
-            try:
-                bps, size, secs, ip = out.split()
-                mbit = float(bps) * 8 / 1e6
-                return {"ok": float(size) > 0, "summary": f"{mbit:.1f} Mbit/s down "
-                        f"({float(size) / 1e6:.1f} MB in {float(secs):.1f}s from {ip})", "output": out + err}
-            except ValueError:
-                return {"ok": False, "summary": f"UNKNOWN — {(err or out).strip()[:100]}", "output": out + err}
+            return await self._speed_test()
         if name == "ping_sweep":
             rc, out, err = await _exec(["fping", "-a", "-q", "-r", "1", "-t", "400", "-g", n["subnet"]], T)
             if rc is None:
