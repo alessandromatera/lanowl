@@ -16,8 +16,8 @@ list of old answers only grows. So the Ask tab is:
     up on the laptop.
 
 Still the same model, the same read-only tools and the same queue as Telegram
-(Auditor.model_turn): one question at a time, the audit first. Telegram keeps one question,
-one answer.
+(Auditor.model_turn): one question at a time, the audit first. Telegram shows the same work
+as it happens, in a message deleted when the answer arrives (chat.LiveReply).
 """
 from __future__ import annotations
 
@@ -54,6 +54,23 @@ def _span(v, unit: str = "h") -> str:
     except (TypeError, ValueError):
         h = 24.0
     return f"{h:g}h" if h < 48 else f"{h / 24:g} days"
+
+
+# lanowl_records' topics (records.TOPICS), as a person says them
+_RECORDS = {
+    "security": "what matters on Security", "updates": "the updates waiting",
+    "exposure": "the security review", "vulnerabilities": "the vulnerability scan",
+    "backups": "the backups", "device": "what lanowl knows about", "actions": "the actions",
+    "telegram": "what lanowl sent on Telegram", "log_checks": "the log checks",
+    "audits": "the audits", "pauses": "the pauses", "discovery": "the new devices",
+    "devices_seen": "every device ever seen", "scan": "the network scan",
+    "shell": "the sandbox's commands", "conversations": "earlier questions",
+    "auditor_log": "lanowl's own log", "sites": "the sites", "services": "the services",
+    "slow_changes": "what is slowly changing", "config_changes": "the configuration changes",
+    "fixes": "the fixes the owl wrote", "scorecard": "the owl's track record",
+}
+_SPANNED = {"actions", "telegram", "log_checks", "audits", "pauses", "conversations",
+            "auditor_log", "config_changes", "scorecard"}       # the topics that take hours=
 
 
 def describe_tool(name: str, args: dict, inv) -> str:
@@ -112,6 +129,18 @@ def describe_tool(name: str, args: dict, inv) -> str:
         return f"Changing note #{s('id')}"
     if name == "forget_memory":
         return f"Forgetting note #{s('id')}"
+    if name == "lanowl_records":
+        topic = s("topic")
+        what = _RECORDS.get(topic, topic.replace("_", " ") or "?")
+        if topic == "device":
+            what += f" {who}" if who else ""
+        elif who:
+            what += f" on {who}"
+        if args.get("search"):
+            what += f" for “{s('search')}”"
+        if args.get("hours") and topic in _SPANNED:
+            what += f", last {_span(args.get('hours'))}"
+        return f"Reading {what}"
     if name == "run_check":
         dev = s("device")
         d = inv.get(dev) if (dev and inv is not None) else None
@@ -120,6 +149,25 @@ def describe_tool(name: str, args: dict, inv) -> str:
         return f"Running {s('check') or '?'}" + (f" — {what}" if what else "")
     return name or "?"
 
+
+def apply_event(t: dict, inv, kind: str, *args):
+    """One piece of an answer being written (LlmAgent._tool_loop's on_event), onto its live
+    state `t`: the phase, the end of its thinking, the text so far, each check in words. The
+    dashboard's turn and a Telegram answer's working message (chat.LiveReply) both keep it
+    this way, so the two show the same thing."""
+    if kind == "start":
+        t.update(phase="thinking", started=time.time())
+    elif kind == "thinking":
+        t["think"] = (t.get("think", "") + args[0])[-THINK_TAIL:]
+        t["phase"] = "thinking"
+    elif kind == "content":
+        t["draft"] = t.get("draft", "") + args[0]
+        t["phase"] = "writing"
+    elif kind == "tool":
+        # whatever it wrote this round was preamble to a check, not the answer
+        if len(t["steps"]) < MAX_STEPS:
+            t["steps"].append({"ts": time.time(), "text": describe_tool(args[0], args[1], inv)})
+        t.update(phase="checking", draft="", think="")
 
 
 def chat_title(q: str) -> str:
@@ -385,20 +433,7 @@ class Conversations:
     def _on_event(self, t: dict, kind: str, *args):
         if t["status"] != "pending":
             return
-        if kind == "start":
-            t.update(phase="thinking", started=time.time())
-        elif kind == "thinking":
-            t["think"] = (t.get("think", "") + args[0])[-THINK_TAIL:]
-            t["phase"] = "thinking"
-        elif kind == "content":
-            t["draft"] = t.get("draft", "") + args[0]
-            t["phase"] = "writing"
-        elif kind == "tool":
-            # whatever it wrote this round was preamble to a check, not the answer
-            if len(t["steps"]) < MAX_STEPS:
-                t["steps"].append({"ts": time.time(),
-                                   "text": describe_tool(args[0], args[1], self.a.inv)})
-            t.update(phase="checking", draft="", think="")
+        apply_event(t, self.a.inv, kind, *args)
 
     @staticmethod
     def _finish(t: dict, status: str, text: Optional[str] = None, error: Optional[str] = None):

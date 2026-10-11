@@ -56,7 +56,7 @@ A refused proposal never reaches you; it is kept, with why, and the owl is told.
 The proposal shows what will run, the owl's reason, the result of its check, and its risk:
 
 ```text
-🛠 Reboot the device — Cam Garage (192.168.88.23)
+📜 Reboot the device — Cam Garage (192.168.88.23)
 Home Assistant: button.press button.garage_cam_plug_restart
 Why (model): dark since 13:35 while the other four cameras answer; its plug can power-cycle it
 Checked: through Home Assistant's button.garage_cam_plug_restart

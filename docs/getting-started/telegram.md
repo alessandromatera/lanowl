@@ -65,7 +65,7 @@ it could press them: list who may in `telegram.chat.allowed_user_ids`.
 | 🔴 **CRITICAL** | At once, for a device of `criticality: critical`, a whole group gone dark, or the internet. One per incident. |
 | 🟢 **RECOVERED** | When it has stayed fine for 15 minutes (`alerts.recovery_confirm_s`), with how long it lasted. |
 | ⚪🟡🟠 **lanowl digest** | After the hourly audit, only when something new opened that is not critical, or the owl's reviews found something. Never "all is well". |
-| 🛠 **Proposals** | A fix the owl proposes, with Approve and Reject. On the incident's own alert when there is one. |
+| 📜 **Proposals** | A fix the owl proposes, with Approve and Reject. On the incident's own alert when there is one. |
 | 🛡 **Updates and security** | After the morning check, only what is new and matters. |
 | 🆕 **New device** | A device never seen on your router's DHCP before: listed when it joins (`discovery.notify_new_devices`), and once more with the owl's reading when it thought it worth a word. |
 | 📅 **Week in review** | Sundays at 10:00 (`weekly`). |

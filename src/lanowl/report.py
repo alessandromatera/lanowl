@@ -735,6 +735,14 @@ def _since_note(issue: dict, now: float) -> str:
     return f" — <i>since {at}</i>"
 
 
+# What the owl did itself (a check, a command, a device it read), one line each under a digest,
+# an alert and a Telegram answer: the owl's own mark, not a tool's (owner 10-11: "it's an owl
+# character!"). A fix it proposes for you to approve comes the way owls bring news, as a
+# scroll (was 🛠, owner 10-11: "change the 🛠 too").
+OWL_MARK = "🪶"
+PROPOSAL_MARK = "📜"
+
+
 def _html(s) -> str:
     """Model text going into a Telegram HTML message. A stray '<' in its prose used to be
     the one thing that could make Telegram refuse a digest outright."""
@@ -774,10 +782,11 @@ def _diag_line(d: dict) -> str:
 
 
 def ran_lines(ran: list, limit: int = 12) -> list:
-    """What the model ran by itself, one line each: 🔧 and the check (or the command), ✗ for one
-    that failed. The same under a Telegram answer, a digest and an incident's alert, so a
-    diagnosis always says what it was based on."""
-    out = [f"{'🔧' if r.get('ok') else '✗'} {_html(r.get('label') or r.get('command') or '')}"
+    """What the model ran by itself, one line each: the owl's mark and the check (or the
+    command), ✗ for one that failed. The same under a digest and an incident's alert as the
+    checks folded under a Telegram answer (chat.LiveReply), so a diagnosis always says what it
+    was based on."""
+    out = [f"{OWL_MARK if r.get('ok') else '✗'} {_html(r.get('label') or r.get('command') or '')}"
            for r in (ran or [])[:limit]]
     if len(ran or []) > limit:
         out.append(f"…and {len(ran) - limit} more")
@@ -920,7 +929,7 @@ def format_digest(report: dict, now: Optional[float] = None,
     if report.get("model_off"):
         lines.append(format_model_off(report["model_off"], now))
     # what the audit looked at by itself (passive checks, its offline shell),
-    # listed like the 🔧 lines under a Telegram answer
+    # listed like the checks under a Telegram answer
     ran = report.get("checks_ran") or []
     if ran:
         lines.append("<i>The audit looked for itself:</i>")

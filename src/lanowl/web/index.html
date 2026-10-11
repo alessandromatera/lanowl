@@ -685,6 +685,7 @@ div.row[data-ip]>.chev{margin-left:6px}
 .steps li{display:flex;gap:7px;align-items:flex-start;overflow-wrap:anywhere}
 .steps li .ic{width:15px;height:15px;flex:none;margin-top:1px;color:var(--green)}
 .steps li.now .ic{color:var(--blue);animation:spin 1.1s linear infinite}
+.steps li .ic.owl{font-size:12.5px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .caret{display:inline-block;width:7px;height:1.05em;vertical-align:-2px;margin-left:1px;border-radius:1px;background:var(--blue);animation:caret 1s steps(1) infinite}
 @keyframes caret{50%{opacity:0}}
@@ -714,6 +715,16 @@ div.row[data-ip]>.chev{margin-left:6px}
 .how summary .ic{width:12px;height:12px;stroke-width:2.6;transition:transform .2s}
 .how[open] summary .ic{transform:rotate(90deg)}
 .how .steps{margin:0 4px 6px;padding:10px 12px;background:var(--fill2);border-radius:12px}
+/* the checks under an answer, as Telegram quotes them: a bar, the count, the first three;
+   as wide as its lines, never wider than the answer, lined up with it */
+.tq{position:relative;box-sizing:border-box;width:fit-content;min-width:min(240px,100%);max-width:94%;margin:2px 0 4px -2px;padding:8px 30px 9px 12px;background:var(--fill2);border-left:3px solid var(--blue);border-radius:4px 12px 12px 4px}
+.tq[data-act]{cursor:pointer}
+.tqh{font-size:12.5px;color:var(--ink3);margin-bottom:5px}
+.tq .steps{margin:0}
+.tq:not(.open) .steps{max-height:80px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 74%,transparent);mask-image:linear-gradient(#000 74%,transparent)}
+.tqx{position:absolute;right:10px;bottom:8px;color:var(--blue-t);display:flex}
+.tqx .ic{width:12px;height:12px;stroke-width:2.6;transform:rotate(90deg);transition:transform .2s}
+.tq.open .tqx .ic{transform:rotate(-90deg)}
 .ask-empty{margin:2px 0 16px}
 .ask-empty .chips{flex-wrap:wrap;overflow:visible;margin:0;padding:10px 0 0}
 .ask-hint{font-size:14px;color:var(--ink2);margin:0 2px}
@@ -1205,8 +1216,11 @@ window.fetch = async (...a) => {
 };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // Telegram text is our own HTML, but it can carry names the network chose (a DHCP host name),
-// so it is escaped whole and only <b>/<i>/<code> are let back in.
-const tg = s => esc(s).replace(/&lt;(\/?)(b|i|code)&gt;/g, "<$1$2>");
+// so it is escaped whole and only <b>/<i>/<code> are let back in. What the owl ran carries its
+// 🪶 and a fix it proposes its 📜 (owner 10-11: "it's an owl character!"); a message sent before
+// then had a 🔧 or a 🛠: shown with the new marks too, the record keeps the old.
+const tg = s => esc(String(s ?? "").replace(/🔧/gu, "🪶").replace(/🛠\uFE0F?/gu, "📜"))
+  .replace(/&lt;(\/?)(b|i|code)&gt;/g, "<$1$2>");
 
 // ---------------------------------------------------------------- icons (drawn, not fetched)
 const P = {
@@ -1254,8 +1268,10 @@ const noCall = s => String(s || "").replace(/^\s*Hoo\.\s*/, "");
 // The owl's first sentence, for a one-line title
 const owlFirst = s => noCall(s).split(/(?<=[.!?])\s+/)[0];
 // "owl" marks the model's own words (diagnoses, assessments, answers): the persona's 🦉, never
-// on what the monitor measured — that keeps its 🔴🟡🟢.
+// on what the monitor measured — that keeps its 🔴🟡🟢. "feather": what it checked itself, the
+// same 🪶 as under a Telegram answer.
 const ic = (n, cls = "") => n === "owl" ? `<span class="ic owl ${cls}" aria-hidden="true">🦉</span>`
+  : n === "feather" ? `<span class="ic owl ${cls}" aria-hidden="true">🪶</span>`
   : `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ""}</svg>`;
 document.querySelectorAll("[data-ic]").forEach(el => el.insertAdjacentHTML("afterbegin", ic(el.dataset.ic)));
 
@@ -2279,7 +2295,7 @@ function md(t) {
 function stepsHtml(steps, live) {
   return `<ol class="steps">` + steps.map((x, i) => {
     const now = live && i === steps.length - 1;
-    return `<li class="${now ? "now" : ""}">${ic(now ? "spin" : "check")}<span>${esc(x.text)}</span></li>`;
+    return `<li class="${now ? "now" : ""}">${ic(now ? "spin" : "feather")}<span>${esc(x.text)}</span></li>`;
   }).join("") + `</ol>`;
 }
 function phaseText(t) {
@@ -2303,12 +2319,16 @@ function turnHtml(t, last) {
     const body = t.a ? md(noCall(t.a)) : "";
     const err = t.status === "failed" ? `<span class="err">${esc(t.error || "No answer.")}</span>` : t.status === "stopped" ? `<span class="muted">Stopped${t.a ? "" : " before it answered"}.</span>` : "";
     a = `<div class="a">${body ? `<span class="owlmark" aria-hidden="true">🦉</span> ` : ""}${body}${body && err ? "\n\n" : ""}${err}</div>`;
+    // the checks it made, under the answer as on Telegram: a quote with each one and its 🪶, the
+    // first three showing, a tap opens the rest (owner 10-11: "on dashboard i want the tool used
+    // like in telegram")
+    const many = steps.length > 3, open = !many || CH.how.has(t.id);
     const how = steps.length
-      ? `<details class="how" data-how="${esc(t.id)}"${CH.how.has(t.id) ? " open" : ""}><summary>${steps.length} check${steps.length > 1 ? "s" : ""}${took ? " · " + esc(took) : ""}${ic("chev")}</summary>${stepsHtml(steps, false)}</details>`
+      ? `<div class="tq${open ? " open" : ""}"${many ? ` data-act="tq" data-t="${esc(t.id)}" role="button" tabindex="0" aria-expanded="${open}"` : ""}><div class="tqh">${steps.length} check${steps.length > 1 ? "s" : ""}${took ? " · " + esc(took) : ""}</div>${stepsHtml(steps, false)}${many ? `<span class="tqx">${ic("chev")}</span>` : ""}</div>`
       : took && t.status === "done" ? `<span class="dot">${esc(took)} · from what it already knew</span>` : "";
     const acts = (t.a ? `<button class="act" type="button" data-act="copy" data-t="${esc(t.id)}">${ic("copy")}Copy</button>` : "") +
       (last ? `<button class="act" type="button" data-act="retry" data-t="${esc(t.id)}">${ic("refresh")}${t.status === "done" ? "Ask again" : "Retry"}</button>` : "");
-    meta = (acts ? `<div class="ameta">${acts}</div>` : "") + (how ? `<div class="ameta">${how}</div>` : "");
+    meta = (how ? `<div class="ameta">${how}</div>` : "") + (acts ? `<div class="ameta">${acts}</div>` : "");
   }
   const props = (t.proposals || []).map(propById).filter(Boolean);
   const pr = props.length ? `<div class="aprops">${props.map(propHtml).join("")}</div>` : "";
@@ -3966,6 +3986,12 @@ document.addEventListener("click", async e => {
   } else if (act === "more") t.classList.toggle("open");
   else if (act === "memdel") forgetMem(t);
   else if (act === "stop") stopAsk(t.dataset.t);
+  else if (act === "tq") {
+    const id = t.dataset.t, open = !CH.how.has(id);
+    open ? CH.how.add(id) : CH.how.delete(id);
+    t.classList.toggle("open", open);
+    t.setAttribute("aria-expanded", String(open));
+  }
   else if (act === "retry") {
     t.disabled = true;
     const r = await chatPost("/api/ask/retry", {c: CH.cid, t: t.dataset.t}, "Could not ask again.");
@@ -4094,6 +4120,7 @@ document.addEventListener("click", async e => {
 });
 document.addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".drow[data-ip]")) { e.preventDefault(); openSheet(e.target.dataset.ip); }
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".tq[data-act]")) { e.preventDefault(); e.target.click(); }
 });
 async function setModel(on) {
   const boxes = () => document.querySelectorAll("[data-model]");

@@ -65,7 +65,7 @@ from typing import Optional
 from . import probes
 from .checks import PASSIVE, CheckError, Checks, KEEP_OUT, _exec, parse_nmap_xml  # noqa: F401 (tests patch A._exec)
 from .reboot import Rebooter
-from .report import _html, label
+from .report import PROPOSAL_MARK, _html, label
 from .sinks import TelegramRejected, telegram_call, telegram_direct, telegram_edit
 from .model import on_main_lan, on_own_network, scan_choice
 
@@ -486,8 +486,8 @@ class Actions:
         if p["via"] == "audit":
             self._audit_batch.append(p["id"])     # after the diagnosis, on the incident's alert
         else:
-            head = ("🛠 <b>Proposed from your question</b>" if p["via"] == "telegram" else
-                    "🛠 <b>Proposed from a question on the dashboard</b>")
+            head = (f"{PROPOSAL_MARK} <b>Proposed from your question</b>" if p["via"] == "telegram"
+                    else f"{PROPOSAL_MARK} <b>Proposed from a question on the dashboard</b>")
             self._spawn(self._send_own([p["id"]], head, notify=True))
         return {"proposal": p["id"], "status": "waiting for the owner's approval",
                 "expires": _hm(p["expires"]),
@@ -1528,7 +1528,7 @@ class Actions:
         if p.get("action") == "investigate":
             return self._session_block(p, alone, tight)
         who = _html(label(p.get("name"), p["ip"]))
-        lines = [f"🛠 <b>{'' if alone else '#' + str(p['id']) + ' '}{_html(CATALOG[p['action']])}"
+        lines = [f"{PROPOSAL_MARK} <b>{'' if alone else '#' + str(p['id']) + ' '}{_html(CATALOG[p['action']])}"
                  f"</b> — {who}",
                  f"<code>{_html(p.get('command') or '')}</code>"]
         if p.get("owner"):
@@ -1669,7 +1669,7 @@ class Actions:
         for mid in touched:
             await self._edit(mid)
         if loose:
-            await self._send_own(loose, "🛠 <b>The audit proposes</b>", notify=False)
+            await self._send_own(loose, f"{PROPOSAL_MARK} <b>The audit proposes</b>", notify=False)
         self._save()
 
     async def _refresh(self, p: dict):

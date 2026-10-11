@@ -230,7 +230,7 @@ def hunks(old: str, new: str, n: int = 1) -> str:
 class ConfigWatch(Review):
     NAME = "configwatch"
     TITLE = "What changed"
-    ICON = "🛠️"
+    ICON = "⚙️"             # configuration, as a Settings save says it (no wrench: owner 10-11)
 
     def __init__(self, auditor):
         super().__init__(auditor)
@@ -501,8 +501,8 @@ class ConfigWatch(Review):
             return []
         week = [c for c in self.rec["changes"] if time.time() - c["ts"] < 7 * 86400]
         if not week:
-            return ["🛠️ Configurations: nothing changed this week."]
+            return [f"{self.ICON} Configurations: nothing changed this week."]
         hot = [c for c in week if c["risk"] in ("high", "critical")]
-        return [f"🛠️ Configurations: {len(week)} change(s) this week"
+        return [f"{self.ICON} Configurations: {len(week)} change(s) this week"
                 + (f", {len(hot)} that change who can get in — the worst: {label(hot[0]['name'], hot[0]['ip'])}: "
                    f"{hot[0]['what']}" if hot else ", none that change who can get in")]

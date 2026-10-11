@@ -30,15 +30,21 @@ the dashboard's Ask tab, where they are a conversation (conversations.py).
 The model is one at a time: a question asked while the hourly audit is thinking waits for it
 and says so, rather than fighting it for the GPU. Answers are the model's and say so; the
 deterministic report, the alerts and the gate are exactly as they were.
+
+While it works, the chat shows what the dashboard's Ask shows — what it is doing, each check
+in words, the end of its thinking — in one message it keeps editing, with a Stop button; the
+answer comes as a message of its own and that one is deleted (LiveReply).
 """
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import logging
+import secrets
 import time
 from typing import Optional
 
+from .conversations import apply_event
 from .login import MAX_LEN, MIN_LEN, WAIT_S as PW_WAIT_S, hash_password
 from .memory import strip_footer
 from .model import NO_MODEL
@@ -46,7 +52,7 @@ from .pause import find_devices
 from .prompts import (CALL_ANSWER, QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
                       investigation_brief, with_actions, with_device_reads, with_memory_tools,
                       with_shell)
-from .report import _clock, _html, format_digest, label, ran_lines
+from .report import OWL_MARK, _clock, _html, format_digest, label
 from .sinks import telegram_call, telegram_direct
 
 log = logging.getLogger("lanowl.chat")
@@ -85,9 +91,188 @@ HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.
         "something and I will — every note I save is printed under my answer.</i>")
 
 
-def ran_footer(ran: list) -> str:
-    """🔧 and one line per check (or command) run in an answer, ✗ for one that failed."""
-    return "\n".join(ran_lines(ran))
+WAIT_TEXT = "⏳ I'm in the middle of the hourly audit — your answer follows as soon as it's done."
+LIVE_EDIT_S = 3.0     # the working message is edited at most this often (Telegram: ~1/s a chat)
+LIVE_TICK_S = 10.0    # ...and at least this often, for its clock, when nothing else moved
+LIVE_DRAFT = 1200     # the end of the text being written that it shows
+LIVE_MAX = 3900       # under Telegram's 4096: the oldest checks give way first
+LIVE_POLL_S = 1.0     # how often it looks whether there is something new to show
+
+
+def _mmss(s: float) -> str:
+    s = max(0, round(s))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _took(s: float) -> str:
+    """How long an answer took, written as the dashboard writes it (index.html dur)."""
+    s = max(0, round(s))
+    if s < 90:
+        return f"{s}s"
+    if s < 5400:
+        return f"{round(s / 60)}m"
+    return f"{s // 3600}h{round(s % 3600 / 60):02d}"
+
+
+class LiveReply:
+    """An answer being written, shown in the chat the way the dashboard's Ask shows it: one
+    message kept edited — what the owl is doing and for how long, each check in words, the end
+    of its thinking, the text so far — with a Stop button. The answer goes out as a message of
+    its own (an edit never buzzes the phone, and an answer minutes later should), then this one
+    is deleted; its checks stay under the answer, folded (`checks`).
+
+    Every Telegram call here is one try: a working message that could not be sent or edited
+    costs a glimpse of the work, never the answer."""
+
+    def __init__(self, chat: "Chat", chat_id: str, head: str = ""):
+        self.chat = chat
+        self.chat_id = str(chat_id or (chat.cfg.get("telegram") or {}).get("chat_id") or "")
+        self.head = head                    # above it, what this answer is: "🔎 Investigation #4"
+        self.t: dict = {"phase": "queued", "steps": [], "ts": time.time()}
+        self.key = secrets.token_urlsafe(6)          # its Stop button's
+        self.mid: Optional[int] = None               # the working message, once sent
+        self.task: Optional[asyncio.Future] = None   # the answer, which Stop cancels
+        self.stopped = False
+        self._shown = ""
+        self._edit_ts = 0.0
+        self._hold = 0.0                    # Telegram said to wait until then (429)
+        self._ticker: Optional[asyncio.Future] = None
+
+    def on_event(self, kind: str, *args):
+        apply_event(self.t, self.chat.a.inv, kind, *args)
+
+    def _phase(self) -> str:
+        """Where the answer is, in the dashboard's words (index.html phaseText)."""
+        t, a = self.t, self.chat.a
+        if t["phase"] == "queued" and a._llm_lock.locked():
+            audit = getattr(a, "_audit_task", None)
+            return ("Waiting for the hourly audit to finish" if audit is not None and not audit.done()
+                    else "Waiting — the owl is busy with another question")
+        if t["phase"] == "checking":
+            return "Checking"
+        if t["phase"] == "writing":
+            return "Writing"
+        return "Thinking about what it found" if t["steps"] else "Thinking"
+
+    def _text(self, clock: bool = True) -> str:
+        t = self.t
+        top = f"🦉 <b>{self._phase()}…</b>"
+        if clock:
+            top += " " + _mmss(time.time() - (t.get("started") or t["ts"]))
+        steps = t["steps"]
+        now = t["phase"] == "checking"
+        lines = [f"{'🔄' if now and i == len(steps) - 1 else OWL_MARK} {_html(s['text'])}"
+                 for i, s in enumerate(steps)]
+        tail = []
+        if t["phase"] == "thinking" and t.get("think"):
+            tail.append("<i>…" + _html(" ".join(t["think"][-150:].split())) + "</i>")
+        d = t.get("draft") or ""
+        if d:
+            tail.append(("…" if len(d) > LIVE_DRAFT else "") + _html(d[-LIVE_DRAFT:].lstrip()) + "▍")
+        head = [self.head] if self.head else []
+        cut = 0
+        while True:
+            more = [f"{OWL_MARK} …{cut} earlier check{'s' if cut != 1 else ''}"] if cut else []
+            out = "\n".join(head + [top] + more + lines[cut:] + tail)
+            if len(out) <= LIVE_MAX or cut >= len(lines):
+                return out
+            cut += 1
+
+    def _markup(self) -> dict:
+        return {"inline_keyboard": [[{"text": "⏹ Stop", "callback_data": f"ask:s:{self.key}"}]]}
+
+    async def open(self) -> bool:
+        """Send the working message — silently: the owner has just asked, the answer buzzes."""
+        if self.chat.a.no_telegram or not self.chat_id:
+            return False
+        r = await telegram_call(self.chat.cfg, "sendMessage", {
+            "chat_id": self.chat_id, "text": self._text(), "parse_mode": "HTML",
+            "disable_web_page_preview": True, "disable_notification": True,
+            "reply_markup": self._markup()}, timeout_s=10)
+        try:
+            self.mid = int(r["result"]["message_id"]) if r and r.get("ok") else None
+        except (KeyError, TypeError, ValueError):
+            self.mid = None
+        if self.mid is None:
+            log.info("telegram chat: no working message (%s)",
+                     str((r or {}).get("description") or "no answer")[:160])
+            return False
+        self.chat._live[self.key] = self
+        self._shown, self._edit_ts = self._text(clock=False), time.time()
+        self._ticker = asyncio.ensure_future(self._tick())
+        return True
+
+    async def _tick(self):
+        try:
+            while self.mid is not None:
+                await asyncio.sleep(LIVE_POLL_S)
+                now = time.time()
+                if now < self._hold:
+                    continue
+                body, gap = self._text(clock=False), now - self._edit_ts
+                if (body != self._shown and gap >= LIVE_EDIT_S) or gap >= LIVE_TICK_S:
+                    await self._edit(body)
+        except asyncio.CancelledError:
+            pass
+
+    async def _edit(self, body: str):
+        self._edit_ts = time.time()
+        r = await telegram_call(self.chat.cfg, "editMessageText", {
+            "chat_id": self.chat_id, "message_id": self.mid, "text": self._text(),
+            "parse_mode": "HTML", "disable_web_page_preview": True,
+            "reply_markup": self._markup()}, timeout_s=10)
+        if r is None:
+            return                           # the path: the next tick tries again
+        desc = str(r.get("description") or "")
+        if r.get("ok") or "not modified" in desc:
+            self._shown = body
+            return
+        wait = (r.get("parameters") or {}).get("retry_after")
+        if wait:
+            self._hold = time.time() + float(wait)
+            return
+        log.info("telegram chat: working message not edited: %s", desc[:160])
+        if "not found" in desc or "can't be edited" in desc:
+            self.mid = None                  # deleted in the chat: nothing left to edit
+
+    def stop(self) -> str:
+        """Its Stop button: cancel the answer, which closes the stream to Ollama and hands the
+        model back (as the dashboard's Stop)."""
+        if self.task is None or self.task.done():
+            return "That answer is already finished."
+        self.stopped = True
+        self.task.cancel()
+        return "Stopping."
+
+    def checks(self) -> str:
+        """The checks it made, folded under the answer: the dashboard's "5 checks · 2m"."""
+        t, steps = self.t, self.t["steps"]
+        if not steps:
+            return ""
+        n = len(steps)
+        took = _took(time.time() - (t.get("started") or t["ts"]))
+        return (f"\n\n<blockquote expandable>{n} check{'s' if n != 1 else ''} · {took}\n"
+                + "\n".join(f"{OWL_MARK} {_html(s['text'])}" for s in steps) + "</blockquote>")
+
+    async def close(self):
+        """No more edits, and the working message deleted: called once the answer is in the
+        chat."""
+        self.chat._live.pop(self.key, None)
+        if self._ticker is not None:
+            self._ticker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._ticker           # no edit still on its way after the delete
+        mid, self.mid = self.mid, None
+        if mid is None:
+            return
+        for _ in range(2):
+            r = await telegram_call(self.chat.cfg, "deleteMessage",
+                                    {"chat_id": self.chat_id, "message_id": mid}, timeout_s=10)
+            if r is not None:
+                if not r.get("ok"):
+                    log.info("telegram chat: working message not deleted: %s",
+                             str(r.get("description") or "")[:160])
+                return
 
 
 class Chat:
@@ -104,6 +289,7 @@ class Chat:
         self.session_iters = int(sess.get("max_iters", 24))
         self._tasks: set = set()
         self._tg: dict = {}       # chat_id -> {"turns": [{"q", "a", "ts"}]}
+        self._live: dict = {}     # Stop button key -> the LiveReply it stops
         try:
             rec = auditor.state.load_record(TG_RECORD) or {}
             self._tg = {str(k): v for k, v in (rec.get("chats") or {}).items()
@@ -436,7 +622,11 @@ class Chat:
         return "\n".join(lines)
 
     async def on_callback(self, data: str) -> str:
-        """An Approve/Reject button under a proposal (actions.py)."""
+        """A button: Stop under an answer being written (LiveReply), or Approve/Reject under a
+        proposal (actions.py)."""
+        if str(data or "").startswith("ask:"):
+            live = self._live.get(str(data).split(":")[-1])
+            return live.stop() if live is not None else "That answer is already finished."
         return await self.a.actions.on_callback(data)
 
     def on_mqtt(self, payload: str):
@@ -546,10 +736,6 @@ class Chat:
                 # printed by the code, whatever the model said — or if it said nothing
                 foot = a.memory.footer(changes)
                 text = f"{text}\n\n{foot}" if text else foot
-            if ran and via == "telegram" and text:
-                # what ran on the owner's say-so, listed where they read the answer (the
-                # dashboard shows each step on the turn itself)
-                text += "\n\n" + ran_footer(ran)
             return text
 
     async def investigate(self, p: dict) -> Optional[str]:
@@ -566,43 +752,76 @@ class Chat:
         src = {"via": via or "telegram",
                **({"chat_id": origin["chat_id"]} if origin.get("chat_id") else {}),
                **({"question": origin["question"]} if origin.get("question") else {})}
-        text = await self.answer(brief, source=src, session=p)
-        if via == "audit":
-            await self.a.actions.flush_audit()    # what it proposed along the way
-        elif via == "telegram":
-            await self._reply(str(origin.get("chat_id") or ""),
-                              f"🔎 <b>Investigation #{p['id']} — findings</b>\n"
-                              + ("🦉 " + _html(text) if text else
-                                 "The model did not finish a report — the checks it ran are on "
-                                 "the session's message."))
+        if via != "telegram":
+            text = await self.answer(brief, source=src, session=p)
+            if via == "audit":
+                await self.a.actions.flush_audit()    # what it proposed along the way
+            return text
+        chat_id = str(origin.get("chat_id") or "")
+        live = LiveReply(self, chat_id, f"🔎 <b>Investigation #{p['id']}</b>")
+        try:
+            text = await self._answer_live(live, brief, source=src, session=p)
+            if live.stopped and not text:
+                await self._reply(chat_id, f"🔎 <b>Investigation #{p['id']}</b> — "
+                                           "⏹ Stopped before it answered." + live.checks())
+            else:
+                await self._reply(chat_id, f"🔎 <b>Investigation #{p['id']} — findings</b>\n"
+                                  + ("🦉 " + _html(text) + ("\n\n<i>Stopped.</i>" if live.stopped
+                                                            else "") + live.checks()
+                                     if text else
+                                     "The model did not finish a report — the checks it ran are "
+                                     "on the session's message."))
+        finally:
+            await live.close()
         return text
+
+    async def _answer_live(self, live: LiveReply, question: str, **kw) -> Optional[str]:
+        """self.answer, shown as it happens in `live`'s working message (or, when that could not
+        be sent, 'typing…' and the old waiting words). Stopped with its button: what it had
+        written so far ("" if nothing), and live.stopped. The caller deletes the working message
+        once the answer is in the chat (live.close)."""
+        async def waiting():
+            if live.mid is None:             # no working message to say it
+                await self._reply(live.chat_id, WAIT_TEXT)
+        typing = None if await live.open() else asyncio.ensure_future(self._typing(live.chat_id))
+        live.task = asyncio.ensure_future(self.answer(question, on_wait=waiting,
+                                                      on_event=live.on_event, **kw))
+        try:
+            return await live.task
+        except asyncio.CancelledError:
+            me = asyncio.current_task()
+            if not live.stopped or (me is not None and me.cancelling()):
+                raise                        # not its Stop: lanowl stopping, a session ended
+            return (live.t.get("draft") or "").strip()
+        finally:
+            if typing is not None:
+                typing.cancel()
 
     async def _answer_telegram(self, question: str, chat_id: str):
         if self.a.no_llm:
             await self._reply(chat_id, self._off_text(False))
             return
-        typing = asyncio.ensure_future(self._typing(chat_id))
-
-        async def waiting():
-            await self._reply(chat_id, "⏳ I'm in the middle of the hourly audit — your answer "
-                                       "follows as soon as it's done.")
+        live = LiveReply(self, chat_id)
         try:
-            text = await self.answer(question, on_wait=waiting,
-                                     history=self._tg_history(chat_id),
-                                     source={"via": "telegram", "chat_id": chat_id,
-                                             "question": question})
+            text = await self._answer_live(live, question, history=self._tg_history(chat_id),
+                                           source={"via": "telegram", "chat_id": chat_id,
+                                                   "question": question})
+            if live.stopped:
+                await self._reply(chat_id, ("🦉 " + _html(text) + "\n\n<i>Stopped.</i>" if text
+                                            else "⏹ Stopped before it answered.") + live.checks())
+            elif text:
+                self._tg_keep(chat_id, question, text)
+                # the model's words: the owl's mark; what it checked, folded under them
+                await self._reply(chat_id, "🦉 " + _html(text) + live.checks())
+            elif self.a.no_llm:              # switched off while it was answering
+                await self._reply(chat_id, self._off_text(True))
+            else:
+                rep = self.a._last_report
+                await self._reply(chat_id, "🤷 I couldn't work that out (the model did not answer "
+                                           "in time). Here is what I know for certain:\n\n"
+                                  + (format_digest(rep, title="Right now") if rep else ""))
         finally:
-            typing.cancel()
-        if text:
-            self._tg_keep(chat_id, question, text)
-            await self._reply(chat_id, "🦉 " + _html(text))       # the model's words: the owl's mark
-        elif self.a.no_llm:                  # switched off while it was answering
-            await self._reply(chat_id, self._off_text(True))
-        else:
-            rep = self.a._last_report
-            await self._reply(chat_id, "🤷 I couldn't work that out (the model did not answer in "
-                                       "time). Here is what I know for certain:\n\n"
-                              + (format_digest(rep, title="Right now") if rep else ""))
+            await live.close()
 
     def _off_text(self, stopped: bool) -> str:
         rep = self.a._last_report
@@ -658,7 +877,8 @@ class Chat:
 
     # --- plumbing -----------------------------------------------------------
     async def _typing(self, chat_id: str):
-        """'typing…' in the chat for as long as the model thinks (Telegram shows it ~5s)."""
+        """'typing…' in the chat for as long as the model thinks (Telegram shows it ~5s), when
+        there is no working message to show it (LiveReply)."""
         try:
             while True:
                 await telegram_call(self.cfg, "sendChatAction",

@@ -30,19 +30,24 @@ port linked at, the device's own log, its Wi-Fi clients
 ([what each kind offers](../reference/kinds.md#what-the-owl-can-read)). For more it runs
 diagnostics from a fixed catalog: `mtr`, DNS, TLS, a scan,
 a packet capture, a check from the router, from another LAN host or from your VPS. Asking is
-the approval: they run at once, and each is listed under the answer (🔧 on Telegram). Anything
-that would change something is only proposed, with a button
-([Actions and approvals](actions.md)).
+the approval: they run at once, and each is listed under the answer. Anything that would
+change something is only proposed, with a button ([Actions and approvals](actions.md)).
 
 An answer takes a minute or two. The model does one thing at a time: a question asked while
 the hourly audit is thinking waits for it, and says so.
 
-**On the dashboard** you watch it work: its thinking, each check as it runs, and the answer as
-it is written. **Stop** stops it at once, **Ask again** retries, and **Copy** copies the
-answer. Conversations are kept across restarts.
+You watch it work, on the dashboard and on Telegram: its thinking, each check as it runs, and
+the answer as it is written. **Stop** stops it at once. The checks it made stay under the
+answer, each with the owl's 🪶, in a quote ("6 checks · 32s") that shows the first few: tap it
+for the rest.
 
-**On Telegram** a chat is a conversation too: a question carries the last few exchanges, so
-"and yesterday?" works. `/new` starts over; six hours of silence does too.
+**On the dashboard** **Ask again** retries, and **Copy** copies the answer. Conversations are
+kept across restarts.
+
+**On Telegram** the work is one silent message, kept up to date, with **Stop** under it. The
+answer arrives as a message of its own, so the phone buzzes once, and the working message is
+deleted. A chat is a conversation too: a question carries the last few exchanges, so "and
+yesterday?" works. `/new` starts over; six hours of silence does too.
 
 ## Memory
 

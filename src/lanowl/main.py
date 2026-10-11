@@ -1276,7 +1276,7 @@ class Auditor:
         # is the only part of an audit that ages well; the numbers must be current.
         report = merge_llm(self._last_report or report, llm)
         if ran:
-            # listed under the digest, like the 🔧 lines under a Telegram answer
+            # listed under the digest, like the checks under a Telegram answer
             report["checks_ran"] = [{"label": r.get("label"), "ok": bool(r.get("ok"))} for r in ran]
         self._last_report = report
         if llm is not None:

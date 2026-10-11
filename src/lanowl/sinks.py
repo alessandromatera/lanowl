@@ -300,12 +300,16 @@ class TelegramRejected(Exception):
 
 
 def _split(text: str, limit: int = TG_MAX_LEN) -> list:
-    """Cut a long message at line boundaries so no part exceeds Telegram's limit."""
+    """Cut a long message at line boundaries so no part exceeds Telegram's limit — never inside
+    a <blockquote> (an answer's folded checks): half a quote is markup Telegram refuses."""
     parts = []
     while len(text) > limit:
         cut = text.rfind("\n", 0, limit)
         if cut < limit // 2:            # one enormous line: cut it mid-way rather than fail
             cut = limit
+        quote = text.rfind("<blockquote", 0, cut)
+        if quote > 0 and text.find("</blockquote>", quote, cut) < 0:
+            cut = quote
         parts.append(text[:cut])
         text = text[cut:].lstrip("\n")
     parts.append(text)
