@@ -48,7 +48,8 @@ nothing else dropped. The update's own restart.
 
 The 🦉 part is not a second message. On a new critical incident the owl investigates at once
 (`cadence.llm_on_incident`), and its diagnosis is **edited into the alert you already have**,
-which does not notify you again. Internet incidents are explained by lanowl's own evidence
+which does not notify you again. Under it, a 🪶 line for each check the owl ran by itself to
+find the cause, ✗ for one that failed. Internet incidents are explained by lanowl's own evidence
 instead, so they never wait for the model.
 
 ### The recovery
@@ -87,6 +88,9 @@ there is something new to say**:
      not the switch. Its DHCP lease is still bound: it lost power or hung. → Power-cycle it
      with its smart plug; if it stays dark, check the cable at the garage end.
 ```
+
+When the audit ran checks of its own, the digest ends with them: "The audit looked for itself",
+then a 🪶 line for each, ✗ for one that failed.
 
 A healthy network gets no digest (`cadence.digest_when_ok: false`). A problem you were told
 about in a digest gets a 🟢 line when it goes away (`alerts.notify_recovery`,

@@ -209,7 +209,7 @@ Two settings shape how the owl thinks:
   links, the sites, what runs where, what you chose on purpose. Every prompt gets it.
 - **`model.persona`**: `owl` (the default), or `""` for plain prose. The owl speaks briefly,
   opens its words on Telegram with its call, "Hoo.", and never changes a severity; its words
-  carry 🦉, the monitor's keep 🔴🟡🟢.
+  carry 🦉, what it checked by itself 🪶 and a fix it proposes 📜; the monitor's keep 🔴🟡🟢.
 
 **A backup internet link** is optional. Without `wan.path.route_comment` lanowl assumes one
 line, and nothing speaks of failover. With it (a MikroTik dual-WAN), name your links

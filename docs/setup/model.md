@@ -133,8 +133,8 @@ The proof runs at start, every morning with the security review, and whenever th
 restarts.
 
 The hourly audit gets a second sandbox with no internet and no DNS at all, and at most a few
-commands per audit. Every command, with who asked and what came back, is listed under the
-answer and on the dashboard.
+commands per audit. Each command is listed in the next digest that goes out, under "The audit
+looked for itself", and with what came back on the dashboard (Ask → The model's shell).
 
 ## Switching it off
 

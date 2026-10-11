@@ -67,7 +67,8 @@ not available. Docker is the supported way.
 
 It watches at night, sees in the dark, and is supposed to be wise: it tells you *why*. Its
 words are marked 🦉 and, on Telegram, open with its call, "Hoo.", so you can always tell the
-model's opinion from the monitor's measurements, which keep their 🔴🟡🟢.
+model's opinion from the monitor's measurements, which keep their 🔴🟡🟢. What it checked by
+itself carries its 🪶, and a fix it proposes its 📜.
 
 ### Is it ready?
 
