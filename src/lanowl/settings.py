@@ -123,6 +123,26 @@ WHY = {"missing": "{name} is not there", "readonly": "{name} is read-only for la
        "container (docker compose restart lanowl), then save"}
 
 
+def think_field(value, info: Optional[dict]) -> dict:
+    """`model.think` as a choice: off, the model's own default, each level the model lists
+    (agent.think_levels) — and the file's value when the model does not list it. `labels` is
+    keyed by each choice as the page writes it (JSON's false and true)."""
+    from .model import think_setting
+    v = None if value is None else think_setting({"model": {"think": value}})
+    info = info or {}
+    levels = [x for x in info.get("values") or [] if isinstance(x, str)]
+    dflt = info.get("default") or ""
+    labels = {"false": "off",
+              "true": ("on — this model cannot think, so it stays off" if info and not info.get("can", True)
+                       else "on: the model's default" + (f" ({dflt})" if dflt else ""))}
+    labels.update({x: x + (" — the model's default" if x == dflt else "") for x in levels})
+    choices = [False, True] + levels
+    if isinstance(v, str) and v not in levels:
+        choices.append(v)
+        labels[v] = f"{v} — not one of this model's levels: its default is used" if levels else v
+    return {"type": "choice", "value": v, "choices": choices, "labels": labels}
+
+
 def _check_word(c) -> str:
     """A device's check as the page lists it: "icmp", "tcp 22", "http 80 /health", "link ether3"."""
     if not isinstance(c, dict):
@@ -685,6 +705,9 @@ class Settings:
                         fd["default"] = schema.DEFAULTS[tuple(fd["path"])]
                     if fd["path"] == ["observer", "host_ip"] and fd["source"] != "env" and not fd["value"]:
                         fd["found"] = str(self.a.cfg.get("_host_ip_found") or "")
+                    if fd["path"] == ["model", "think"]:
+                        fd.update(think_field(fd["value"] if fd["source"] == "file" else None,
+                                              getattr(getattr(self.a, "agent", None), "think_info", None)))
                     if fd["hash"]:
                         fd["value"] = bool(fd["value"])
                     if fd["type"] == "yaml" and fd["source"] == "file":

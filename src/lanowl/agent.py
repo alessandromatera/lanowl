@@ -10,9 +10,10 @@ import asyncio
 import json
 import logging
 import re
+import time
 from typing import Optional
 
-from .model import model_cfg, model_name
+from .model import model_cfg, model_name, think_setting, think_words
 from .prompts import DEFAULT_PERSONA, call_block, network_block, persona_block
 from .tools import TOOL_SPECS, ToolExecutor
 
@@ -81,7 +82,10 @@ class LlmAgent:
         o = model_cfg(cfg)
         self.url = str(o.get("url") or "http://127.0.0.1:11434").rstrip("/")
         self.model = model_name(cfg)
-        self.think = bool(o.get("think", True))
+        # False, True (the model's own default level) or a level it lists: one for every call
+        self.think = think_setting(cfg)
+        self.think_info: Optional[dict] = None     # think_levels(): what the model says it can do
+        self._think_tried = 0.0
         self.keep_alive = o.get("keep_alive", 0)
         self.timeout_s = o.get("request_timeout_s", 240)
         self.max_iters = o.get("max_tool_iters", 6)
@@ -161,6 +165,53 @@ class LlmAgent:
             log.warning("model not unloaded (%s: %s)", type(e).__name__, e or "no message")
             return False
 
+    async def think_levels(self) -> Optional[dict]:
+        """What the model says about thinking, from Ollama's /api/show (a listing: nothing is
+        loaded): {"model", "can": it thinks at all, "values": its levels, e.g. [False, "low",
+        "medium", "xhigh"] ([] when this Ollama does not say), "default": e.g. "medium"}.
+        Asked once per model; after a failure, again 10 minutes later. None = not known yet."""
+        if self.think_info is not None and self.think_info.get("model") == self.model:
+            return self.think_info
+        now = time.time()
+        if aiohttp is None or now - self._think_tried < 600:
+            return None
+        self._think_tried = now
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as s:
+                async with s.post(f"{self.url}/api/show", json={"model": self.model}) as resp:
+                    resp.raise_for_status()
+                    d = await resp.json()
+        except Exception as e:
+            log.info("the model's thinking levels unknown for now (%s: %s)", type(e).__name__, e or "no message")
+            return None
+        caps, th = d.get("capabilities"), d.get("thinking") or {}
+        info = {"model": self.model, "can": "thinking" in caps if isinstance(caps, list) else True,
+                "values": [v for v in (th.get("values") if isinstance(th, dict) else None) or []
+                           if isinstance(v, (bool, str))],
+                "default": str((th.get("default") if isinstance(th, dict) else "") or "")}
+        self.think_info = info
+        sent = self.think_value()
+        if self.think is not False and sent != self.think:
+            log.warning("model.think %s: %s, so lanowl asks for %s", think_words(self.think),
+                        "this model cannot think" if not info["can"] else
+                        "not one of this model's levels (" + ", ".join(
+                            "off" if v is False else str(v) for v in info["values"]) + ")",
+                        "no thinking" if sent is None else "its default level")
+        return info
+
+    def think_value(self):
+        """What a request's `think` says, or None to leave it out. Off is said: a thinking model
+        sent no `think` thinks anyway. A model that cannot think is never asked to (Ollama
+        refuses the request), and a level the model does not list becomes its default."""
+        info = self.think_info
+        if info is not None and not info["can"]:
+            return None
+        if not isinstance(self.think, str):
+            return bool(self.think)
+        if info is not None and info["values"] and self.think not in info["values"]:
+            return True
+        return self.think
+
     def _with_memory(self, system: str, asked_only: bool = False, call: str = "") -> str:
         """`system`, then the owner's description of the network and the persona's voice
         (both fixed by config), then the memory's notes. The notes go LAST, so the prompt's
@@ -190,8 +241,9 @@ class LlmAgent:
             "keep_alive": self.keep_alive,   # shared box: release the model after the call
             "options": self.options,
         }
-        if self.think:
-            body["think"] = True
+        await self.think_levels()
+        if self.think_value() is not None:
+            body["think"] = self.think_value()
         if use_tools:
             body["tools"] = self._tools()
         async with session.post(f"{self.url}/api/chat", json=body) as resp:
@@ -212,8 +264,9 @@ class LlmAgent:
         it. Ollama sends a tool call whole, in one chunk, and the prompt count on the last."""
         body = {"model": self.model, "messages": messages, "stream": True,
                 "keep_alive": self.keep_alive, "options": self.options}
-        if self.think:
-            body["think"] = True
+        await self.think_levels()
+        if self.think_value() is not None:
+            body["think"] = self.think_value()
         if use_tools:
             body["tools"] = self._tools()
         content, thinking, tool_calls, last = [], [], [], {}

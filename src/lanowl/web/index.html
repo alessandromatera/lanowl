@@ -4346,7 +4346,7 @@ function fieldHtml(f) {
   if (f.choices) {
     ctl = `<div class="fsw"><select class="fsel" id="${id}" data-k="${esc(k)}" data-t="choice"${lock ? " disabled" : ""}>` +
       (v === null ? `<option value="" selected>${esc("default" + (ex ? " (example: " + ex + ")" : ""))}</option>` : "") +
-      f.choices.map(c => `<option value="${esc(c)}"${v === c ? " selected" : ""}>${esc(c === "" ? "(none)" : c)}</option>`).join("") + `</select></div>`;
+      f.choices.map(c => `<option value="${esc(String(c))}"${v === c ? " selected" : ""}>${esc((f.labels || {})[String(c)] ?? (c === "" ? "(none)" : String(c)))}</option>`).join("") + `</select></div>`;
   } else if (f.type === "text" || f.type === "yaml") {
     const txt = f.type === "yaml" ? (e ? e.text : (v === null ? "" : f.text || "")) : (v === null ? "" : String(v));
     ctl = `<textarea class="fta${f.type === "text" ? " prose" : ""}" id="${id}" data-k="${esc(k)}" data-t="${f.type}" rows="${f.type === "text" ? 4 : 5}" spellcheck="${f.type === "text"}"
@@ -4391,7 +4391,7 @@ async function setSection(key) {
 }
 function parseField(t, raw, f) {
   if (t === "bool") return raw;
-  if (t === "choice") return raw;
+  if (t === "choice") { const c = (f.choices || []).find(x => String(x) === raw); return c === undefined ? raw : c; }   // false/true stay switches' values
   if (t === "int") { const n = raw.trim(); if (n === "") return undefined; if (!/^-?\d+$/.test(n)) throw new Error(`${f.label}: a whole number`); return +n; }
   if (t === "float") { const n = raw.trim(); if (n === "") return undefined; if (isNaN(+n)) throw new Error(`${f.label}: a number`); return +n; }
   if (t === "list") {

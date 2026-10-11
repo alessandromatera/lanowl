@@ -206,6 +206,10 @@ class SettingsRoutes:
     # --- Settings ---------------------------------------------------------------------------
     async def get(self, request):
         s = self.s
+        from .model import model_set
+        agent = getattr(self.a, "agent", None)
+        if agent is not None and not agent.off and model_set(self.a.cfg):
+            await agent.think_levels()         # Settings offers the model's own thinking levels
         out = {"ok": True, **s.view(), **s.values(),
                "secrets": {**secrets_view(self.a.cfg, self.a.inv), "file": s.files["secrets"].status(),
                            "base": digest(s.files["secrets"].read())},

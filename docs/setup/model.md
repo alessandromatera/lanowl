@@ -36,7 +36,7 @@ model:
 | Key | What it does |
 |---|---|
 | `url`, `name` | Where Ollama is, and which model. `LANOWL_MODEL_URL` wins over `url`. |
-| `think` | Let a thinking model reason before it answers. |
+| `think` | How much a thinking model reasons before it answers, one setting for every call: `false`, `true` (the model's own default level) or one of the levels the model lists (for example `low`, `medium`, `xhigh`). **Settings → The model** offers the levels your model has; a level it does not list means its default. `false` answers fastest; the level can change what the owl concludes. |
 | `num_ctx` | The context window. Every tool result stays in the prompt, so give it room: past it, Ollama silently drops the start of the prompt, and lanowl's log warns when an audit came within 10% of it. |
 | `keep_alive` | How long the model stays loaded after a call. `0` frees the memory at once. |
 | `request_timeout_s` | The longest one call may take. |

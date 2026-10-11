@@ -179,6 +179,26 @@ def model_name(cfg: dict) -> str:
     return str(model_cfg(cfg).get("name") or DEFAULT_MODEL)
 
 
+def think_setting(cfg: dict):
+    """config.yaml's `model.think`, one for every call: False, True (the model's own default
+    level) or the name of a level the model lists (Ollama's /api/show: low, medium, xhigh…).
+    Not set: True. YAML reads on/off/yes/no as true/false; quoted, they mean the same here."""
+    t = model_cfg(cfg).get("think", True)
+    if isinstance(t, str):
+        s = t.strip().lower()
+        if s in ("", "true", "on", "yes"):
+            return True
+        if s in ("false", "off", "no", "none"):
+            return False
+        return s
+    return True if t is None else bool(t)
+
+
+def think_words(t) -> str:
+    """A `think_setting` in words."""
+    return "off" if t is False else "on (the model's default level)" if t is True else f"level {t}"
+
+
 def model_set(cfg: dict) -> bool:
     """Is there a model to ask? Only when config.yaml has a `model:` section (or
     LANOWL_MODEL_URL gives one): a new install has none, and the owl is off — nothing is
@@ -206,7 +226,10 @@ def model_report(cfg: dict) -> tuple:
     if not model_set(cfg) and "ollama" not in (cfg or {}) and (cfg or {}).get("model") is None:
         lines.append(f"Model: {NO_MODEL} (or `model:` in config.yaml)")
         return "\n".join(lines), bad
-    lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where}")
+    lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where} · thinking {think_words(think_setting(cfg))}")
+    if not isinstance(m.get("think", True), (bool, str)) and m.get("think") is not None:
+        row("✗", "model.think", "false, true (the model's default) or one of the model's levels "
+                                "(Settings → The model lists them)")
     if "ollama" in (cfg or {}):
         row("✗", "config.yaml", "`ollama:` is not read any more: rename it `model:`, and its "
                                 "`model:` key `name:`")
