@@ -28,7 +28,7 @@ import time
 from typing import Optional
 from urllib.parse import urlsplit
 
-from . import logbook, probes, weekly
+from . import __version__, logbook, probes, weekly
 from .access import Access, report as secrets_report
 from .kinds import Kinds, report as kinds_report
 from .actions import Actions
@@ -1789,8 +1789,8 @@ class Auditor:
     # --- main loop --------------------------------------------------------
     async def loop(self):
         interval = self.cad.get("sweep_interval_s", 60)
-        log.info("lanowl started: %d devices, sweep=%ds, llm_mode=%s",
-                 len(self.inv.devices), interval, self.cad.get("llm_mode"))
+        log.info("lanowl %s started: %d devices, sweep=%ds, llm_mode=%s",
+                 __version__, len(self.inv.devices), interval, self.cad.get("llm_mode"))
         # Separate task on purpose: everything below can block for minutes behind an LLM
         # audit, and that stall is exactly when a 57s failover goes unseen.
         from . import routeros
@@ -2142,6 +2142,7 @@ def _setup_code(args) -> int:
 
 def main():
     ap = argparse.ArgumentParser(prog="lanowl", description="lanowl: a watchful, read-only caretaker for your network")
+    ap.add_argument("--version", action="version", version=f"lanowl {__version__}")
     ap.add_argument("--config", default=None)
     ap.add_argument("--inventory", default=None)
     ap.add_argument("--once", action="store_true", help="run a single cycle then exit")

@@ -23,7 +23,7 @@ machine. [The prompt to copy](docs/getting-started/with-an-ai.md).
 
 > **Status: pre-alpha.** lanowl comes out of a monitor that has run a real home network
 > (MikroTik, OpenWrt, Linux servers, Shelly, cameras, a VPS hub, two remote sites) since
-> August 2026. It is being turned into something anyone can install, and is not ready yet.
+> August 2026, now turned into something anyone can install. Expect rough edges.
 
 ## What it does
 

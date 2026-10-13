@@ -11,6 +11,7 @@ dashboard and the Telegram bot. The same program takes a few options, run with
 | `lanowl --once --no-llm --no-mqtt --no-telegram` | A dry run: one sweep printed, nothing sent anywhere. |
 | `lanowl --hash-password` | Asks for the dashboard's password twice, without showing it, and prints the `password_hash` line for `config.yaml`. |
 | `lanowl --setup-code` | Prints the code the dashboard's first page asks for while it has no password (a new install). It works once. Run it in the running container: `docker exec lanowl lanowl --setup-code`. |
+| `lanowl --version` | Prints the version, `lanowl 0.1.0` for example. The log's first line, `lanowl 0.1.0 started: …`, says it too. |
 | `lanowl` | Runs for good (the container's command). |
 
 | Option | What it does |

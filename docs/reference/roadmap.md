@@ -10,8 +10,6 @@ and nothing here is promised by a date.
   discovery, without a custom integration, and an add-on for Home Assistant OS users.
 - **Profiles that can install and restart**: `upgrade` and `restart` operations for device
   kinds of your own.
-- **Releases**: a multi-architecture image on GitHub's registry and packages on PyPI, so
-  installing needs no build.
 
 Ideas, requests and bugs are welcome as
 [GitHub issues](https://github.com/alessandromatera/lanowl/issues).

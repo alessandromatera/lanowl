@@ -1,15 +1,15 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [project]
 name = "lanowl"
 version = "0.1.0"
 description = "A watchful, read-only caretaker for home and small-office networks"
-readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Alessandro Matera" }]
+dynamic = ["readme"]
 requires-python = ">=3.11"
 keywords = ["network", "monitoring", "homelab", "mikrotik", "openwrt", "ollama"]
 classifiers = [
@@ -26,8 +26,31 @@ dependencies = [
     "icmplib>=3.0",      # unprivileged ping; falls back to the system's `ping`
 ]
 
+[project.urls]
+Homepage = "https://lanowl.com"
+Documentation = "https://lanowl.com/docs/"
+Source = "https://github.com/alessandromatera/lanowl"
+Issues = "https://github.com/alessandromatera/lanowl/issues"
+Releases = "https://github.com/alessandromatera/lanowl/releases"
+
 [project.scripts]
 lanowl = "lanowl.main:main"
+
+# PyPI shows README.md, where the repository's relative links lead nowhere: there they point
+# at GitHub (pictures at their raw files)
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(\]\(|src=")(docs/img/[^)"]+)'
+replacement = '\1https://raw.githubusercontent.com/alessandromatera/lanowl/main/\2'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\]\((?!https?://|#|mailto:)([^)]+)\)'
+replacement = '](https://github.com/alessandromatera/lanowl/blob/main/\1)'
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lanowl"]
@@ -36,3 +59,8 @@ packages = ["src/lanowl"]
 [tool.hatch.build.targets.wheel.force-include]
 "config.example.yaml" = "lanowl/examples/config.example.yaml"
 "inventory.example.yaml" = "lanowl/examples/inventory.example.yaml"
+
+# the source package: what building the wheel needs, without the docs' pictures
+[tool.hatch.build.targets.sdist]
+include = ["/src/lanowl", "/README.md", "/LICENSE", "/config.example.yaml", "/inventory.example.yaml",
+           "/secrets.example.yaml"]

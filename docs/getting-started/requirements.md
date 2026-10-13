@@ -52,8 +52,8 @@ lanowl (a desktop with a GPU, a Mac with Apple silicon); lanowl calls it over HT
 
 ## Without Docker
 
-lanowl is a Python package (3.11 or newer): `pip install .` from the repository gives you the
-`lanowl` command. The Docker image adds what the model's diagnostics run (`mtr`,
+lanowl is a Python package (3.11 or newer) on [PyPI](https://pypi.org/project/lanowl/):
+`pip install lanowl` gives you the `lanowl` command. The Docker image adds what the model's diagnostics run (`mtr`,
 `traceroute`, `dig`, `nmap`, `tcpdump`, `fping`, `arping`, `snmpget`, `ssh`); install those
 yourself to get the same. Docker is the supported way.
 

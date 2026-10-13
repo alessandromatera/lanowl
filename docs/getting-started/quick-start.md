@@ -11,7 +11,7 @@ docker compose -f docker/compose.yaml up -d
 docker exec lanowl lanowl --setup-code
 ```
 
-The first start builds the image, which takes a few minutes. Then lanowl finds the `config`
+The first start downloads the image (amd64 or arm64). Then lanowl finds the `config`
 folder empty and writes what it needs there:
 
 | File | What goes in it | Share it? |
