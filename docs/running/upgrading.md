@@ -12,12 +12,18 @@ docker compose -f docker/compose.yaml run --rm lanowl lanowl --check
 docker compose -f docker/compose.yaml up -d
 ```
 
-With the sandboxed shell, add `--profile shell` to the `pull` and `up` commands. The releases
+With the sandboxed shell, add `--profile shell` to the `pull` and `up` commands, and
+`LANOWL_HOST_IP=<this machine's address>` before `up` unless `docker/.env` sets it. The releases
 and what changed are on [GitHub](https://github.com/alessandromatera/lanowl/releases);
 `lanowl --version` says which one you run.
 
 To run the code you checked out instead of the release (`main` between releases, or your own
 change), replace `pull` with `build`.
+
+A compose file of your own, copied before the images were published, still names local
+images (`lanowl:latest`, `lanowl-sandbox:latest`): `pull` then fetches nothing and the old
+image keeps running. Name the published ones, `ghcr.io/alessandromatera/lanowl:latest` and
+`ghcr.io/alessandromatera/lanowl-sandbox:latest`, or keep using `build`.
 
 ## Before restarting
 

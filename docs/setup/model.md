@@ -111,10 +111,12 @@ read, edit and delete on the dashboard or with `/memory`.
 ## Its shell, in a sandbox
 
 For questions a fixed tool cannot answer, the owl can get a shell: one bash command at a
-time, in a container of its own beside lanowl.
+time, in a container of its own beside lanowl. It walls off the machine lanowl runs on, so it
+needs that machine's address (Settings → The model's shell gives the line, filled in), on the
+command line or in `docker/.env`:
 
 ```bash
-docker compose -f docker/compose.yaml --profile shell up -d
+LANOWL_HOST_IP=192.168.88.5 docker compose -f docker/compose.yaml --profile shell up -d
 ```
 
 ```yaml

@@ -59,7 +59,7 @@ minute. Probes run in parallel (`probes.concurrency`).
 
 ### Can it run without Docker?
 
-Yes: it is a Python package (`pip install .`, Python 3.11 or newer). The image adds the tools
+Yes: it is a Python package (`pip install lanowl`, Python 3.11 or newer). The image adds the tools
 the owl's diagnostics use (`mtr`, `nmap`, `tcpdump` and others); without them, those checks are
 not available. Docker is the supported way.
 
