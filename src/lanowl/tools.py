@@ -14,7 +14,9 @@ investigation session the owner opened with a button. Both are offered only whil
 turn is allowed to propose (`Actions.source`).
 
 And `device_read` (devread.py): one device read by the owl itself, with lanowl's own login for
-it — a fixed read-only command per read, in the owner's own questions only.
+it — a fixed read-only command per read, in the owner's own questions only. And
+`device_command` (devcmd.py): a command the owl writes on such a device — at once when it is on
+its kind's read-only list, otherwise only after the owner approves it with a button.
 
 And `lanowl_records` (records.py): not the network but lanowl itself —
 what it knows, did, decided and sent, everything its dashboard shows. Read-only, from memory
@@ -220,13 +222,15 @@ class ToolExecutor:
         self.cves = None
         # devread.py: a device read with lanowl's own login for it — the owner's questions only
         self.devices = None
+        # devcmd.py: a command the owl writes on a device — the owner's questions only
+        self.commands = None
         self.devwatch = None          # devwatch.py: the devices' ports and logs, hourly
 
     def tool_specs(self) -> list:
         """What the model is offered this turn: the read-only tools, plus `propose_action`
-        and `run_check` while the turn is allowed to propose, plus the memory's tools and
-        `device_read` while it is the owner's conversation. lanowl's own records are always there: reading
-        what it knows and decided is never a risk."""
+        and `run_check` while the turn is allowed to propose, plus the memory's tools,
+        `device_read` and `device_command` while it is the owner's conversation. lanowl's own
+        records are always there: reading what it knows and decided is never a risk."""
         out = self.specs
         if self.records is not None:
             out = out + [self.records.spec()]
@@ -241,6 +245,8 @@ class ToolExecutor:
             out = out + [sh.spec()]
         if self.devices is not None and self.devices.offered():
             out = out + [self.devices.spec()]
+        if self.commands is not None and self.commands.offered():
+            out = out + [self.commands.spec()]
         return out
 
     def _shell(self):
@@ -603,6 +609,11 @@ class ToolExecutor:
             if self.devices is None:
                 return {"tool": name, "error": "devices cannot be read here"}
             return {"tool": name, "result": await self.devices.call(args)}
+
+        if name == "device_command":
+            if self.commands is None:
+                return {"tool": name, "error": "commands cannot be run here"}
+            return {"tool": name, "result": await self.commands.call(args)}
 
         if name == "lanowl_records":
             if self.records is None:

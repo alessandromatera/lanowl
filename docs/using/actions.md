@@ -2,8 +2,9 @@
 
 A monitor that can only look can say what is wrong but never settle it. So the owl may
 **propose** a change, and you **approve** it, on Telegram with a button or on the dashboard
-in a sheet that says what runs. Nothing changes by itself, and the model never writes a command: it names an
-action from a fixed catalog and a device, and lanowl builds the command.
+in a sheet that says what runs. Nothing changes by itself. For an action from the catalog the
+model names the action and a device, and lanowl builds the command; a command the owl writes
+for a device shows you that exact command ([below](#a-command-of-the-owls-own)).
 
 ## The catalog
 
@@ -79,6 +80,26 @@ preceded by a backup when backups are on for that machine, and a failed backup s
 device's sheet on the dashboard. Your own request passes the same rules and the same check,
 and still waits for your button or the dashboard's confirm, so a typo never reboots the wrong thing. It does
 not count against the daily limit.
+
+## A command of the owl's own
+
+In your questions the owl can write a command for a device lanowl logs in to
+([what it can run](../reference/kinds.md#what-the-owl-can-run)). One that is not on the
+device kind's read-only list comes to you first, with the command itself:
+
+```text
+📜 Run a command — Barn Switch (192.168.88.7)
+/interface ethernet reset-counters ether3
+Why (model): its error counters add up months of history; reset, they show whether errors still grow
+⚠️ Not on the read-only list — ‘reset-counters’ changes something. It may CHANGE Barn Switch; it runs as admin over ssh. Read the command before you approve.
+⏳ Waiting for you until 10:05 · approving runs it
+[ ✅ Approve ] [ ✖️ Reject ]
+```
+
+Approved, it runs exactly as written, as the device's login, and its output goes back to the
+owl's answer, which waits for it. Unanswered after 5 minutes, or when you stop the answer, it
+expires and nothing can run it later. These are not the catalog's actions: no device or group
+deny list applies, because you read the command itself. At most 3 an answer.
 
 ## Investigation sessions
 

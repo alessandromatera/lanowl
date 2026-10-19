@@ -9,16 +9,20 @@ cannot turn into damage on its own. This page is how.
 
 The owl is useful, and treated as if anything it reads could steer it.
 
-- **It can look, not touch.** Its tools are read-only. An address that is not in your
-  inventory is refused, whatever the model asks.
-- **It never writes a command.** A change is an action from a fixed catalog, which the model
-  fills with a device and a reason. lanowl builds the command from validated data: nmap runs
-  without a shell, a service restart takes a unit from that device's allow-list, a Shelly
-  reboot is one request to its own endpoint. The model's words are only ever shown.
-- **It reads a device only by name.** In your own questions, never in the audit or a log
-  check, it can read a device lanowl has a login for: one fixed read-only command per read (a
-  print, a log tail, an API read), picked by name. What it searches for is filtered on lanowl's
-  side, so nothing it writes reaches the device.
+- **It can look; a change waits for you.** Its own tools are read-only. An address that is not
+  in your inventory is refused, whatever the model asks.
+- **An action's command is lanowl's.** An action from the catalog is filled by the model with a
+  device and a reason; lanowl builds the command from validated data: nmap runs without a
+  shell, a service restart takes a unit from that device's allow-list, a Shelly reboot is one
+  request to its own endpoint. The model's words are only ever shown.
+- **A command the owl writes runs only if it reads, or if you approve it.** In your own
+  questions, never in the audit or a log check, it can read a device lanowl has a login for:
+  a fixed read picked by name, or a command of its own. Its own command runs at once only when
+  it is on the device kind's read-only list (a print, a status, a log with a filter): one
+  program in a known form, plain words that are quoted again before they are sent, so no shell
+  syntax reaches the device. Anything else (a change, a pipe, a program not on the list) waits
+  for your button, showing the exact command, and runs as written only if you approve it. What
+  comes back is masked: passwords, keys, tokens and password hashes never reach the model.
 - **Every change waits for a person.** A proposal is checked against the rules and the device
   itself before you see it, and again when you approve. Approval is a Telegram button from an
   allowed user, or the dashboard behind its login, after a sheet that says what runs.

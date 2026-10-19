@@ -114,6 +114,15 @@ def describe_tool(name: str, args: dict, inv) -> str:
     if name == "device_read":
         what = f" for “{s('search')}”" if args.get("search") else ""
         return f"Reading {s('read') or '?'} on {who}{what}"
+    if name == "device_command":
+        from .devcmd import classify, family
+        c = " ".join(str(args.get("command") or "").split())
+        kind = str(dev.attrs.get("kind") or "") if dev is not None else ""
+        lane = classify(family(kind, (kind,)), c)       # a kind of the owner's own: a shell
+        c = c[:80] + "…" if len(c) > 80 else c
+        if lane.get("read_only") is False:
+            return f"Asking you to approve “{c}” on {who}"
+        return f"Running “{c}” on {who}"
     if name == "cve_lookup":
         return f"Looking up {s('cve')}" + (f" for {who}" if who else "")
     if name == "propose_action":

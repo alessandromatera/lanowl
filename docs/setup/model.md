@@ -92,8 +92,13 @@ refused.
 
 **Read a device itself**, in your questions: the speed a port really linked at, its own log,
 its Wi-Fi clients. lanowl logs in with the device's own login, the one it uses for updates and
-backups, and runs one fixed read-only command per read; the owl picks the read, never the
-command. What each kind offers: [Device kinds](../reference/kinds.md#what-the-owl-can-read).
+backups, and runs one fixed read-only command per read; the owl picks the read. What each
+kind offers: [Device kinds](../reference/kinds.md#what-the-owl-can-read).
+
+**Run a command on a device**, in your questions, for what the fixed reads do not show: the
+routes, a setting, a counter. The owl writes the command; one on the
+device kind's read-only list runs at once, anything else waits for your approval with a button
+and runs exactly as you read it ([Device kinds](../reference/kinds.md#what-the-owl-can-run)).
 
 **Run diagnostics**, from a fixed catalog: `mtr`, `traceroute`, DNS and TLS checks, a port
 scan, the router's own ping, a packet capture, each internet link on its own, a check from

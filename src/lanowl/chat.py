@@ -50,8 +50,8 @@ from .memory import strip_footer
 from .model import NO_MODEL
 from .pause import find_devices
 from .prompts import (CALL_ANSWER, QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
-                      investigation_brief, with_actions, with_device_reads, with_memory_tools,
-                      with_shell)
+                      investigation_brief, owl_question, with_actions, with_device_commands,
+                      with_device_reads, with_memory_tools, with_shell)
 from .report import OWL_MARK, _clock, _html, format_digest, label
 from .sinks import telegram_call, telegram_direct
 
@@ -112,6 +112,29 @@ def _took(s: float) -> str:
     if s < 5400:
         return f"{round(s / 60)}m"
     return f"{s // 3600}h{round(s % 3600 / 60):02d}"
+
+
+async def _within(aw, limit_s: float, paused):
+    """`aw` under a time limit that stands still while `paused()` grows — the seconds the
+    answer spent waiting for the owner to approve a command (devcmd.py): an approval taken
+    at minute four must not leave the owl no time to read what came back. TimeoutError past
+    it; cancelling the caller cancels `aw`."""
+    task = asyncio.ensure_future(aw)
+    t0 = time.monotonic()
+    try:
+        while True:
+            left = t0 + limit_s + paused() - time.monotonic()
+            if left <= 0:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+                raise asyncio.TimeoutError
+            done, _ = await asyncio.wait({task}, timeout=min(left, 5))
+            if done:
+                return task.result()
+    except asyncio.CancelledError:
+        task.cancel()
+        raise
 
 
 class LiveReply:
@@ -687,7 +710,8 @@ class Chat:
                 site_of=((lambda ip: (a.sites.get(a.sites.of(ip)) or {}).get("name", "?"))
                          if getattr(a, "sites", None) else None),
                 audit=(getattr(a, "_last_llm_report", None) or {}).get("llm"),
-                audit_at=getattr(a, "_last_llm_at", 0.0) or 0.0)
+                audit_at=getattr(a, "_last_llm_at", 0.0) or 0.0,
+                replying_to=owl_question(history, question) if session is None else "")
             via = (source or {}).get("via")
             system = (QA_SYSTEM if history is None else
                       QA_SYSTEM_TELEGRAM if via == "telegram" else QA_SYSTEM_CHAT)
@@ -706,6 +730,13 @@ class Chat:
             devices = a.devreads.prompt_list() if owned else ""
             if devices:
                 system = with_device_reads(system, devices)
+            cmds = owned and bool(a.devcmds.targets())
+            if cmds:
+                shellys = ", ".join(label(d.name, d.ip) for d in a.devcmds.shellys())
+                where = " and ".join(x for x in (
+                    "every device under DEVICE READS" if devices else "",
+                    f"the Shellys: {shellys}" if shellys else "") if x)
+                system = with_device_commands(system, where, approvals=acts)
             t0 = time.time()
             changes: list = []
             ran: list = []
@@ -715,14 +746,16 @@ class Chat:
                         (a.shell.turn(via, (source or {}).get("question") or question, ran)
                          if shell else contextlib.nullcontext()), \
                         (a.devreads.turn(via, ran) if owned else contextlib.nullcontext()), \
+                        (a.devcmds.turn(via, ran) if cmds else contextlib.nullcontext()), \
                         (a.memory.turn(via, (source or {}).get("question") or question)
                          if owned else contextlib.nullcontext()) as mt:
                     try:
-                        text = await asyncio.wait_for(
+                        text = await _within(
                             a.agent.ask_text(system, ctx, history=history, on_event=on_event,
                                              max_iters=self.session_iters if session
                                              else self.max_iters, call=CALL_ANSWER),
-                            timeout=self.session_wall_s if session else self.max_wall_s)
+                            self.session_wall_s if session else self.max_wall_s,
+                            a.devcmds.paused)
                     finally:
                         changes = list((mt or {}).get("changes") or [])
             except asyncio.TimeoutError:

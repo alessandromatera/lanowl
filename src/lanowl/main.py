@@ -43,6 +43,7 @@ from . import wanexplain
 from .agent import LlmAgent
 from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .chat import Chat
+from .devcmd import DeviceCommands
 from .devread import DeviceReads
 from .devwatch import DevWatch
 from .memory import Memory
@@ -337,6 +338,11 @@ class Auditor:
         # in the owner's questions only, a fixed read-only command per read
         self.devreads = DeviceReads(self)
         self.executor.devices = self.devreads
+        # ...and a command the owl writes itself, on the same devices and the Shellys
+        # (devcmd.py): at once when it is on its kind's read-only list, else after the owner's
+        # approval
+        self.devcmds = DeviceCommands(self)
+        self.executor.commands = self.devcmds
         # ...and on a clock, with the same logins (devwatch.py): every device's ports and new log
         # lines once an hour, the main router's ports every minute over its connection. Its own
         # task; what it tells goes the way the host logs' findings go.

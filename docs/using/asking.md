@@ -27,7 +27,9 @@ a machine's log, MQTT values, and everything lanowl keeps (every message it sent
 a digest was held back, the update check, the security review, the backups, earlier
 conversations). It reads a device itself too, with the login lanowl has for it: the speed a
 port linked at, the device's own log, its Wi-Fi clients
-([what each kind offers](../reference/kinds.md#what-the-owl-can-read)). For more it runs
+([what each kind offers](../reference/kinds.md#what-the-owl-can-read)), and writes a command
+of its own for the rest: one that only reads runs at once, anything else waits for your
+button ([what it can run](../reference/kinds.md#what-the-owl-can-run)). For more it runs
 diagnostics from a fixed catalog: `mtr`, DNS, TLS, a scan,
 a packet capture, a check from the router, from another LAN host or from your VPS. Asking is
 the approval: they run at once, and each is listed under the answer. Anything that would

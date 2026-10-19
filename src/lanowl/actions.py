@@ -93,6 +93,7 @@ CATALOG = {
     "apt_upgrade": "Update the system",
     "routeros_upgrade": "Update RouterOS",
     "investigate": "Investigation session",
+    "device_command": "Run a command",
 }
 PROPOSABLE = ("nmap_scan", "nmap_service", "restart_service", "shelly_reboot",
               "reboot", "apt_upgrade", "routeros_upgrade")
@@ -111,8 +112,9 @@ COOLDOWN_MIN = {"restart_service": 30, "shelly_reboot": 30, "reboot": 30,
                 "apt_upgrade": 60, "routeros_upgrade": 60}
 RUN_TIMEOUT_S = {"nmap_scan": 180, "nmap_service": 240, "restart_service": 100,
                  "shelly_reboot": 120, "reboot": 780, "apt_upgrade": 3300,
-                 "routeros_upgrade": 2000}          # both include the backup taken first;
+                 "routeros_upgrade": 2000,          # both include the backup taken first;
                                                     # RouterOS + firmware = two reboots
+                 "device_command": 90}
 STEPS_SHOWN = 12           # checks listed on a session's Telegram message
 SHELLY_BACK_S = 90         # how long a rebooting Shelly may take to answer again
 SHELLY_FIRST_S = 4         # ...before the first look (it is still going down)
@@ -498,6 +500,48 @@ class Actions:
                 "tell_the_owner": "what you proposed and why, in one line; do not claim it "
                                   "ran or what it found"}
 
+    async def ask_command(self, ip: str, name: str, command: str, reason: str, risk: list,
+                          wait_s: float) -> Optional[dict]:
+        """A command the owl wrote that is not on its read-only list (devcmd.py): the owner
+        approves it first, like an action — on Telegram and on the dashboard, the command
+        itself on the card. Not the catalog's rules: the owner reads exactly what will run,
+        on any device lanowl logs in to. The owl's answer waits for it (`wait_s`), so it
+        expires with that wait. Returns the proposal, or None outside a turn that may ask."""
+        src = self._src
+        if not (self.enabled and src):
+            return None
+        now = time.time()
+        p = {"id": self._next, "action": "device_command", "ip": ip, "name": name,
+             "reason": reason, "via": src["via"], "ts": now, "args": {"command": command},
+             "command": command, "risk": list(risk), "mode": self.mode, "status": "pending",
+             "nonce": secrets.token_hex(4), "expires": now + wait_s}
+        self._next += 1
+        self._keep(p)
+        log.info("actions: #%d device_command on %s asked (%s): %s", p["id"], ip, p["via"],
+                 command)
+        cb = src.get("on_proposed")
+        if cb is not None:
+            try:
+                cb(p["id"])
+            except Exception:
+                log.debug("on_proposed failed", exc_info=True)
+        head = (f"{PROPOSAL_MARK} <b>Proposed from your question</b>" if p["via"] == "telegram"
+                else f"{PROPOSAL_MARK} <b>Proposed from a question on the dashboard</b>")
+        self._spawn(self._send_own([p["id"]], head, notify=True))
+        return p
+
+    def withdraw(self, p: dict, why: str):
+        """A command request nobody approved in time, or whose answer was stopped: nothing
+        may run it later — the answer that wanted its output is gone."""
+        if p.get("status") != "pending":
+            return
+        now = time.time()
+        p.update(status="expired", expires=now, done_ts=now)
+        log.info("actions: #%d %s unanswered", p["id"], why)
+        self._save()
+        self._event(p)
+        self._spawn(self._refresh(p))
+
     def _keep(self, p: dict):
         self.items = (self.items + [p])[-KEEP:]
         self._save()
@@ -698,6 +742,8 @@ class Actions:
             return await self.a.updates.upgrade_check(ip, name)
         if action == "routeros_upgrade":
             return await self.a.updates.ros_upgrade_check(ip, name)
+        if action == "device_command":
+            return {"ok": True, "note": ""}       # the owner read the command itself
         return {"ok": False, "note": "unknown action"}
 
     async def _shelly_read(self, ip: str) -> Optional[dict]:
@@ -1363,6 +1409,9 @@ class Actions:
                 key = "result" if res.get("ok") else "error"
                 res[key] = f"{res.get(key, '')} · {words}"
             return res
+
+        if action == "device_command":
+            return await self.a.devcmds.run_approved(p)
 
         if action == "shelly_reboot":
             ip = p["ip"]

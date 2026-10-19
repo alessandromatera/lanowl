@@ -2626,7 +2626,7 @@ async function endSess(id) {
 }
 // Every approval is confirmed in the sheet: the page is behind its login, and the tap on the
 // sheet's button is the owner's explicit yes to what it names. CHANGES change something.
-const CHANGES = ["reboot", "shelly_reboot", "apt_upgrade", "routeros_upgrade", "restart_service", "vps_restart"];
+const CHANGES = ["reboot", "shelly_reboot", "apt_upgrade", "routeros_upgrade", "restart_service", "vps_restart", "device_command"];
 try { localStorage.removeItem("lanowl.pin"); } catch (e) {}     // the PIN of earlier versions
 function approveProp(id, prop) { openPin(id, "", prop || propById(id)); }
 function openPin(id, err, prop) {
@@ -2643,6 +2643,8 @@ function openPin(id, err, prop) {
   $("pin-what").innerHTML = !p ? "" : p.action === "investigate"
     ? esc(`Investigation session${p.label ? " — " + p.label : ""}. Approving lets the model run up to ${p.max} read-only checks for ${p.minutes} min.`)
     : esc(`${p.title} — ${p.label}. ${p.mode === "live" ? "Approving runs it." : "Dry run: nothing is executed."}`)
+      // the owl's own command: the owner approves exactly what they read
+      + (p.action === "device_command" && p.command ? `<code class="pcmd">${esc(p.command)}</code>` : "")
       + (p.check ? `<br><span class="fine">${esc(p.check)}</span>` : "")
       + (p.risk || []).map(r => `<br><b style="color:var(--orange-t)">⚠️ ${esc(r)}</b>`).join("");
   $("pinerr").textContent = err || "";

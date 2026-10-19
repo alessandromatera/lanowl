@@ -41,8 +41,7 @@ Any kind, `generic` included, can be rebooted through a Home Assistant button:
 In your own questions (Telegram, or the dashboard's Ask tab), the owl can read a device
 itself, logged in with the login lanowl has for it: a device with a `kind` below and its
 `credentials:` (Home Assistant: its token). No `manage` is needed. Each read is one fixed,
-read-only command: the owl picks the read, never the command. Every read is listed under the
-answer.
+read-only command: the owl picks the read. Every read is listed under the answer.
 
 | kind | Reads |
 |---|---|
@@ -54,6 +53,27 @@ answer.
 | `homeassistant` | `system` · `log` · `unavailable` (every entity that is unavailable, and since when) |
 | `reolink` | `system` (model, firmware; an NVR's disks) · `sessions` (who is connected) · `channels` (an NVR's cameras online) |
 | a profile | Its operations, except `reboot` and `backup` |
+
+## What the owl can run
+
+For what the reads do not show (the routes, a setting, a counter),
+the owl writes a command itself, on the same devices and on every `shelly`, in the device's own
+language. A command on its kind's read-only list runs at once and is listed under the answer.
+Anything else waits for your approval: the exact command, with **Approve** and **Reject**, on
+Telegram and on the dashboard ([Actions and approvals](../using/actions.md#a-command-of-the-owls-own)).
+The answer waits with it, up to 5 minutes, and gets the output when you approve.
+
+| kind | Takes | Read-only, at once |
+|---|---|---|
+| `openwrt`, `linux`, `unifi`, `esxi`, a profile | a shell command, as the device's login | one program in a known reading form, plain words: `iwinfo`, `iw dev`, `ubus call … status/dump/info`, `uci show`, `ip route` / `ip addr` / `ip link` (show), `logread -e …`, `journalctl` (no follow), `systemctl status`, `cat` of the state under `/proc/net`, `/sys`, `/var/log`, `/etc/config`, `ping -c` (10 at most), `esxcli … list/get`, `docker ps/logs/inspect`, and the like |
+| `mikrotik` | a RouterOS command | any `print`, `export`, `monitor … once`, a `ping` or `traceroute` with `count=`; never a file, `follow` or `show-sensitive` |
+| `reolink` | an API command and its JSON param | its `Get…` commands |
+| `homeassistant` | `METHOD /api/…` and a JSON body | `GET` |
+| `shelly` | an RPC method (`Wifi.GetStatus`) or a Gen1 path | `…Get…` and `…List…` methods; `/status`, `/settings`, `/shelly` |
+
+A pipe, `;`, a redirect or `$( )` is never on the list: the owl filters what came back instead.
+What comes back is masked before the owl sees it: passwords, keys, tokens and password hashes.
+With actions switched off (`actions.enabled: false`) only the read-only list runs.
 
 ## What each feature does
 
