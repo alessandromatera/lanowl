@@ -454,11 +454,16 @@ _QA_CONV = """- This is a conversation: the earlier questions and your answers a
 - When your last answer ended with a question to the owner and they reply in a word or two
   ("ok", "yes", "sì", "go", "do it"), that is their answer to YOUR question: do what you
   offered, now, with the tools — never take it as the end of the topic."""
+# Telegram's reply (a swipe on a message): the message is put beside the question (Chat.replied)
+_QA_REPLY = """
+- A QUESTION that is a reply to a message comes with it, under REPLYING TO: that message is
+  what "this", "it", "why?" point at. When it is one of lanowl's alerts, what is said there
+  about the incident (open or closed now) and its proposals is current."""
 
-QA_SYSTEM_CHAT =(_QA_HEAD + "The owner is asking you questions on lanowl's own "
+QA_SYSTEM_CHAT = (_QA_HEAD + "The owner is asking you questions on lanowl's own "
                   "dashboard, usually on a phone." + _QA_BODY + _QA_CONV + _QA_TAIL)
 QA_SYSTEM_TELEGRAM = (_QA_HEAD + "The owner is asking you questions on Telegram, on a phone."
-                      + _QA_BODY + _QA_CONV + _QA_TAIL)
+                      + _QA_BODY + _QA_CONV + _QA_REPLY + _QA_TAIL)
 
 # The owner's own conversations may write the memory (memory.py). Its notes are at the
 # end of every prompt; this says what the tools are for and when not to use them.
@@ -753,11 +758,12 @@ def build_qa_context(question: str, report: Optional[dict], wan_note: str = "",
                      now: Optional[float] = None, host_logs: Optional[dict] = None,
                      proposals: Optional[list] = None, security: str = "",
                      site_of=None, audit: Optional[dict] = None,
-                     audit_at: float = 0.0, replying_to: str = "") -> str:
+                     audit_at: float = 0.0, replying_to: str = "", replied: str = "") -> str:
     """Everything cheap the model should not have to call a tool for: the inventory with
     live state, what is open, the last 24h of ups and downs, and the WAN in one sentence.
     `audit`: the last audit's own words (Auditor._last_llm_report's llm), made at `audit_at`.
-    `replying_to`: the owl's own question the QUESTION answers (owl_question), said beside it."""
+    `replying_to`: the owl's own question the QUESTION answers (owl_question), said beside it.
+    `replied`: the Telegram message the QUESTION replies to (Chat.replied), right before it."""
     import time as _t
     now = now or _t.time()
     r = report or {}
@@ -832,9 +838,11 @@ def build_qa_context(question: str, report: Optional[dict], wan_note: str = "",
         lines.append(security)       # the Security tab in one line (records.py)
     lines += proposals_lines(proposals)
     lines.append("")
+    if replied:
+        lines.append(replied)
     lines.append(f"QUESTION: {question}")
     if replying_to:
-        lines.append(f"(This is the owner's reply to the question your last answer ended with: "
+        lines.append(f"(This is the owner's reply to the question your message ended with: "
                      f"«{replying_to}» — a yes, ok or go means do it now.)")
     # Last, where a local model weighs it most: the rule sits in the system prompt too, but
     # everything appended after it there (actions, memory, the notes) pushes it out of mind,

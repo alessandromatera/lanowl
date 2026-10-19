@@ -61,6 +61,7 @@ TG_RECORD = "telegram_conv"
 TG_TURNS = 6              # earlier exchanges a Telegram question carries
 TG_IDLE_S = 6 * 3600      # ...unless the last one is older than this: then it starts over
 TG_CHARS = 2500           # each earlier answer cut to this
+REPLY_CHARS = 3000        # the message a question replies to, as the owl is shown it
 
 HELP = ("🦉 <b>lanowl</b> — ask me anything about the network, in any words.\n"
         "e.g. <i>why did the internet drop last night?</i> · <i>how has the boiler been this "
@@ -102,6 +103,11 @@ LIVE_POLL_S = 1.0     # how often it looks whether there is something new to sho
 def _mmss(s: float) -> str:
     s = max(0, round(s))
     return f"{s // 60}:{s % 60:02d}"
+
+
+def _cut(text: str, n: int) -> str:
+    text = str(text or "").strip()
+    return text if len(text) <= n else text[:n].rstrip() + " […]"
 
 
 def _took(s: float) -> str:
@@ -321,7 +327,9 @@ class Chat:
             log.warning("telegram conversations unreadable, starting fresh", exc_info=True)
 
     # --- inbound ------------------------------------------------------------
-    async def on_telegram(self, text: str, chat_id: str, message_id=None):
+    async def on_telegram(self, text: str, chat_id: str, message_id=None,
+                          reply: Optional[dict] = None):
+        """`reply`: the message this one replies to (sinks.reply_of) — a question's context."""
         cmd = text.split()[0].split("@")[0].lower() if text.startswith("/") else ""
         lg = getattr(self.a, "login", None)
         asked = lg.waiting.pop(str(chat_id), None) if lg is not None else None
@@ -329,7 +337,9 @@ class Chat:
             log.info("telegram chat: the password /password asked for (not logged)")
             await self._password_set(text, chat_id, message_id)
             return
-        log.info("telegram chat: %s", cmd or f"question ({len(text)} chars)")
+        log.info("telegram chat: %s", cmd or f"question ({len(text)} chars"
+                 + (f", a reply to {'lanowl' if reply.get('bot') else 'you'}" if reply else "")
+                 + ")")
         if cmd in ("/start", "/help"):
             await self._reply(chat_id, HELP)
         elif cmd == "/status":
@@ -396,7 +406,7 @@ class Chat:
         else:
             # Its own task: the poller must keep reading (a /status right after a question
             # should not wait minutes behind it).
-            t = asyncio.ensure_future(self._answer_telegram(text, chat_id))
+            t = asyncio.ensure_future(self._answer_telegram(text, chat_id, reply))
             self._tasks.add(t)
             t.add_done_callback(self._tasks.discard)
 
@@ -711,7 +721,12 @@ class Chat:
                          if getattr(a, "sites", None) else None),
                 audit=(getattr(a, "_last_llm_report", None) or {}).get("llm"),
                 audit_at=getattr(a, "_last_llm_at", 0.0) or 0.0,
-                replying_to=owl_question(history, question) if session is None else "")
+                # a reply to one of lanowl's messages answers ITS question, not the latest's
+                replying_to=owl_question(
+                    [{"role": "assistant", "content": (source or {})["replied_owl"]}]
+                    if (source or {}).get("replied_owl") else history, question)
+                if session is None else "",
+                replied=(source or {}).get("replied", ""))
             via = (source or {}).get("via")
             system = (QA_SYSTEM if history is None else
                       QA_SYSTEM_TELEGRAM if via == "telegram" else QA_SYSTEM_CHAT)
@@ -830,20 +845,25 @@ class Chat:
             if typing is not None:
                 typing.cancel()
 
-    async def _answer_telegram(self, question: str, chat_id: str):
+    async def _answer_telegram(self, question: str, chat_id: str, reply: Optional[dict] = None):
         if self.a.no_llm:
             await self._reply(chat_id, self._off_text(False))
             return
         live = LiveReply(self, chat_id)
+        src = {"via": "telegram", "chat_id": chat_id, "question": question}
+        if reply:
+            src.update(replied=self.replied(reply),
+                       replied_owl=reply.get("text", "") if reply.get("bot") else "")
         try:
             text = await self._answer_live(live, question, history=self._tg_history(chat_id),
-                                           source={"via": "telegram", "chat_id": chat_id,
-                                                   "question": question})
+                                           source=src)
             if live.stopped:
                 await self._reply(chat_id, ("🦉 " + _html(text) + "\n\n<i>Stopped.</i>" if text
                                             else "⏹ Stopped before it answered.") + live.checks())
             elif text:
-                self._tg_keep(chat_id, question, text)
+                # a follow-up still knows what this one was about
+                self._tg_keep(chat_id, question + (f"\n(a reply to: «{_cut(reply.get('text', ''), 300)}»)"
+                                                   if reply else ""), text)
                 # the model's words: the owl's mark; what it checked, folded under them
                 await self._reply(chat_id, "🦉 " + _html(text) + live.checks())
             elif self.a.no_llm:              # switched off while it was answering
@@ -855,6 +875,46 @@ class Chat:
                                   + (format_digest(rep, title="Right now") if rep else ""))
         finally:
             await live.close()
+
+    def replied(self, r: dict) -> str:
+        """The message the owner replied to, as the owl is shown it beside their question:
+        whose, when, its text and the part they selected — and, for one of lanowl's own, the
+        incident it announced (open or not) and the proposals it carries, as they stand now."""
+        when = (time.strftime("%d/%m %H:%M", time.localtime(float(r["ts"])))
+                if r.get("ts") else "?")
+        whose = f"lanowl's message of {when}" if r.get("bot") else f"the owner's own message of {when}"
+        lines = [f"REPLYING TO — the QUESTION is a reply to {whose}:",
+                 f"«{_cut(r.get('text') or '(a message with no text)', REPLY_CHARS)}»"]
+        if r.get("quote"):
+            lines.append(f"They selected this part of it: «{_cut(r['quote'], 600)}»")
+        if r.get("bot") and r.get("id") is not None:
+            lines += self._about_message(int(r["id"]))
+        return "\n".join(lines)
+
+    def _about_message(self, mid: int) -> list:
+        """What lanowl knows of one of its own messages, by its id: the incidents it announced
+        (Auditor._alert_msgs, kept two days) and the proposals on it (Actions.msgs)."""
+        a, out = self.a, []
+        try:
+            open_keys = a._open_incident_keys()
+        except Exception:
+            open_keys = set()
+        for k, v in list((getattr(a, "_alert_msgs", None) or {}).items()):
+            if v.get("id") != mid:
+                continue
+            p = str(k).split(":", 3)          # kind:ip:group:device
+            what = p[0].replace("_", " ")
+            who = label(p[3], p[1]) if len(p) == 4 and p[1] else ""
+            out.append(f"It announced an incident ({what}{', ' + who if who else ''}): "
+                       + ("still OPEN now." if k in open_keys else "closed since."))
+        from .actions import CATALOG
+        acts = a.actions
+        for pid in (acts.msgs.get(str(mid)) or {}).get("pids") or []:
+            pr = acts._get(pid)
+            if pr is not None:
+                out.append(f"It carries proposal #{pr['id']} ({CATALOG.get(pr['action'], pr['action'])}"
+                           f", {label(pr.get('name'), pr.get('ip'))}): {acts._status_words(pr)}")
+        return out
 
     def _off_text(self, stopped: bool) -> str:
         rep = self.a._last_report

@@ -49,7 +49,10 @@ kept across restarts.
 **On Telegram** the work is one silent message, kept up to date, with **Stop** under it. The
 answer arrives as a message of its own, so the phone buzzes once, and the working message is
 deleted. A chat is a conversation too: a question carries the last few exchanges, so "and
-yesterday?" works. `/new` starts over; six hours of silence does too.
+yesterday?" works. `/new` starts over; six hours of silence does too. Reply to any message in
+the chat (swipe on it) and the owl gets that message with your question, and the part you
+selected, if any: "why?" under an alert is about that alert, and lanowl adds whether its
+incident is still open and what became of the proposals on it.
 
 ## Memory
 

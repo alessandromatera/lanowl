@@ -452,6 +452,18 @@ async def telegram_edit(cfg: dict, message_id: int, text: str,
     return False
 
 
+def reply_of(m: dict) -> Optional[dict]:
+    """The message `m` answers, when the owner replied to one (a swipe on the phone): {"id",
+    "text", "bot": sent by a bot — lanowl, "ts", "quote": the part they selected, if any}."""
+    r = m.get("reply_to_message")
+    if not isinstance(r, dict):
+        return None
+    q = m.get("quote") if isinstance(m.get("quote"), dict) else {}
+    return {"id": r.get("message_id"), "text": str(r.get("text") or r.get("caption") or "").strip(),
+            "bot": bool((r.get("from") or {}).get("is_bot")), "ts": r.get("date"),
+            "quote": str(q.get("text") or "").strip()}
+
+
 class TelegramPoller:
     """The bot's inbound half: the owner can ASK lanowl things.
 
@@ -462,7 +474,8 @@ class TelegramPoller:
     Only the configured chat is listened to. The bot is findable by name, and anything it
     answers comes from the network's own data, so every other sender is ignored (logged once
     per chat, never answered). `on_message(text, chat_id, message_id)` is awaited for each
-    message in order; `persist(offset)` keeps the position across restarts, so a question
+    message in order — with `reply=` (reply_of) when it replies to another message;
+    `persist(offset)` keeps the position across restarts, so a question
     asked while the container was being rebuilt is answered when it comes back, not dropped."""
 
     def __init__(self, cfg: dict, on_message, persist=None, offset: int = 0,
@@ -531,7 +544,9 @@ class TelegramPoller:
                                     "(@%s)", chat, (m.get("from") or {}).get("username", "?"))
                     continue
                 try:
-                    await self.on_message(text, chat, m.get("message_id"))
+                    r = reply_of(m)
+                    await self.on_message(text, chat, m.get("message_id"),
+                                          **({"reply": r} if r else {}))
                 except Exception:
                     log.exception("telegram chat: handling %r failed", text[:60])
 
