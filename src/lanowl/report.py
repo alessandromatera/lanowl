@@ -19,6 +19,7 @@ from .sweep import OLLAMA_KEY, Snapshot
 _SEV = {"critical": "critical", "high": "high", "warning": "warning", "low": "info", "info": "info"}
 _SEV_RANK = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 _EMOJI = {"critical": "🔴", "high": "🟠", "warning": "🟡", "info": "⚪", "ok": "🟢"}
+_HOO = re.compile(r"^\s*(🦉\s*)?Hoo\.\s*")       # the owl's call, once a message: not in a list line
 
 
 @dataclass
@@ -888,6 +889,21 @@ def format_digest(report: dict, now: Optional[float] = None,
                          f"{_html(_short(d.get('root_cause'), 140))}"
                          + (f" → {_html(_short(d.get('recommendation'), 100))}"
                             if d.get("recommendation") else ""))
+
+    # What a device's own log showed that was not normal, from a device that does not page
+    # (devwatch.py): one line a device, its newest note, and how many since the last digest.
+    logs = report.get("log_news") or []
+    if logs:
+        worst = "warning" if any(g.get("severity") in ("critical", "warning") for g in logs) else "info"
+        lines.append(f"{_EMOJI[worst]} <b>Device logs</b> <i>(the owl's read — the dashboard has the lines)</i>")
+        for g in logs[:6]:
+            s = _HOO.sub("", str(g.get("summary") or ""))
+            # the owl names the device itself most of the time: then not twice
+            who = "" if g.get("ip") and f"({g['ip']})" in s else _html(label(g.get("name"), g.get("ip"), idx)) + ": "
+            lines.append(f"• {who}{_html(_short(s, 320))}"
+                         + (f" <i>({g['n']} times since the last digest)</i>" if g.get("n", 1) > 1 else ""))
+        if len(logs) > 6:
+            lines.append(f"…and {len(logs) - 6} more on the dashboard")
 
     # Brief internet drops under the paging floor. Not "covered by the backup": a short drop
     # may never reach the failover at all, with the router's own pings never failing

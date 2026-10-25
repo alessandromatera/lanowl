@@ -121,5 +121,8 @@ each event, a logout, and lanowl's own logins (by the address the device saw the
 is left is marked when lanowl recognises it — `[link]`, `[reboot]`, `[storage]`, `[hardware]`,
 `[memory]`, `[login]`, `[failed-login]`, `[config]` — and the owl reads it with what lanowl knows
 about the device: its ports, what lanowl itself did to it in that hour, and the internet at the
-time. Normal gets no message. For the first `quiet_days` (7) nothing is sent: what the owl would
-have said is on the Timeline and under **Log checks**, so you can read it first.
+time. Normal gets no message. What is not normal comes at once from a `criticality: critical`
+device; from any other it waits for the next digest, unless the owl reads someone getting in or
+the device about to fail ([How alerts work](../using/alerts.md#a-port-slower-a-devices-own-log)).
+For the first `quiet_days` (7) nothing is sent: what the owl would have said is on the Timeline
+and under **Log checks**, so you can read it first.

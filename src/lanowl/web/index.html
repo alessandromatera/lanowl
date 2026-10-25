@@ -2117,7 +2117,7 @@ function tlRow(d, x, inSheet) {
     more += storyHtml(x);
   } else if (x.type === "check") {
     ico = x.problem ? (SEV[x.severity] === "red" ? "red" : "orange") : "gray"; i = x.problem ? "warn" : "check";
-    t = noCall(x.summary); m.push(x.source || "", x.problem ? x.severity : "fine", fKind(x));
+    t = noCall(x.summary); m.push(x.source || "", x.problem ? x.severity : "fine", fKind(x), fDoor(x));
     const lip = logIp(d, x);
     if (lip && (d.devices || []).some(v => v.ip === lip)) attr = ` data-ip="${esc(lip)}"`;   // its log's machine
     if (x.problem && x.detail) more = `<div class="rs clamp" data-act="more">${esc(x.detail)}</div>`;
@@ -2995,12 +2995,14 @@ async function unhandle(id) {
 // security or health by the model; one without a label counts as security from a host's auth
 // log, health from the router's.
 const fKind = x => x.kind || (String(x.source || "").startsWith("host log") ? "security" : "health");
+// where a device log's note went (devwatch.py): kept in the first week, or the digest's
+const fDoor = x => x.held ? "kept, not sent" : x.digest ? "for the digest" : "";
 function logsHtml(d, logs) {
   // every log check of the last 48 hours, the same count as the Timeline's: the problems, then
   // the latest fine ones — each opens to the lines it read
   const bad = logs.filter(f => f.problem), fine = logs.filter(f => !f.problem);
   const row = f => `<div class="row"${logIp(d, f) && (d.devices || []).some(v => v.ip === logIp(d, f)) ? ` data-ip="${esc(logIp(d, f))}" data-focus="chk:${esc(Number(f.ts).toFixed(3))}"` : ""}><span class="sd c-${f.problem ? (SEV[f.severity] === "red" ? "red" : "orange") : "gray"}"></span><span class="rt"><span class="rn wrap">${esc(noCall(f.summary))}</span>
-    <span class="rs wrap">${esc(hmd(f.ts, NOW))} · ${esc(f.source || "")} · ${esc(f.problem ? f.severity : "fine")}</span>
+    <span class="rs wrap">${esc(hmd(f.ts, NOW))} · ${esc(f.source || "")} · ${esc(f.problem ? f.severity : "fine")}${fDoor(f) ? " · " + esc(fDoor(f)) : ""}</span>
     ${(f.log || []).length ? `<details class="pkl" data-how="${esc("lgl:" + f.ts)}"${CH.how.has("lgl:" + f.ts) ? " open" : ""}><summary>The ${f.log.length} line${f.log.length > 1 ? "s" : ""} it read${ic("chev")}</summary><div class="wlog">${esc(f.log.join("\n"))}</div></details>` : ""}</span></div>`;
   return `<div class="sh">Log checks <span class="r">48 h · ${logs.length} check${logs.length === 1 ? "" : "s"} · ${bad.length ? `${bad.length} a problem` : "none a problem"}</span></div><div class="list">` +
     (logs.length ? [...bad, ...fine.slice(0, 3)].map(row).join("") : `<div class="empty">No log was read in 48 hours.</div>`) +
@@ -3385,7 +3387,8 @@ function detailsHtml() {
   // its own log, hourly (devwatch.py), and by lanowl's key its auth log every two minutes (hostlog.py)
   const DL = I.devlog || {};
   h += kv("Its log", esc([DL.read ? "read every hour; the owl tells what is not routine"
-    + (DL.quiet_until > NOW ? ` — kept, not sent, until ${dmy(DL.quiet_until)}` : "") : "",
+    + (DL.quiet_until > NOW ? ` — kept, not sent, until ${dmy(DL.quiet_until)}`
+      : DL.at_once ? " — at once, a critical device" : " — in the next digest; at once only for someone getting in or the device about to fail") : "",
     I.host_log ? "its auth log every two minutes" : "",
     DL.error ? "✗ " + DL.error : ""].filter(Boolean).join(" · ")));
   h += kv("Login", I.login_known ? "known — in secrets.yaml" : "none: lanowl cannot log in");

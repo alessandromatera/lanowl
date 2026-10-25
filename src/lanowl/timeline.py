@@ -320,7 +320,8 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
             others.append({"type": "check", "id": f"chk:{f['ts']:.3f}", "ts": f["ts"], "source": f.get("source"),
                            "problem": bool(f.get("problem")), "severity": f.get("severity"),
                            "kind": f.get("kind"), "summary": f.get("summary"), "detail": f.get("detail"),
-                           "log": list(f.get("log") or [])})
+                           "log": list(f.get("log") or []),
+                           **{k: True for k in ("held", "digest") if f.get(k)}})
     news = []
     for r in seen:
         if (r.get("first_seen") or 0) >= since and not r.get("before"):

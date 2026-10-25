@@ -136,7 +136,8 @@ Every device with `manage: [logs]` — a MikroTik access point, OpenWrt, UniFi, 
 machine — also has its own log read once an hour (`devwatch`; on a Linux machine the journal's
 errors and kernel lines, and its auth lines too when the two-minute read above does not cover
 it): a login that does not fit and failed passwords again and again are the owl's to tell, with
-the device's own lines ([Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)).
+the device's own lines — at once from a critical device or when it reads like someone getting
+in, else in the next digest ([Device kinds](../reference/kinds.md#every-hour-its-ports-and-its-log)).
 
 Each security event stays in To decide until you mark it **handled**.
 

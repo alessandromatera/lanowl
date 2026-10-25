@@ -22,6 +22,10 @@ Two reads, one login a device:
             tags what it recognises (a link, a reboot, a disk); the owl reads the rest and says
             something only when it is not normal. Nothing is sent for the first `quiet_days`: the
             verdicts are kept, so what would have been said can be read before anything is.
+            Then by the two doors of a device going down (alerts.md): a `critical` device's note,
+            or a critical verdict from any device, at once; every other device's waits for the
+            next digest, one line a device. Such a note never sends a digest by itself — the
+            first digest after MORNING_H goes for one that has waited since before that morning.
 
 Not read here: the main router's log (wanwatch.py, every minute over the same connection) and a
 Linux host's auth log when lanowl's key reads it every two minutes (hostlog.py).
@@ -62,6 +66,8 @@ ANCHOR_N = 40           # the last lines of a read, remembered: where the next r
 RECENT_N = 30           # lines worth a look kept a device, for its sheet
 PENDING_MAX = 200       # lines waiting for the owl (it was busy, or off)
 FINDINGS_N = 30
+DIGEST_MAX = 100        # notes waiting for the next digest
+MORNING_H = 8           # a note waiting since before this hour sends the first digest after it
 
 # --- the commands --------------------------------------------------------------------------------
 # Every section starts with a marker line, so one login answers both reads.
@@ -888,10 +894,15 @@ class DevWatch:
         problem = bool(v.get("problem"))
         summary = str(v.get("summary") or "").strip()
         held = problem and sev in self.notify and now < self.quiet_until
+        # the door: at once from a critical device, or for a critical verdict; else the digest
+        dev = self.a.inv.get(t.ip)
+        later = (problem and sev in self.notify and not held and sev != "critical"
+                 and (dev is None or dev.criticality != "critical"))
         f = {"ts": now, "source": f"device log {t.name}", "ip": t.ip, "lines": len(batch),
              "problem": problem, "kind": verdict_kind(v, "health"), "severity": sev,
              "summary": summary[:200], "detail": str(v.get("detail") or "")[:1500],
-             "log": kept_lines(batch), **({"held": True} if held else {})}
+             "log": kept_lines(batch), **({"held": True} if held else {}),
+             **({"digest": True} if later else {})}
         self.findings = (self.findings + [f])[-FINDINGS_N:]
         if self.on_event is not None:
             try:
@@ -905,10 +916,18 @@ class DevWatch:
         notify = sev in self.notify and not held
         if seclog is not None and f["kind"] == "security" and sev in ("critical", "warning"):
             seclog.add(source=f["source"], ip=t.ip, sev=sev, title=summary or "a login that does not fit",
-                       detail=f["detail"], by="model", paged=notify)
+                       detail=f["detail"], by="model", paged=notify and not later)
         if held:
             log.info("devwatch: %s: %s — kept, not sent (the first %g days)", t.name, summary[:80],
                      self.quiet_days)
+            return
+        if later:
+            self.rec["digest"] = (list(self.rec.get("digest") or [])
+                                  + [{"ts": now, "ip": t.ip, "name": t.name, "severity": sev,
+                                      "summary": summary[:500]}])[-DIGEST_MAX:]
+            self._save()
+            log.info("devwatch: %s: %s — for the next digest (a %s device)", t.name, summary[:80],
+                     dev.criticality if dev is not None else "removed")
             return
         if not notify:
             return
@@ -916,6 +935,39 @@ class DevWatch:
         self.on_alert(f"{emoji} <b>DEVICE LOG</b> {time.strftime('%H:%M:%S')} — <b>{_html(label(t.name, t.ip))}</b>\n"
                       + (f"🦉 {_html(summary)}" if summary else "something unusual in its log")
                       + f"\n<i>from {len(batch)} new log line(s)</i>", f"devlog:{t.ip}")
+
+    # --- the digest ------------------------------------------------------------------------------
+    def digest_news(self) -> list:
+        """The notes waiting for the next digest, one a device, the latest device first: its
+        newest summary, how many notes, the worst severity."""
+        rank = {"critical": 2, "warning": 1}
+        by: dict = {}
+        for n in self.rec.get("digest") or []:
+            g = by.setdefault(n["ip"], {"ip": n["ip"], "name": n.get("name") or "", "n": 0,
+                                        "severity": "info", "first": n["ts"]})
+            g.update(n=g["n"] + 1, summary=n.get("summary") or "", last=n["ts"], name=n.get("name") or g["name"])
+            if rank.get(n.get("severity"), 0) > rank.get(g["severity"], 0):
+                g["severity"] = n["severity"]
+        return sorted(by.values(), key=lambda g: -g["last"])
+
+    def digest_due(self, now: Optional[float] = None) -> bool:
+        """A note has waited since before the last MORNING_H: the next digest goes for it."""
+        notes = self.rec.get("digest") or []
+        if not notes:
+            return False
+        now = time.time() if now is None else now
+        lt = time.localtime(now)
+        morning = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, MORNING_H, 0, 0, 0, 0, -1))
+        if now < morning:
+            morning = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday - 1, MORNING_H, 0, 0, 0, 0, -1))
+        return min(float(n["ts"]) for n in notes) < morning
+
+    def digest_told(self, upto: float):
+        """A digest carried the notes up to `upto`."""
+        left = [n for n in self.rec.get("digest") or [] if float(n["ts"]) > upto]
+        if len(left) != len(self.rec.get("digest") or []):
+            self.rec["digest"] = left
+            self._save()
 
     # --- the dashboard ---------------------------------------------------------------------------
     def ports_of(self, ip: str) -> list:
@@ -938,7 +990,9 @@ class DevWatch:
         d = self.rec["dev"].get(ip) or {}
         if t is None and not d:
             return {}
+        dev = self.a.inv.get(ip)
         return {"read": bool(t and t.logs), "ports": bool(t and t.ports) or ip == router_host(self.a.cfg),
+                "at_once": bool(dev is not None and dev.criticality == "critical"),
                 "every_h": self.every_s / 3600, "last": d.get("last"), "ok": d.get("ok"),
                 "error": d.get("error") or d.get("log_error") or "", "routine": d.get("routine") or 0,
                 "recent": list(d.get("recent") or [])[-10:][::-1],

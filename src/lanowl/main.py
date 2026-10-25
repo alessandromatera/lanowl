@@ -1465,6 +1465,10 @@ class Auditor:
         # what the model's scheduled looks found that no digest has carried yet (reviews.py):
         # news of its own, once — the network may be healthy and still slowly getting worse
         news = self._review_news()
+        # what a device's log showed, from a device that does not page (devwatch.py): it rides
+        # any digest, and sends one only when it has waited since before this morning
+        logs_due = self.devwatch.digest_due(now)
+        logs_why = "device-log notes waiting since before this morning"
 
         if forced:
             self._send_digest(report, now, "requested")
@@ -1474,6 +1478,9 @@ class Auditor:
             if n_news:
                 self._send_digest(report, now, f"{n_news} new from the model's reviews")
                 return f"sent: {n_news} new from the model's reviews"
+            if logs_due:
+                self._send_digest(report, now, logs_why)
+                return "sent: " + logs_why
             if self.cad.get("digest_when_ok", False):
                 self._send_digest(report, now, "all-clear (digest_when_ok)")
                 return "sent: all clear (digest_when_ok)"
@@ -1500,6 +1507,9 @@ class Auditor:
         if n_news:
             self._send_digest(report, now, f"{n_news} new from the model's reviews")
             return f"sent: {n_news} new from the model's reviews"
+        if logs_due:
+            self._send_digest(report, now, logs_why)
+            return "sent: " + logs_why
         if stale:
             self._send_digest(report, now, "daily reminder, still open")
             return "sent: the daily reminder of a problem still open"
@@ -1573,6 +1583,8 @@ class Auditor:
                                  for r, items in news.items()]
         for r, items in news.items():
             r.mark_told([k for k, _ in items])
+        report["log_news"] = self.devwatch.digest_news()
+        self.devwatch.digest_told(now)
         self._date_issues(report)
         self._last_digest_fp = digest_fingerprint(report)
         self._last_digest_sent = now
