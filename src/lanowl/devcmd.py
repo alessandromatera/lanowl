@@ -63,19 +63,57 @@ def family(kind: str, profiles=()) -> str:
 
 # --- what comes back --------------------------------------------------------------------
 # A setting whose name says it is secret, in the forms devices print them: `key=v`, `key: v`,
-# `"key": "v"`, `option key 'v'` (OpenWrt's files), `PrivateKey = v` (WireGuard).
-_SECRET = (r"[\w.-]*?(?:pass(?:word|wd|phrase)?|secret|psk|private[-_]?key|pre[-_]?shared[-_]?key"
-           r"|(?<![a-z])key|token|community)")
-_VALUE = r"(\"[^\"\n]*\"|'[^'\n]*'|[^\s,;}\]]+)"
+# `"key": "v"`, `option key 'v'` (OpenWrt's files), `PrivateKey = v` (WireGuard), `--password v`
+# and `password v` at a line's start; a URL's password, a Bearer or Basic credential; a table's
+# column of them (RouterOS's `/ppp secret print`: PASSWORD).
+# Each name is tried from its start only (?<!…): from every letter of a long run, it took minutes.
+_SECRET = (r"(?<![\w.-])[\w.-]*?(?:pass(?:word|wd|phrase)?|pwd|secret|psk|private[-_]?key"
+           r"|pre[-_]?shared[-_]?key|(?:api|auth|access|session|license)[-_]?key|(?<![a-z])key\d*"
+           r"|(?<![a-z])pin|token|community)")
+_SQ = r"'(?:[^'\n]|'\\'')*'"                     # uci writes a ' inside a value as '\''
+_VALUE = r"(\"(?:[^\"\\\n]|\\.)*\"|" + _SQ + r"(?:[ \t]+" + _SQ + r")*|[^\s,;}\]]+)"
 _SET_RE = re.compile(r"(?i)(\"?" + _SECRET + r"\"?\s*[=:]\s*)" + _VALUE)
 _OPT_RE = re.compile(r"(?i)(\b(?:option|list)\s+" + _SECRET + r"\s+)" + _VALUE)
+_PAIR_RE = re.compile(r"(?im)((?:--|^[ \t]*)(?:pass(?:word|wd)?|pwd|secret|token|psk|key|"
+                      r"(?:api|auth)[-_]?key)\s+)(\S+)")
+_URL_RE = re.compile(r"(?i)((?<![\w+.-])[a-z][\w+.-]*://[^\s:/@]*:)([^\s@/]+)(?=@)")
+_HEAD_RE = re.compile(r"^ *(?:# +)?[A-Z][A-Z0-9-]*(?: +[A-Z][A-Z0-9-]*)* *$")   # one column too
+_AUTH_RE = re.compile(r"(?i)(\b(?:bearer|basic)\s+)([\w.~+/=-]{8,})")
 _HASH_RE = re.compile(r"\$(?:1|2[aby]?|5|6|y|apr1)\$[^\s:\"']+")
+_SECRET_NAME = re.compile(r"(?i)" + _SECRET)
+
+
+def secret_name(name: str) -> bool:
+    """A setting's name that says its value is secret: key, private_key, sae_password, wps_pin."""
+    return bool(_SECRET_NAME.fullmatch(name or ""))
 
 
 def _hide(m) -> str:
     v = m.group(2)
     q = v[0] if v[:1] in ("'", '"') else ""
     return m.group(1) + q + "***" + q
+
+
+def _mask_columns(text: str) -> str:
+    """Under a table's header, the cells of a secret column (PASSWORD, PRIVATE-KEY) become ***.
+    A blank line ends the table."""
+    lines, cols = text.split("\n"), None
+    for n, raw in enumerate(lines):
+        ln, cr = (raw[:-1], "\r") if raw.endswith("\r") else (raw, "")     # RouterOS ends in \r\n
+        if _HEAD_RE.match(ln):
+            heads = [(m.start(), m.group()) for m in re.finditer(r"[A-Z#][A-Z0-9-]*", ln)]
+            cols = [(s, heads[k + 1][0] if k + 1 < len(heads) else None)
+                    for k, (s, h) in enumerate(heads)
+                    if secret_name(h.lower()) and not h.startswith("PUBLIC")] or None
+        elif not ln.strip():
+            cols = None
+        elif cols:
+            for s, e in cols:
+                cell = ln[s:e] if e else ln[s:]
+                if cell.strip():
+                    ln = ln[:s] + "***".ljust(len(cell)) + (ln[e:] if e else "")
+            lines[n] = ln + cr
+    return "\n".join(lines)
 
 
 def mask_secrets(text: str, also=()) -> str:
@@ -85,8 +123,12 @@ def mask_secrets(text: str, also=()) -> str:
     for s in also:
         if s and len(s) >= 4:
             text = text.replace(s, "***")
+    text = _URL_RE.sub(lambda m: m.group(1) + "***", text)
+    text = _AUTH_RE.sub(lambda m: m.group(1) + "***", text)
     text = _OPT_RE.sub(_hide, text)
     text = _SET_RE.sub(_hide, text)
+    text = _PAIR_RE.sub(_hide, text)
+    text = _mask_columns(text)
     return _HASH_RE.sub("$***", text)
 
 
@@ -204,13 +246,15 @@ _READ_EXACT = {"/proc/" + x for x in (
     "/var/lib/misc/dnsmasq.leases"}
 _READ_UNDER = ("/proc/net/", "/proc/sys/net/", "/sys/", "/var/log/", "/etc/config/",
                "/tmp/resolv.conf.d/", "/tmp/state/", "/tmp/sysinfo/", "/tmp/log/")
+_READ_NOT = ("/sys/kernel/debug/", "/sys/kernel/tracing/")   # trace_pipe waits, and eats the trace
 
 
 def readable(path: str) -> bool:
     if not path.startswith("/") or ".." in path.split("/"):
         return False
     p = posixpath.normpath(path)
-    return p in _READ_EXACT or any(p.startswith(d) for d in _READ_UNDER)
+    return (p in _READ_EXACT or any(p.startswith(d) for d in _READ_UNDER)) and \
+        not (p + "/").startswith(_READ_NOT)
 
 
 def _files(args: list, letters="", valued=(), val_ok=None, need=1) -> str:
@@ -253,12 +297,14 @@ def _ip(args):
 def _systemctl(args):
     read = {"status", "is-active", "is-enabled", "is-failed", "list-units", "list-unit-files",
             "list-timers", "list-sockets", "list-dependencies", "show", "cat"}
-    pos = [a for a in args if not a.startswith("-")]
-    if pos and pos[0] not in read:
-        return f"systemctl {pos[0]} is not on its read-only list (status, show, list-units, …)"
-    return _opts([a for a in args if a != (pos[0] if pos else None)], "alq",
-                 valued=("--type", "-t", "--state", "-n", "--lines", "-p", "--property",
-                         "-o", "--output"),
+    valued = ("--type", "-t", "--state", "-n", "--lines", "-p", "--property", "-o", "--output")
+    # the verb is the first word that is not a flag's value: `-p status reboot` reboots
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i] in valued else 1
+    if i < len(args) and args[i] not in read:
+        return f"systemctl {args[i]} is not on its read-only list (status, show, list-units, …)"
+    return _opts(args[:i] + args[i + 1:], "alq", valued=valued,
                  longs=("--no-pager", "--plain", "--no-legend", "--all", "--full", "--failed",
                         "--value"), pos=(0, -1), pos_ok=lambda a: bool(_NAME.match(a)))
 
@@ -293,7 +339,9 @@ def _docker(args):
                      val_ok=lambda f, v: f not in ("--tail", "-n") or v == "all" or
                      (_INT.match(v) and int(v) <= 2000))
     if sub == "stats":
-        if "--no-stream" not in rest:
+        # its own word, not the value --format takes: `--format --no-stream` streams forever
+        if not any(a == "--no-stream" and (i == 0 or rest[i - 1] != "--format")
+                   for i, a in enumerate(rest)):
             return "docker stats needs --no-stream (it would never end)"
         return _opts(rest, "a", valued=("--format",), longs=("--no-stream", "--all", "--no-trunc"),
                      pos=(0, -1), pos_ok=lambda a: bool(_NAME.match(a)))
@@ -352,12 +400,16 @@ def _ubus(args):
             return f"ubus {obj} is not on its read-only list"
         if not re.match(r"^(status|dump|board|info|list\w*|get\w*|get_\w+|scan_results)$", method):
             return f"ubus {obj} {method} is not on its read-only list (status, dump, info, get…)"
+        arg = {}
         if len(rest) == 4:
             try:
-                if not isinstance(json.loads(rest[3]), dict):
-                    return "ubus's argument is a JSON object"
+                arg = json.loads(rest[3])
             except ValueError:
+                arg = None
+            if not isinstance(arg, dict):
                 return "ubus's argument is a JSON object"
+        if obj == "uci" and secret_name(str(arg.get("option") or "")):
+            return f"ubus call uci get of {arg['option']} gives a secret bare — uci show masks it"
         return ""
     return f"ubus {rest[0]} is not on its read-only list"
 
@@ -432,7 +484,9 @@ SH_READ = {
     "mount": lambda a: _opts(a), "findmnt": lambda a: _opts(a, "lD", pos=(0, 1)),
     "ps": lambda a: "",                          # ps changes nothing, whatever it is asked
     "top": lambda a: _form(a, ("-b", "-n", "1"), ("-bn1",), ("-b", "-n1"), ("-n", "1", "-b")),
-    "vmstat": lambda a: _opts(a, "swatdSa", pos=(0, 2), pos_ok=lambda x: _INT.match(x) and int(x) <= 5),
+    "vmstat": lambda a: _opts(a, "swatdSa", pos=(0, 2), pos_ok=lambda x: _INT.match(x) and 1 <= int(x) <= 5)
+    or ("a delay needs a count after it (it would never end)"
+        if len([x for x in a if not x.startswith("-")]) == 1 else ""),
     "sensors": lambda a: _opts(a, "Auj", pos=(0, -1), pos_ok=lambda x: bool(_NAME.match(x))),
     "vcgencmd": lambda a: _form(a, ("measure_temp",), ("get_throttled",), ("version",),
                                 ("measure_volts",), ("measure_volts", "ANY"),
@@ -452,10 +506,14 @@ SH_READ = {
                                ("sources",), ("sources", "-v"), ("sourcestats",), ("activity",),
                                ("ntpdata",), ("serverstats",)),
     "ntpq": lambda a: _opts(a, "pnw"),
+    # -l names a log; with values (scterc,70,70) it sets the drive
     "smartctl": lambda a: _opts(a, "aHiAxcj", valued=("-d", "-l"), longs=("--scan", "--all"),
-                                pos=(0, 1), pos_ok=lambda x: x.startswith("/dev/")),
+                                pos=(0, 1), pos_ok=lambda x: x.startswith("/dev/"),
+                                val_ok=lambda f, v: f != "-l" or bool(re.match(r"^[a-z]+$", v))),
     "docker": _docker,
-    "lsof": lambda a: "",                        # lsof only lists
+    # lsof only lists; -r and +r list again and again
+    "lsof": lambda a: "lsof -r repeats forever" if any(
+        x[:1] in "-+" and "r" in x[1:] for x in a if x) else "",
     # packages
     "opkg": lambda a: _form(a, ("list-installed",), ("list-installed", "ANY"),
                             ("list-upgradable",), ("info", "ANY"), ("status", "ANY"),
@@ -474,9 +532,13 @@ SH_READ = {
     "route": lambda a: _form(a, (), ("-n",), ("-e",), ("-ne",), ("-en",), ("-n", "-e"),
                              ("get", "ANY"), ("-n", "get", "ANY")),
     "netstat": lambda a: _opts(a, "anptulrisewxveg46WA"),
-    "ss": lambda a: "" if not any(x in ("--kill", "--events") or (x.startswith("-") and not
-                                  x.startswith("--") and set(x[1:]) & {"K", "E"}) for x in a)
-                       else "ss --kill and --events are not reads",
+    # its own flags only: -K kills, -E never ends, -D writes a file, and a long flag may be cut
+    # short (--kil); the words left are a filter (state established dport = :22)
+    "ss": lambda a: _opts(a, "tuwxanlpmoeisr46HOb", valued=("-f", "--family", "-A", "--query"),
+                          longs=("--tcp", "--udp", "--raw", "--unix", "--all", "--listening",
+                                 "--numeric", "--resolve", "--processes", "--extended", "--info",
+                                 "--memory", "--options", "--summary", "--ipv4", "--ipv6",
+                                 "--no-header", "--oneline"), pos=(0, -1)),
     "arp": lambda a: _opts(a, "anev", pos=(0, 1), pos_ok=lambda x: bool(_NAME.match(x))),
     "bridge": lambda a: "" if [x for x in a if not x.startswith("-")][:1] in (
         ["link"], ["fdb"], ["vlan"], ["mdb"]) and [x for x in a if not x.startswith("-")][1:2] in (
@@ -493,16 +555,22 @@ SH_READ = {
     "iwinfo": lambda a: _form(a, (), ("NAME",), *[("NAME", w) for w in (
         "info", "assoclist", "freqlist", "txpowerlist", "countrylist", "htmodelist")]),
     "ubus": _ubus,
-    "uci": lambda a: _form([x for x in a if x not in ("-q", "-X", "-N")], ("show",),
-                           ("show", "ANY"), ("get", "ANY"), ("export",), ("export", "ANY"),
-                           ("changes",), ("changes", "ANY")),
+    # `get` prints a value bare: not a secret's, which nothing could mask then (show masks it)
+    "uci": lambda a: (lambda w: f"uci get {w[1]} gives a secret bare — uci show masks it"
+                      if w[:1] == ["get"] and len(w) == 2 and secret_name(w[1].rsplit(".", 1)[-1])
+                      else _form(w, ("show",), ("show", "ANY"), ("get", "ANY"), ("export",),
+                                 ("export", "ANY"), ("changes",), ("changes", "ANY")))(
+        [x for x in a if x not in ("-q", "-X", "-N")]),
     "swconfig": lambda a: _form(a, ("list",), ("dev", "NAME", "show"), ("dev", "NAME", "help"),
                                 ("dev", "NAME", "get", "ANY"), ("dev", "NAME", "port", "INT", "show"),
                                 ("dev", "NAME", "port", "INT", "get", "ANY"),
                                 ("dev", "NAME", "vlan", "INT", "show"),
                                 ("dev", "NAME", "vlan", "INT", "get", "ANY")),
-    "wg": lambda a: _form(a, (), ("show",), ("show", "NAME"), ("show", "NAME", "ANY"),
-                          ("showconf", "NAME")),
+    # not private-key, preshared-keys or dump: they print a key bare, with no name to mask it by
+    "wg": lambda a: _form(a, (), ("show",), ("show", "NAME"), ("showconf", "NAME"), *[
+        ("show", "NAME", f) for f in ("public-key", "listen-port", "fwmark", "peers", "endpoints",
+                                      "allowed-ips", "latest-handshakes", "persistent-keepalive",
+                                      "transfer")]),
     "ethtool": lambda a: _form(a, ("NAME",), *[(f, "NAME") for f in (
         "-i", "-S", "-m", "-a", "-k", "-g", "-c", "-l", "-T", "-P", "--driver", "--statistics",
         "--module-info", "--show-features", "--show-ring", "--show-coalesce", "--show-channels",
@@ -517,7 +585,8 @@ SH_READ = {
     "nslookup": lambda a: _opts(a, longs=tuple(f"-type={t}" for t in (
         "a", "aaaa", "mx", "ns", "txt", "ptr", "soa", "srv", "cname", "any")), pos=(1, 2),
         pos_ok=lambda x: bool(_NAME.match(x))),
-    "dig": lambda a: "",                         # a DNS question; dig changes nothing
+    # a DNS question; not -f (a file's lines sent as questions) nor -k (a key file)
+    "dig": lambda a: _opts(a, "46", valued=("-t", "-x", "-p", "-q", "-c"), pos=(0, -1)),
     "nmcli": _nmcli,
     # ESXi
     "esxcli": _esxcli,
@@ -579,8 +648,9 @@ _ROS_WRITE = {"add", "set", "remove", "disable", "enable", "reset", "reboot", "s
               "bandwidth-test", "blink", "cable-test", "generate", "sign", "renew", "release",
               "cancel", "resume", "stop", "start", "restore", "erase", "format-drive",
               "disconnect", "reconnect", "kill", "factory-reset"}
-_ROS_VERB_ARGS_BAD = ("file=", "interval=", "follow", "follow-only", "show-sensitive", "append",
-                      "duration=")
+# a name cut short counts too: RouterOS may read `fil=` as file=, `foll` as follow
+_ROS_VERB_ARGS_BAD = ("file", "interval", "follow", "follow-only", "show-sensitive", "append",
+                      "duration")
 
 
 def _ros_words(cmd: str) -> list:
@@ -611,8 +681,8 @@ def ros_readonly(cmd: str) -> tuple:
     w = next((w for w in menu if w in _ROS_WRITE or not re.match(r"^[a-z0-9-]+$", w)), None)
     if w is not None:
         return False, f"‘{w}’ is not part of a menu it only reads"
-    a = next((x for x in args if x.split("=", 1)[0] + ("=" if "=" in x else "")
-              in _ROS_VERB_ARGS_BAD or x in _ROS_VERB_ARGS_BAD), None)
+    a = next((x for x in args if x.split("=", 1)[0] and
+              any(b.startswith(x.split("=", 1)[0]) for b in _ROS_VERB_ARGS_BAD)), None)
     if a is not None:
         return False, f"‘{a}’ makes it write a file, follow forever or show secrets"
     if verb == "monitor" and "once" not in args:
@@ -650,6 +720,8 @@ def api_parse(fam: str, cmd: str) -> tuple:
         body = _json_param(m.group(3) or "") if m else None
         if not m or body is None:
             return None, False, "a Home Assistant command is METHOD /api/… and an optional JSON body"
+        if ".." in m.group(2) or "%" in m.group(2):     # /api/../auth: the URL leaves /api
+            return None, False, "a Home Assistant path stays under /api/: no .. and no %"
         method = m.group(1) or "GET"
         ro = method == "GET" and not m.group(3)
         return ({"method": method, "path": m.group(2), "body": body or None}, ro,
@@ -995,8 +1067,13 @@ async def _http(method: str, url: str, body, headers: dict, timeout_s: float) ->
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_s)) as s:
             async with s.request(method, url, json=body, headers=headers,
                                  allow_redirects=False) as r:
-                raw = await r.read()
-                text = raw[:200_000].decode("utf-8", "replace")
+                raw = b""                       # a stream (a camera, /api/stream) stops here
+                while len(raw) < 200_000:
+                    chunk = await r.content.read(200_000 - len(raw))
+                    if not chunk:
+                        break
+                    raw += chunk
+                text = raw.decode("utf-8", "replace")
                 with contextlib.suppress(ValueError):
                     text = json.dumps(json.loads(text), indent=1, ensure_ascii=False)
                 if r.status != 200:
