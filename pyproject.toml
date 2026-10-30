@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",       # config, inventory, secrets
-    "aiohttp>=3.9",      # HTTP checks, the model, MikroTik REST, the dashboard
+    "aiohttp>=3.14.4",   # HTTP checks, the model, MikroTik REST, the dashboard
     "paho-mqtt>=1.6",    # optional MQTT: publish results, read existing topics
     "icmplib>=3.0",      # unprivileged ping; falls back to the system's `ping`
 ]
