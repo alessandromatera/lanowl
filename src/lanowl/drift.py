@@ -212,9 +212,10 @@ class Drift(FindingsReview):
             log.debug("drift: main-link outages unreadable", exc_info=True)
         for e in wanexplain.moments(self.a.state, start):
             i = int((e["ts"] - start) // 86400)
-            k = "no internet at all" if e["kind"] == "blackout" else "short blips" if e["kind"] == "blip" else ""
-            if k and 0 <= i < ncol:
-                per[k][i] += 1
+            # its own name: `k` is the main link's row, used again below
+            row = "no internet at all" if e["kind"] == "blackout" else "short blips" if e["kind"] == "blip" else ""
+            if row and 0 <= i < ncol:
+                per[row][i] += 1
         first = self.a.state.first_event_ts()
         if failover and covers is None:
             per[k] = ["UNKNOWN"] * ncol            # never read: not zero
