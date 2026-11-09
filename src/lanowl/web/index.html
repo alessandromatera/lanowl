@@ -428,6 +428,20 @@ html.kb .askside,html.kb .askseg{display:none}
 .fc .l{color:var(--ink2)}
 .fc.fup{color:var(--ink2)}
 @media (max-width:899px){.fc.nil{display:none}}
+/* a long list's fold: one line that says what it holds, opened in place */
+.fold{display:flex;align-items:center;gap:10px;width:100%;min-height:50px;padding:10px 14px;border:0;text-align:left;
+  background:color-mix(in srgb,var(--blue) 6%,transparent);color:inherit;font:inherit;cursor:pointer}
+.fold .ic{width:13px;height:13px;stroke-width:2.6;color:var(--blue-t);transition:transform .2s}
+.fold[aria-expanded="true"] .ic{transform:rotate(90deg)}
+.fold .ft{min-width:0;display:flex;flex-direction:column;gap:1px}
+.fold .fa{color:var(--blue-t);font-weight:600;font-size:15px}
+.fold .fb{font-size:13px;color:var(--ink2);overflow-wrap:anywhere}
+.tlr+.fold,.fold+.tlr{border-top:1px solid var(--sep)}
+.sh.tlday{width:calc(100% - 32px);margin-top:14px;min-height:34px;align-items:center;border:0;background:none;padding:0;text-align:left;font-family:inherit;cursor:pointer}
+.sh.tlday .ic{width:12px;height:12px;stroke-width:2.6;transition:transform .2s}
+.sh.tlday[aria-expanded="true"] .ic{transform:rotate(90deg)}
+.sh.tlday .r{white-space:nowrap}
+.sh.tlday .r b{color:var(--ink);font-weight:600}
 details.acc{margin-top:18px}
 details.acc>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--ink2);margin:0 16px 7px;min-height:32px}
 details.acc>summary::-webkit-details-marker{display:none}
@@ -1349,6 +1363,11 @@ const S = {d: null, tab: "home", scroll: {}, pane: load("pane", "events"), sched
            askp: load("askp", "chat"),
            lookAll: {}, cfgAll: false, scAll: false, fixFor: null, cp: []};   // the model's looks   // Ask below 1100px: the chat, or the model's side    // the Devices and Security tabs' site filter (sites.py)
 
+// the Timeline's folds, in this page only: the days tapped open (Today: tapped shut) and the days whose
+// routine log reads are open; a reload folds them again
+const TLD = {flip: new Set(), logs: new Set()};
+function tlDayOpen(k) { return (k === "Today") !== TLD.flip.has(k); }
+
 // ---------------------------------------------------------------- derived data
 // Outages per device from the logbook: an `up` carries how long it was down, an open `down`
 // runs until now. The payload holds at most 200 entries; when it is full, the time before
@@ -2188,15 +2207,25 @@ function renderLog(d) {
   put("tl-filters", TLF.map(([k, t]) => `<button class="chip" type="button" data-tlf="${k}" aria-pressed="${S.tlf === k}">${t} <span class="cnt">${cnt(k)}</span></button>`).join(""));
   put("tl-lanes", tlLanes(d));
   const shown = its.filter(x => shownIn(x, S.tlf));
-  let h = "", day = "";
-  for (const x of shown.slice(0, 500)) {
-    const k = dayName(x.ts);
-    if (k !== day) { h += `${day ? "</div>" : ""}<div class="sh">${esc(k)}</div><div class="list tll">`; day = k; }
-    h += tlRow(d, x);
+  // Today open, every other day one line with its count; inside a day its routine log reads are
+  // one line too. A jump to a row opens what holds it.
+  const days = new Map();
+  for (const x of shown) { const k = dayName(x.ts); if (!days.has(k)) days.set(k, []); days.get(k).push(x); }
+  if (S.tlGo) {
+    const x = shown.find(v => tlId(v) === S.tlGo);
+    if (x) { const k = dayName(x.ts); if (!tlDayOpen(k)) TLD.flip.has(k) ? TLD.flip.delete(k) : TLD.flip.add(k); if (routineIt(x)) TLD.logs.add(k); }
   }
-  if (day) h += "</div>";
+  let h = "";
+  for (const [k, rows] of days) {
+    const {rest, logs} = foldDay(rows), open = tlDayOpen(k);
+    const words = rest.length ? `<b>${rest.length}</b>${logs.length ? ` · ${logs.length} log read${logs.length > 1 ? "s" : ""}` : ""}` : `${logs.length} log read${logs.length > 1 ? "s" : ""}, nothing else`;
+    h += `<button class="sh tlday" type="button" data-act="tlday" data-day="${esc(k)}" aria-expanded="${open}">${ic("chev")}${esc(k)}<span class="r">${words}</span></button>`;
+    if (!open) continue;
+    const lo = TLD.logs.has(k);
+    h += `<div class="list tll">${rest.map(x => tlRow(d, x)).join("")}` +
+      (logs.length ? foldRow("tllogs", ` data-day="${esc(k)}"`, lo, `${logs.length} log read${logs.length > 1 ? "s" : ""}, nothing needed you`, esc(logsWhat(logs, hm))) + (lo ? logs.map(x => tlRow(d, x)).join("") : "") : "") + `</div>`;
+  }
   if (!shown.length) h = `<div class="list"><div class="empty">Nothing here in 7 days.</div></div>`;
-  if (shown.length > 500) h += `<div class="fine" style="margin:6px 4px">…and ${shown.length - 500} older. Ask can search them all.</div>`;
   if (S.tlf === "new") h += `<div id="tl-seen">${SEEN.open ? "" : `<button class="sbtn" type="button" data-act="seenall" style="margin:10px 0">Every device ever seen on the networks</button>`}</div>`;
   put("tl-body", h);
   if (S.tlf === "new" && SEEN.open) renderSeen(d);
@@ -3346,7 +3375,8 @@ function secHtml(d, ip) {
     h += `<div class="card" style="margin-top:${fs.length ? 10 : 0}px"><div class="mh"><b>Vulnerability scan</b><span class="fine" style="margin-left:auto">${(U.scan || {}).ts ? esc(clock(U.scan.ts)) : ""}</span></div>
       <div class="fine"${v.confirmed && !cf ? ' style="color:var(--red-t);font-weight:600"' : ""}>${esc(cap(v.words || ""))}</div>`
       + (cf ? `<div class="fine" style="margin-top:4px">${esc(disWords(cf))}</div>` : "")
-      + cveRows(v, 40)
+      // the verdict above says what they come to; each one, with its reason, behind a fold
+      + ((v.vulns || []).length ? `<details class="pkl" data-how="${esc("cve:" + ip)}"${CH.how.has("cve:" + ip) ? " open" : ""} style="margin-top:4px"><summary>The ${v.vulns.length} match${v.vulns.length > 1 ? "es" : ""}, one by one${ic("chev")}</summary>${cveRows(v, 40)}</details>` : cveRows(v, 40))
       + `<div class="fine" style="margin-top:8px">${cveHow((U.scan || {}).check || {})}</div></div>`;
   }
   return h;
@@ -3513,6 +3543,7 @@ function renderWan() {
 // ---------------------------------------------------------------- device sheet
 function openSheet(ip, focus) {
   S.sheet = ip; S.wan = null; S.hist = null; S.histAt = 0; S.histTries = 0; S.sheetProp = null; S.sheetFocus = focus || null;
+  if (S.whatAll !== ip) S.whatAll = null;        // another device: its week folded again
   devSetLeave();
   if (!TL.d && !TL.busy) loadTimeline();
   renderSheet();
@@ -3524,7 +3555,9 @@ function closeSheet() {
   const dlg = $("sheet");
   if (dlg.open) dlg.close();
 }
-$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; devSetLeave(); document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; $("sheet-in").__ip = null; });
+$("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; S.whatAll = null; devSetLeave();
+  for (const k of [...CH.how]) if (k.startsWith("cve:")) CH.how.delete(k);     // its folds close with it
+  document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; $("sheet-in").__ip = null; });
 $("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
 
 async function loadHist() {
@@ -3625,6 +3658,41 @@ function renderSheet() {
 }
 
 
+// A long list folds instead of scrolling on and on: what
+// matters stays in sight, the rest is one line that says what it holds and opens in place.
+// Nothing leaves the list — a jump to a row opens the fold that holds it.
+// fold-helpers: (pure functions)
+function routineIt(x) { return x.type === "check" && !x.problem; }   // a log read where nothing needed you
+// a device's week, folded: the newest five that are not drawn quiet; a short week is never folded
+function foldWhat(mine, open, quiet) {
+  if (open || mine.length <= 5) return {rows: mine, hidden: 0, routine: 0};
+  const rows = mine.filter(x => !quiet(x)).slice(0, 5);
+  return {rows, hidden: mine.length - rows.length, routine: mine.filter(routineIt).length};
+}
+// a Timeline day: its routine log reads apart, to be one line of their own
+function foldDay(rows) {
+  const logs = rows.filter(routineIt);
+  return {rest: logs.length ? rows.filter(x => !routineIt(x)) : rows, logs};
+}
+// "07:45–23:46 · Printer, Cabin router, the router…": what the line of log reads holds
+function logsWhat(logs, hm) {
+  const names = [...new Set(logs.map(x => String(x.source || "").replace(/^(device|host) log /, "").replace(/^router log$/, "the router")))];
+  const span = logs.length > 1 ? `${hm(logs[logs.length - 1].ts)}–${hm(logs[0].ts)}` : logs.length ? hm(logs[0].ts) : "";
+  return [span, names.slice(0, 4).join(", ") + (names.length > 4 ? "…" : "")].filter(Boolean).join(" · ");
+}
+// fold-helpers-end
+function foldRow(act, data, open, a, b) {
+  return `<button class="fold" type="button" data-act="${act}"${data} aria-expanded="${open}">${ic("chev")}<span class="ft"><span class="fa">${a}</span>${b ? `<span class="fb">${b}</span>` : ""}</span></button>`;
+}
+// a fold closed from the bottom of a long list: its line stays under the finger
+function keepFold(sel, scroller, draw) {
+  const el = document.querySelector(sel), y = el ? el.getBoundingClientRect().top : null;
+  draw();
+  const now = document.querySelector(sel);
+  if (y == null || !now) return;
+  const dy = now.getBoundingClientRect().top - y;
+  if (scroller) scroller.scrollTop += dy; else window.scrollBy(0, dy);
+}
 function whatHtml(d, ip, lbx) {
   if (!TL.d) return `<div class="sh">What happened <span class="r">7 days</span></div><div class="list"><div class="empty">Reading the week…</div></div>`;
   const named = (x, rx) => rx.test([x.summary, x.detail, ...(x.log || [])].join(" "));
@@ -3635,14 +3703,27 @@ function whatHtml(d, ip, lbx) {
     : x.type === "owl" ? (x.issues || []).some(v => rx.test(String(v.device || "")))
     : ["security", "config", "action", "new_device"].includes(x.type) ? x.ip === ip : false);
   if (!mine.length) return `<div class="sh">What happened <span class="r">7 days</span></div><div class="list"><div class="empty">${lbx.length ? "Nothing but what the week's bar shows." : "Nothing in seven days."}</div></div>`;
+  // opened at a row the fold holds (a tap elsewhere on an item about it): the whole week
+  let F = foldWhat(mine, S.whatAll === ip, quietIt);
+  if (F.hidden && S.sheetFocus && !F.rows.some(x => tlId(x) === S.sheetFocus) && mine.some(x => tlId(x) === S.sheetFocus)) {
+    S.whatAll = ip; F = foldWhat(mine, true, quietIt);
+  }
   // by day, as on the Timeline: a row's time alone does not say which day it was
   let h = `<div class="sh">What happened <span class="r">7 days · ${mine.length}</span></div>`, day = "";
-  for (const x of mine.slice(0, 60)) {
+  for (const x of F.rows) {
     const k = dayName(x.ts);
     if (k !== day) { h += `${day ? "</div>" : ""}<div class="fine shday">${esc(k)}</div><div class="list tll">`; day = k; }
     h += tlRow(d, x, true);
   }
-  return h + "</div>";
+  if (day) h += "</div>";
+  const all = S.whatAll === ip && mine.length > 5;
+  if (F.hidden || all) {
+    const top = foldWhat(mine, false, quietIt).rows.length, nw = mine[0];
+    h += `<div class="list">` + (all ? foldRow("whatall", "", true, "Show fewer", top > 1 ? `back to the newest ${top} that matter` : top ? "back to the newest that matters" : "back to one line")
+      : foldRow("whatall", "", false, `Show all ${mine.length}`, esc([F.routine ? `${F.routine} of them routine log reads, nothing needed you` : "",
+          `the newest ${sameDay(nw.ts, NOW) ? "today " : ""}${hmd(nw.ts, NOW)}`].filter(Boolean).join(" · ")))) + `</div>`;
+  }
+  return h;
 }
 function sheetFocusNow() {
   const f = S.sheetFocus;
@@ -3949,6 +4030,11 @@ document.addEventListener("click", async e => {
   else if (act === "seenall") { SEEN.open = true; renderLog(S.d); }
   else if (act === "lanes") { S.lanes = !S.lanes; save("lanes", S.lanes); renderLog(S.d); }
   else if (act === "tlgo") tlGo(t.dataset.id);
+  else if (act === "tlday" || act === "tllogs") {
+    const k = t.dataset.day, set = act === "tlday" ? TLD.flip : TLD.logs;
+    keepFold(`#tl-body [data-act="${act}"][data-day="${CSS.escape(k)}"]`, null, () => { set.has(k) ? set.delete(k) : set.add(k); renderLog(S.d); });
+  }
+  else if (act === "whatall") keepFold('#sheet [data-act="whatall"]', $("sheet"), () => { S.whatAll = S.whatAll === S.sheet ? null : S.sheet; renderSheet(); });
   else if (act === "tlowl") { S.tlf = "owl"; save("tlf", "owl"); setTab("log"); }
   else if (act === "openprop") openProp(+t.dataset.pid);
   else if (act === "pal") openPal();
@@ -4037,7 +4123,10 @@ document.addEventListener("click", async e => {
                   sitescan: "Scanning every site's networks — a few minutes."}[act] : r.error || "Could not do it.");
     refresh();
   } else if (act === "lbchecks") {
-    S.tlf = "sec"; save("tlf", S.tlf); setTab("log"); renderLog(S.d);
+    // the log checks' 48 hours: today and yesterday open, their log reads too
+    S.tlf = "sec"; save("tlf", S.tlf);
+    for (const k of ["Today", "Yesterday"]) { if (!tlDayOpen(k)) TLD.flip.has(k) ? TLD.flip.delete(k) : TLD.flip.add(k); TLD.logs.add(k); }
+    setTab("log"); renderLog(S.d);
   } else if (act === "updcheck" || act === "updscan") {
     const scan = act === "updscan";
     if ((S.d || {}).updates) { S.d.updates.running = {...(S.d.updates.running || {}), [scan ? "scan" : "check"]: true}; renderSec(S.d); }

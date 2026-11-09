@@ -66,7 +66,8 @@ item, under **What happened**:
 - **Overview**: down since when, the share of answers in 24 hours and seven days, its
   outages, a latency chart with lost probes, seven days as a bar.
 - **What happened**: its own seven days, by day: outages, the messages about them, the log checks
-  that name it, its configuration's changes, actions, and the owl's verdicts that named it.
+  that name it, its configuration's changes, actions, and the owl's verdicts that named it. A
+  long week shows the newest five that matter; **Show all** opens the whole week in place.
 - **Manage**: its **Alerts** switch, to pause it (still pinged and graphed, no alerts:
   [Pausing a device](pausing.md); Telegram is told), and the actions its kind allows, such as
   Reboot or Update, each confirmed in a sheet that says what runs.
@@ -85,7 +86,9 @@ item, under **What happened**:
 Seven days, everything lanowl saw, said and did: outages grouped into incidents, the
 internet, security events and log checks, the configurations' changes, the owl's verdicts (each
 time they changed), actions, new devices and every Telegram message. **Everything** shows all
-of it: the routine rows are drawn quiet, never left out.
+of it: the routine rows are drawn quiet, never left out. Today is open; every other day is one
+line with its count, and a tap opens it. Inside a day the routine log reads, where nothing
+needed you, are one line of their own that opens them all.
 
 Each event carries what was said about it: the Telegram message about it sits under it, not
 apart; a new device carries what the owl said and **the same story**, the log checks and
