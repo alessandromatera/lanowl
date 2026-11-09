@@ -2526,7 +2526,7 @@ const PST = {pending: ["Waiting for you", "blue"], running: ["Running", "indigo"
 const isLive = () => ((S.d || {}).actions || {}).mode === "live";
 const VIA = {telegram: "a Telegram question", dashboard: "a dashboard question", audit: "the audit"};
 // who asked: the model (from a question or the audit), or the owner's own press — which the page
-const fromWho = p => p.owner ? `you, on ${p.via === "telegram" ? "Telegram" : "the dashboard"}` : VIA[p.via] || p.via;
+const fromWho = p => p.after ? `lanowl, after #${p.after}` : p.owner ? `you, on ${p.via === "telegram" ? "Telegram" : "the dashboard"}` : VIA[p.via] || p.via;
 // which browser approved it (actions.decide records it since 10-08): a login can be shared
 const fromWhere = p => { const w = p.decided_from || {}; const t = [w.addr, w.agent, w.browser ? "login " + w.browser : ""].filter(Boolean).join(", ");
   return t ? `${p.status === "rejected" ? "rejected" : "approved"} from ${t}` : ""; };
@@ -2584,6 +2584,15 @@ function liveHtml(p) {
   h += `<div class="lm">Started ${esc(hm(p.started_ts))} · running ${esc(dur(now() - p.started_ts))}${p.deadline ? " · gives up at " + esc(hm(p.deadline)) : ""}</div>`;
   return h + `</div>`;
 }
+// An update that left a reboot pending is done, but not finished: say so, and point to the
+// reboot proposal it made (or that lanowl cannot reboot the machine).
+function rebootNote(o) {
+  const r = o.reboot_pid ? propById(o.reboot_pid) : null;
+  if (r && r.status === "done") return `<div class="pmeta">Finished by #${esc(r.id)} ${esc(r.title)}: ${esc(r.words || "done")}</div>`;
+  const where = !o.reboot_pid ? "lanowl cannot reboot it — reboot it yourself"
+    : r ? `#${r.id} ${esc(r.title)} — ${esc(r.status === "pending" ? "waiting for you" : r.words || r.status)}` : `#${esc(o.reboot_pid)}`;
+  return `<div class="prisk">${ic("warn")}<span>The update is done; a reboot finishes it — ${where}</span></div>`;
+}
 function propHtml(p) {
   if (p.action === "investigate") return sessHtml(p);
   const dry = p.mode !== "live", o = p.outcome || {}, busy = PBUSY[p.id] ? " disabled" : "";
@@ -2592,7 +2601,8 @@ function propHtml(p) {
   let h = `<div class="prop c-${st[1]}" data-pcard="${esc(p.id)}"><div class="ph"><span class="tagx">${esc(st[0])}</span><b>${esc(p.title)}</b><span class="pid">#${esc(p.id)} · ${esc(clock(p.ts))}</span></div>
     <div class="pdev">${esc(p.label)}</div>`;
   if (p.command) h += `<code class="pcmd">${esc(p.command)}</code>`;
-  if (p.reason) h += `<div class="diag">${ic("owl")}<div><i>${esc(p.reason)}</i></div></div>`;
+  // a reboot an update left pending is lanowl's own line, not the owl's words
+  if (p.reason) h += p.after ? `<div class="pmeta">${esc(p.reason)}</div>` : `<div class="diag">${ic("owl")}<div><i>${esc(p.reason)}</i></div></div>`;
   (p.risk || []).forEach(r => { h += `<div class="prisk">${ic("warn")}<span>${esc(r)}</span></div>`; });
   if (p.status === "pending") {
     h += (p.check ? `<div class="pmeta">Checked: ${esc(p.check)}</div>` : "") +
@@ -2610,6 +2620,7 @@ function propHtml(p) {
   } else if (o.ran !== undefined && (p.status === "done" || p.status === "failed")) {
     h += `<div class="pres${p.status === "failed" ? " bad" : ""}">${esc(cap(p.status === "done" ? o.result : o.error))}</div>` +
       ((o.lines || []).length ? `<pre class="pout">${esc(o.lines.join("\n"))}</pre>` : "") +
+      (p.status === "done" && o.reboot_pending ? rebootNote(o) : "") +
       `<div class="pmeta">From ${esc(fromWho(p))} · approved on ${esc(BY[p.decided_by] || p.decided_by)} at ${esc(hm(p.decided_ts))}${fromWhere(p) ? " · " + esc(fromWhere(p)) : ""}${o.secs != null ? " · took " + esc(dur(o.secs)) : ""}</div>`;
   } else {
     h += `<div class="pmeta">From ${esc(fromWho(p))}. ${esc(cap(p.words))}${p.status === "done" && o.check ? ". At approval: " + esc(o.check) : ""}.${fromWhere(p) ? " " + esc(cap(fromWhere(p))) + "." : ""}</div>`;
@@ -3252,6 +3263,11 @@ function machineState(d, x) {
   const o = (p || {}).outcome || {};
   const recent = p && p.done_ts && NOW - p.done_ts < 3600 && !(U.last_manual && U.last_manual > p.done_ts);
   const okDone = recent && p.status === "done", bad = recent && ["failed", "skipped"].includes(p.status);
+  // an update that left a reboot pending is not "Done" until that reboot has run
+  const rbRan = okDone && (A.recent || []).some(q => q.ip === x.ip && q.action === "reboot" && q.status === "done" && q.done_ts > p.done_ts);
+  const needRb = okDone && o.reboot_pending && !rbRan;
+  const rbp = needRb ? (A.pending || []).find(q => q.ip === x.ip && q.action === "reboot" && q.status === "pending") : null;
+  const rbRun = needRb && [...(A.pending || []), ...(A.recent || [])].some(q => q.ip === x.ip && q.action === "reboot" && q.status === "running");
   const refusedNow = p && p.status === "refused" && NOW - (p.ts || 0) < 120;
   const queued = p && p.status === "running" && p.queued, cancelled = recent && p.status === "cancelled";
   let btn = "";
@@ -3259,13 +3275,16 @@ function machineState(d, x) {
   else if (queued) btn = cancelBtn(p);
   else if (p && p.status === "running") btn = `<button class="rowbtn" disabled><span class="spin"></span>Updating…</button>`;
   else if (p && p.status === "pending") btn = `<button class="rowbtn" type="button" data-act="approve" data-pid="${p.id}">Approve</button>`;
+  else if (rbp) btn = `<button class="rowbtn" type="button" data-act="approve" data-pid="${rbp.id}">${ic("power")}Approve reboot</button>`;
+  else if (rbRun) btn = `<button class="rowbtn" disabled><span class="spin"></span>Rebooting…</button>`;
   else if (inst) btn = `<button class="rowbtn${bad ? " bad" : ""}" type="button" data-act="upgrade" data-uip="${esc(x.ip)}">${bad ? ic("xo") + "Retry" : "Update"}</button>`;
-  else if (okDone) btn = `<span class="rowbtn ok">${ic("check")}Done</span>`;
+  else if (okDone && !needRb) btn = `<span class="rowbtn ok">${ic("check")}Done</span>`;
   else if (bad) btn = `<span class="rowbtn bad">${ic("xo")}Failed</span>`;
   const res = queued ? `<span class="rs wrap">Queued ${esc(p.queue)}</span>`
     : p && p.status === "running" ? `<span class="rs wrap" style="color:var(--indigo)">${esc(stepLine(p))}</span>`
     : cancelled ? `<span class="rs wrap">Cancelled before its turn — nothing was done</span>`
-    : okDone ? `<span class="rs ok wrap">✓ ${esc(o.result || "done")}</span>`
+    : needRb ? `<span class="rs warn wrap">✓ ${esc(o.updated || o.result || "done")} · a reboot finishes them${o.reboot_by_hand ? " — reboot it yourself" : ""}</span>`
+    : okDone ? `<span class="rs ok wrap">✓ ${esc(rbRan && o.updated ? o.updated : o.result || "done")}</span>`
     : bad ? `<span class="rs bad wrap">✗ ${esc(o.error || o.check || "it did not work")}</span>`
     : refusedNow ? `<span class="rs bad wrap">✗ Not now: ${esc(p.refused || "refused")}</span>` : "";
   return {bits, btn, res, dot: x.error ? "orange" : x.security || x.reboot_since ? "yellow" : "green"};

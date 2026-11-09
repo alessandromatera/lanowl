@@ -897,16 +897,19 @@ class Updates:
         held = sum(1 for u in f.get("updates") or [] if u.get("phased"))
         left = len(f.get("updates") or []) - held
         done = max(0, int(chk.get("before") or 0) - left - held)
-        tail = "; a reboot is now pending — Reboot it when it suits" if f.get("reboot_since") else ""
+        # the runner proposes the reboot from this flag (actions._reboot_after); the words only say it
+        pend = bool(f.get("reboot_since"))
+        tail = "; a reboot finishes them" if pend else ""
         if m.group(1) != "0":
             return {"ok": False, "ran": True,
-                    "error": f"apt-get failed (exit {m.group(1)}) — {done} installed, {left} left{tail}"}
+                    "error": f"apt-get failed (exit {m.group(1)}) — {done} installed, {left} left"
+                             + ("; a reboot is pending" if pend else "")}
         self.start("after an upgrade")          # the dashboard's list, at once
-        return {"ok": True, "ran": True,
-                "result": f"{done} package(s) updated"
-                          + (f", {left} left" if left else "")
-                          + (f", {held} held back by Ubuntu's phased rollout (they come by "
-                             "themselves)" if held else "") + tail}
+        said = (f"{done} package(s) updated" + (f", {left} left" if left else "")
+                + (f", {held} held back by Ubuntu's phased rollout (they come by themselves)"
+                   if held else ""))
+        return {"ok": True, "ran": True, "result": said + tail, "updated": said,
+                "reboot_pending": pend}
 
     async def _apt_watch(self, ip: str, since: float, total: int):
         """While apt runs: its latest line and how many packages are set up, read from the

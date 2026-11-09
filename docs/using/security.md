@@ -29,7 +29,10 @@ installed after 2 days, a security release or a serious vulnerability for someth
 installed, a newly opened telnet or ftp. Everything else waits on the Security tab.
 
 Installing is an action you approve: **Update** on the machine's row, `/upgrade` on Telegram,
-or the owl's proposal.
+or the owl's proposal. When an update leaves the machine asking for a reboot, the row says "a
+reboot finishes them" and lanowl proposes that reboot at once, on the dashboard
+(**Approve reboot** on the same row) and on Telegram: it is checked first and its alerts are held
+while it restarts, as any reboot. A machine lanowl cannot reboot says "reboot it yourself".
 
 ### The monthly vulnerability scan
 

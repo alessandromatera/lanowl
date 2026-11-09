@@ -432,6 +432,8 @@ class Actions:
              "via": src["via"], "ts": now, "args": {}, "risk": [], "mode": self.mode}
         if src.get("owner"):
             p["owner"] = True
+        if src.get("after"):
+            p["after"] = src["after"]          # lanowl's own: the reboot an update left pending
         err = self._validate(p, args)
         if not err:
             dup = next((x for x in self.items if x.get("status") == "pending"
@@ -487,6 +489,8 @@ class Actions:
             return {"proposal": p["id"]}
         if p["via"] == "audit":
             self._audit_batch.append(p["id"])     # after the diagnosis, on the incident's alert
+        elif p.get("after"):
+            pass       # the update that left it sends its card, after the update's own message
         else:
             head = (f"{PROPOSAL_MARK} <b>Proposed from your question</b>" if p["via"] == "telegram"
                     else f"{PROPOSAL_MARK} <b>Proposed from a question on the dashboard</b>")
@@ -666,18 +670,21 @@ class Actions:
         # Both caps keep the MODEL from flooding the owner: the owner's own presses neither hit
         # them nor use them up (a day of the owner's own updates would otherwise fill the cap,
         # and their presses the next morning be refused)
-        if not p.get("owner"):
-            live = [x for x in self.items if x.get("status") == "pending" and not x.get("owner")]
+        # lanowl's own follow-up (`after`) is neither the model's flood nor its loop either
+        own = p.get("owner") or p.get("after")
+        if not own:
+            live = [x for x in self.items if x.get("status") == "pending" and not x.get("owner")
+                    and not x.get("after")]
             if len(live) >= self.max_pending:
                 return (f"{len(live)} proposals are already waiting for the owner — no more "
                         "until they are answered")
             day = [x for x in self.items if x.get("status") != "refused" and not x.get("owner")
-                   and now - x["ts"] < 86400]
+                   and not x.get("after") and now - x["ts"] < 86400]
             if len(day) >= self.max_per_day:
                 return f"the limit of {self.max_per_day} proposals a day is reached"
         # the cooldown keeps the MODEL from reboot loops; the owner's own press decides for
         # itself (an Update pressed again after one ran must not be refused for an hour)
-        cool = 0 if p.get("owner") else self._cooldown_s(p["action"])
+        cool = 0 if own else self._cooldown_s(p["action"])
         if cool:
             ran = next((x for x in reversed(self.items) if x.get("status") in ("done", "failed")
                         and (x.get("outcome") or {}).get("ran")
@@ -1317,6 +1324,9 @@ class Actions:
                             p["outcome"]["secs"], res.get("result") or res.get("error"))
             self._cur = None
             p.pop("detail", None)                 # the live word; the steps it took are kept
+        rb = None
+        if p["status"] == "done" and (p.get("outcome") or {}).get("reboot_pending"):
+            rb = await self._reboot_after(p)      # before the card and the announcement say it
         self._save()
         self._event(p)
         await self._refresh(p)
@@ -1324,6 +1334,45 @@ class Actions:
             # anything approved on the page that ran is said on Telegram, with which browser:
             # a login can be shared, a phone left logged in
             self.a._emit_telegram("digest", self._announce(p))
+        if rb is not None:
+            # the reboot's card comes after the update's own message, never before it
+            self._spawn(self._send_own([rb], f"{PROPOSAL_MARK} <b>A reboot finishes the update</b>", notify=True))
+
+    async def _reboot_after(self, p: dict):
+        """An update that left a reboot pending is not finished: propose that reboot now, as
+        the Reboot button does — its own
+        check, alerts held, who approved — on the dashboard and on Telegram. A machine lanowl
+        cannot reboot gets no proposal; its line says so. Returns the id of a reboot proposal
+        made here (its card is the caller's to send), else None."""
+        o = p["outcome"]
+        if p["ip"] not in self.rebootable():
+            o["reboot_by_hand"] = True
+            o["result"] = f"{o.get('result', '')} — reboot it yourself"
+            return None
+        cur = next((x for x in self.items if x["ip"] == p["ip"] and x["action"] == "reboot"
+                    and x.get("status") in ("pending", "running")), None)
+        if cur is None:
+            try:
+                r = await self._propose(
+                    {"action": "reboot", "ip": p["ip"],
+                     "reason": f"#{p['id']} {CATALOG[p['action']]} left a reboot pending"},
+                    {"via": p.get("decided_by") or "dashboard", "after": p["id"]})
+            except Exception:
+                log.exception("actions: the reboot after #%s could not be proposed", p["id"])
+                r = {"refused": "the proposal failed"}
+            if not r.get("proposal") or r.get("refused"):
+                o["reboot_by_hand"] = True
+                o["result"] = f"{o.get('result', '')} — reboot it yourself"
+                return None
+            cur = made = self._get(r["proposal"])
+        else:
+            made = None
+        if cur is None:
+            return None
+        o["reboot_pid"] = cur["id"]
+        # said once and kept: true later too, when the reboot has run (the page says where it stands)
+        o["result"] = f"{o.get('result', '')} — Reboot #{cur['id']} proposed"
+        return made["id"] if made else None
 
     async def _run(self, p: dict, chk: dict) -> dict:
         """The action itself. {"ok", "ran", "result", "lines", "error"}."""
@@ -1582,6 +1631,8 @@ class Actions:
                  f"<code>{_html(p.get('command') or '')}</code>"]
         if p.get("owner"):
             lines.append(f"<i>Asked by you on {_VIA.get(p['via'], p['via'])}</i>")
+        elif p.get("after"):
+            lines.append(f"<i>{_html(p['reason'])}</i>")      # lanowl's words, not the owl's
         elif p.get("reason"):
             lines.append(f"<i>Why (model): {_html(p['reason'])}</i>")
         lines += [f"⚠️ {_html(r)}" for r in p.get("risk") or []]
@@ -1740,7 +1791,7 @@ class Actions:
         return {"id": p.get("id"), "action": p["action"], "title": CATALOG.get(p["action"], p["action"]),
                 "ip": p["ip"], "label": label(p.get("name"), p["ip"]) if p.get("ip") else "",
                 "reason": p.get("reason"), "via": p.get("via"), "ts": p.get("ts"),
-                "owner": bool(p.get("owner")),
+                "owner": bool(p.get("owner")), "after": p.get("after"),
                 "expires": p.get("expires"), "status": p.get("status"),
                 "mode": p.get("mode", SHADOW),
                 "command": p.get("command"), "check": p.get("check"), "risk": p.get("risk") or [],
