@@ -12,7 +12,9 @@ FROM python:3.12-slim
 # mtr traceroute dig whois curl fping tcpdump arping — the model's diagnostics (checks.py); with
 #            host networking on Linux they see the real path and the real wire
 # tzdata     NOT optional: sunrise/sunset and the router's log timestamps read local time (TZ)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# upgrade    Debian's security fixes newer than the base image (a zlib fix, for one, came before
+#            python:3.12-slim was rebuilt with it)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         snmp iputils-ping openssh-client ca-certificates tzdata nmap \
         mtr-tiny traceroute bind9-dnsutils whois curl fping tcpdump iputils-arping \
     && rm -rf /var/lib/apt/lists/*
