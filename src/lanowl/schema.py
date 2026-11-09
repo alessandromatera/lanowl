@@ -61,6 +61,7 @@ DEFAULTS = {
     ("configwatch", "enabled"): False, ("fixes", "enabled"): True, ("scorecard", "enabled"): True,
     ("backups", "enabled"): False, ("shell", "enabled"): False, ("shell", "audit", "enabled"): False,
     ("devwatch", "enabled"): True, ("devwatch", "ports"): True, ("devwatch", "logs"): True,
+    ("self_update", "check"): True, ("self_update", "auto"): False,
 }
 # paths inside the container and other plumbing: under "Advanced" in their section
 ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file"),
@@ -75,7 +76,8 @@ TITLES = {"network": "Your network", "timezone": "Time zone", "model": "The mode
           "access": "Access", "actions": "Actions", "hostlog": "Host logs", "updates": "Updates",
           "cves": "Vulnerabilities", "exposure": "Exposure", "drift": "Drift",
           "configwatch": "Config watch", "fixes": "Fixes", "scorecard": "Scorecard",
-          "backups": "Backups", "shell": "The model's shell", "devwatch": "Device ports and logs"}
+          "backups": "Backups", "shell": "The model's shell", "devwatch": "Device ports and logs",
+          "self_update": "lanowl's updates"}
 
 
 def env(var: str) -> str:

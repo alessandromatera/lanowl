@@ -25,6 +25,32 @@ images (`lanowl:latest`, `lanowl-sandbox:latest`): `pull` then fetches nothing a
 image keeps running. Name the published ones, `ghcr.io/alessandromatera/lanowl:latest` and
 `ghcr.io/alessandromatera/lanowl-sandbox:latest`, or keep using `build`.
 
+## The updater (optional)
+
+Settings → lanowl's version and updates can update lanowl for you. That needs one more
+container, the updater, which you start yourself:
+
+```bash
+docker compose -f docker/compose.yaml --profile updater up -d
+```
+
+The risk, in one sentence: the updater holds Docker's socket, which is root on the machine, so
+it is a container of its own, from the same image, with no network, a read-only disk and no
+capabilities; lanowl itself never gets the socket and can only tell the updater "update".
+
+What an update does, fixed in the updater's code and not chosen by lanowl: it takes only the
+containers of its own compose project that are lanowl, `sandbox` or `sandbox-offline` and are
+running; pulls each one's own image (a lanowl built on the machine, with no registry in its
+name, is refused: update it where it was built); stops there when the images are the same;
+else replaces the sandboxes first and lanowl last, each new container made from the old one's
+own configuration. The old ones are kept, renamed `-previous`, until the new lanowl has run for
+3 minutes without restarting and its dashboard answers. Then they are removed. If it does not,
+the new ones are removed, the old ones come back, and Telegram quotes the new container's last
+log lines. What happened is in `/run/updater/last.json`, and on Settings.
+
+Without the updater, update by hand as above (`pull`, `up -d`), or `pip install -U lanowl` and a
+restart for a pip install.
+
 ## Before restarting
 
 Run `lanowl --check` on the new image first. When a setting was renamed or moved, it says

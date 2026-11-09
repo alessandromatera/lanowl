@@ -4342,6 +4342,7 @@ function renderSet() {
   if (p.startsWith("set/device/")) return setDevice(decodeURIComponent(p.slice(11)));
   if (p.startsWith("set/site/")) return setSitePage(p.slice(9));
   if (p === "set/history") return setHistory();
+  if (p === "set/lanowl") return setLanowl();
   if (p === "set/secrets") return setSecrets();
   if (p === "setup/pick") return setupPick();
   if (p === "setup/telegram") return setupTelegram();
@@ -4413,6 +4414,7 @@ async function setHome() {
   h += `</details>`;
   h += `<div class="sh">lanowl</div><div class="list">
     <button class="row" type="button" data-sgo="set/secrets"><span class="rico">${ic("key")}</span><span class="rt"><span class="rn">Secrets</span><span class="rs"><span class="k">secrets.yaml</span> · set or missing, never a value</span></span>${secMissing(D) ? `<span class="rv bad">${secMissing(D)} missing</span>` : ""}${ic("chev", "chev")}</button>
+    <button class="row" type="button" data-sgo="set/lanowl"><span class="rico">${ic("up")}</span><span class="rt"><span class="rn">lanowl's version and updates</span><span class="rs">the release you run, the latest one, and how to update</span></span>${ic("chev", "chev")}</button>
     <button class="row" type="button" data-sgo="set/history"><span class="rico">${ic("undo")}</span><span class="rt"><span class="rn">History</span><span class="rs">${(D.history || []).length} save${(D.history || []).length === 1 ? "" : "s"} · undo any of them</span></span>${ic("chev", "chev")}</button>
     ${D.login.on ? `<button class="row" type="button" data-sact="password"><span class="rico">${ic("lock")}</span><span class="rt"><span class="rn">Change the password</span><span class="rs">every browser logs in again</span></span></button>` : ""}
     <button class="row" type="button" data-sact="restart"><span class="rico">${ic("refresh")}</span><span class="rt"><span class="rn">Restart lanowl</span><span class="rs">running since ${esc(clock(D.restart.since))}</span></span></button></div>`;
@@ -4666,6 +4668,110 @@ function passwordSheet() {
       if (r.ok) { toast("Password changed: log in with the new one."); setTimeout(() => location.reload(), 1500); }
       return r;
     }, {label: "Change it", note: "Only its hash is kept, in config.yaml."});
+}
+
+// -- lanowl itself: the version it runs, the latest release, the updater (selfupdate.py, updater.py) --
+const relDate = d => /^\d{4}-\d\d-\d\d$/.test(d || "") ? dmy(Date.parse(d + "T12:00:00Z") / 1000) : (d || "");
+function lanowlOutcome(o) {
+  if (!o || !o.state) return "";
+  const when = o.finished ? clock(o.finished) : "";
+  if (o.state === "ok") return `<div class="kv"><span>Last update</span><span>${esc(o.from && o.to ? `${o.from} → ${o.to}` : "done")} · ${esc(when)}</span></div>`;
+  if (o.state === "nothing") return `<div class="kv"><span>Last update</span><span>nothing to do: already the latest · ${esc(when)}</span></div>`;
+  return `<div class="kv"><span>Last update</span><span>${o.state === "rolled_back" ? "rolled back" : "did not start"} · ${esc(when)}</span></div>` +
+    (o.reason ? `<div class="box2" style="margin:8px 0 0"><b>${o.state === "rolled_back" ? "Why the old one came back, in the new one's own words" : "Why"}</b><pre style="white-space:pre-wrap">${esc(o.reason)}</pre></div>` : "");
+}
+async function setLanowl() {
+  const D = await setData(true), L = await getJ("/api/settings/lanowl");
+  if (!L || !L.ok) { put("set", `<div class="setw">${back("set", "Settings")}${setHead("lanowl")}<div class="list"><div class="empty">${esc((L || {}).error || "Settings did not load.")}</div></div></div>`); return; }
+  const lat = L.latest, up = L.updater || {}, behind = L.stand === "behind";
+  let h = back("set", "Settings") + setHead("lanowl", "the version you run, the latest release, and how to update") + pendHtml(D) + fileWarn(D);
+  h += `<div class="sh">Version</div><div class="list">
+    <div class="kv"><span>Running</span><span>${esc(L.version)}${L.dev ? " · development build" : ""}</span></div>
+    <div class="kv"><span>Latest release</span><span>${lat ? esc(lat.version) + (lat.published ? " · " + esc(relDate(lat.published)) : "") : L.check ? "not asked yet" : "the check is off"}</span></div>
+    ${L.words ? `<div class="kv"><span>So</span><span>${esc(L.words)}</span></div>` : ""}
+    <div class="kv"><span>Last checked</span><span>${L.ok_at ? esc(clock(L.ok_at)) : "never"}</span></div></div>`;
+  if (L.error) h += `<div class="swarn" style="margin-top:10px">The last check failed: ${esc(L.error)}. ${lat ? "The answer above is the last good one." : ""}</div>`;
+  if (lat && lat.notes) h += `<div class="sh">What is new in ${esc(lat.version)}</div><div class="box2" style="white-space:pre-wrap">${esc(lat.notes)}</div>`;
+  h += `<div class="ibtns" style="margin:10px 0 4px">
+    <button class="sbtn" type="button" data-sact="lcheck"${L.check ? "" : " disabled"}>${ic("refresh")}Check now</button>
+    ${lat && /^https:\/\/github\.com\//.test(lat.url) ? `<a class="sbtn" href="${esc(lat.url)}" target="_blank" rel="noopener noreferrer">${ic("link")}The release on GitHub</a>` : ""}
+    ${behind && up.answering && !up.busy ? `<button class="btn" type="button" data-sact="lupdate">${ic("up")}Update now</button>` : ""}</div>
+    ${L.check ? `<p class="fine" style="margin:6px 4px 0">Asks GitHub for the latest release once a day, and when you press Check now: nothing but the version you run goes with it. <span class="k">self_update.check</span> switches it off.</p>`
+      : `<p class="fine" style="margin:6px 4px 0">The check is switched off (<span class="k">self_update.check</span> in config.yaml): lanowl asks GitHub nothing.</p>`}`;
+  if (up.busy) h += `<div class="swarn" style="margin-top:10px">An update is running now: lanowl restarts in a moment.</div>`;
+  h += `<div class="sh">The updater</div><div class="box2">`;
+  if (up.answering) {
+    h += `<b>The updater is running.</b> It is a separate container, the only one that holds Docker's socket; it pulls lanowl's own images and recreates lanowl's own containers, and does nothing else.`;
+    h += `<div class="fld" style="margin-top:12px;padding:0"><div class="fh"><label class="lab plain" for="lauto">When a newer release is out</label></div>
+      <select class="fsel" id="lauto"><option value="tell"${L.auto ? "" : " selected"}>Tell me only (one line in a digest)</option><option value="auto"${L.auto ? " selected" : ""}>Update by itself at</option></select>
+      <input class="fin" id="lat" value="${esc(L.at)}" maxlength="5" autocomplete="off" spellcheck="false" style="margin-top:8px;max-width:110px" aria-label="Time of the automatic update">
+      <div class="fhelp">Within two hours after that time, once a release; if the new one does not answer in 3 minutes the old one comes back. Saved to config.yaml: it applies after a restart.</div>
+      <div style="margin-top:8px"><button class="sbtn" type="button" data-sact="lsave">Check and save</button></div></div>`;
+  } else {
+    h += `<b>No updater is running</b>${up.error && !up.absent ? ` (${esc(up.error)})` : ""}, so lanowl can tell you about a new release but cannot update itself. To let it, start the updater from the repository:
+      <div class="cmd"><code id="upcmd">${esc(L.commands.updater)}</code><button class="sbtn" type="button" data-sact="copy" data-for="upcmd">Copy</button></div>
+      <p class="fine" style="margin:8px 0 0">The risk, in one line: the updater holds Docker's socket, which is root on this machine; it is used only to pull lanowl's own images and recreate lanowl's own containers, has no network of its own, and lanowl can only tell it "update".</p>
+      <div class="fld" style="margin-top:12px;padding:0"><div class="fh"><span class="lab plain">When a newer release is out</span></div>
+      <select class="fsel" disabled><option>Tell me only (one line in a digest)</option><option${L.auto ? " selected" : ""}>Update by itself at ${esc(L.at)}</option></select>
+      <div class="fhelp">Updating by itself needs the updater.</div></div>`;
+  }
+  h += `</div><div class="sh">Update by hand</div><div class="box2">
+    In Docker${L.container ? " (this lanowl is)" : ""}:<div class="cmd"><code id="dkcmd" class="ml">${esc(L.commands.docker)}</code><button class="sbtn" type="button" data-sact="copy" data-for="dkcmd">Copy</button></div>
+    <p style="margin:12px 0 0">Installed with pip${L.container ? "" : " (this lanowl is)"}:</p><div class="cmd"><code id="pipcmd">${esc(L.commands.pip)}</code><button class="sbtn" type="button" data-sact="copy" data-for="pipcmd">Copy</button></div>
+    <p class="fine" style="margin:8px 0 0">…then restart lanowl. Nothing ever downgrades: a newer build than the latest release is left as it is.</p></div>`;
+  const last = lanowlOutcome(L.last);
+  if (last) h += `<div class="sh">The last update</div><div class="list">${last}</div>`;
+  if (L.auto_error) h += `<div class="swarn" style="margin-top:10px">The last automatic update did not start: ${esc(L.auto_error)}</div>`;
+  put("set", `<div class="setw">${h}</div>`);
+}
+function lanowlUpdateSheet() {
+  const L = ST.lanowl || {};
+  openSet(`Update lanowl to ${(L.latest || {}).version || "the latest release"}?`, `<p style="margin:0 2px 4px;font-size:15px">The updater pulls the new image and replaces lanowl's containers with it.</p>
+    <ul class="klist"><li>${ic("check")}lanowl restarts: it is back in about a minute, and nothing is watched for that long</li>
+      <li>${ic("check")}It keeps the new one only if it runs for 3 minutes and its dashboard answers</li>
+      <li>${ic("check")}Otherwise the old one comes back, and Telegram says why, in the new one's own log lines</li>
+      <li>${ic("check")}Your config, the database and the secrets are untouched</li></ul>`,
+    async () => {
+      const r = await post("/api/settings/lanowl/update", {}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+      if (r.ok) waitUpdated((S.d || {}).sweep ? S.d.sweep.started : 0);
+      return r;
+    }, {label: "Update now", busy: "Starting…", note: "Telegram gets one line now, and one when it is done."});
+}
+async function waitUpdated(started) {
+  ST.restarting = true;
+  const t0 = Date.now();
+  toast("Updating: lanowl restarts in a moment…");
+  for (;;) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const r = await fetch("/api/state", {cache: "no-store"});
+      if (r.ok) { const d = await r.json(); if (d.sweep && d.sweep.started !== started) { applyState(d); break; } }
+    } catch (e) {}
+    if (Date.now() - t0 > 600000) { ST.restarting = false; toast("lanowl has not come back after ten minutes: docker ps -a, and docker logs lanowl-updater, say why."); return; }
+  }
+  ST.restarting = false;
+  await setData(true);
+  if (S.tab === "set") renderSet();
+  toast("lanowl is back.");
+}
+async function lanowlSave() {
+  const auto = $("lauto").value === "auto", at = $("lat").value.trim();
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(at)) { toast("The time as HH:MM, for example 04:00."); return; }
+  const ops = [{op: "set", path: ["self_update", "auto"], value: auto}, {op: "set", path: ["self_update", "at"], value: at}];
+  const p = await post("/api/settings/plan", {file: "config", ops}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
+  if (!(p.changes || []).length) { toast("Nothing changed."); return; }
+  openSet("Save to config.yaml", planHtml(p, "config.yaml"), async () => {
+    const r = await saveCall("/api/settings/save", {file: "config", ops, base: p.base});
+    if (r.ok) { await setData(true); renderSet(); refresh(); toast("Saved. Restart lanowl to apply."); }
+    else if (r.why === "changed") { await setData(true); renderSet(); }
+    return r;
+  }, {blocked: (p.problems || []).length > 0});
+}
+async function lanowlCheck() {
+  const r = await post("/api/settings/lanowl/check", {}).catch(() => ({ok: false, error: "lanowl did not answer."}));
+  toast(r.ok ? (r.words || "Checked.") : "The check failed: " + (r.error || "no answer") + ".");
+  if (S.tab === "set" && S.setp === "set/lanowl") setLanowl();
 }
 
 // -- History and undo --
@@ -5555,6 +5661,9 @@ document.addEventListener("click", async e => {
   if (a === "discard") { ST.edits = {}; renderSet(); return; }
   if (a === "restart") { withSpin(t, "One moment…", async () => { await setData(true); restartSheet(); }); return; }
   if (a === "password") { await setData(); passwordSheet(); return; }
+  if (a === "lcheck") { withSpin(t, "Asking GitHub…", lanowlCheck); return; }
+  if (a === "lsave") { withSpin(t, "Checking…", lanowlSave); return; }
+  if (a === "lupdate") { withSpin(t, "One moment…", async () => { ST.lanowl = await getJ("/api/settings/lanowl"); lanowlUpdateSheet(); }); return; }
   if (a === "undo") { withSpin(t, "Checking…", () => undoSheet(+t.dataset.id)); return; }
   if (a === "migrate") { withSpin(t, "Checking…", migrateSheet); return; }
   const S2 = ST.dev;

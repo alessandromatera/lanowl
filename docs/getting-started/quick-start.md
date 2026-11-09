@@ -176,4 +176,10 @@ The examples are a demo house on 192.168.88.0/24: replace their addresses and th
 address, the model's URL, the dashboard's port, `TZ`), and Settings then shows them locked
 ([The environment](../reference/environment.md)).
 
+Later, to update lanowl from its own Settings page, start the optional updater:
+`docker compose -f docker/compose.yaml --profile updater up -d`. It holds Docker's socket (root on
+this machine), so it is a container of its own that only pulls lanowl's own images and recreates
+lanowl's own containers ([Upgrading](../running/upgrading.md#the-updater-optional)). Without it,
+`docker compose -f docker/compose.yaml pull && docker compose -f docker/compose.yaml up -d` updates by hand.
+
 Next: [Telegram](telegram.md), then [The first hour](first-hour.md).

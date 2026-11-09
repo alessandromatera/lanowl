@@ -297,6 +297,19 @@ for, with no `manage` needed (its logs only with `manage: [logs]`).
 | `backups` | Monthly backups of your machines onto a disk of yours | [Security](../using/security.md) |
 | `shell` | The owl's sandboxed shell | [The model](model.md) |
 
+## self_update
+
+```yaml
+self_update:
+  check: true      # ask GitHub once a day for lanowl's latest release (and on Check now)
+  auto: false      # true: update by itself at `at` when a newer release is out (needs the updater)
+  at: "04:00"      # an automatic update starts within two hours after this time
+```
+
+`check: false` makes lanowl ask GitHub nothing at all. `auto` needs the optional updater
+container ([Upgrading](../running/upgrading.md#the-updater-optional)); what Settings shows and does
+with them is in [Settings](../using/settings.md#lanowls-own-updates).
+
 ## Leaving a key out
 
 A key left out of the file takes lanowl's own default. For most keys that is the example's

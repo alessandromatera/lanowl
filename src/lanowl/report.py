@@ -936,6 +936,9 @@ def format_digest(report: dict, now: Optional[float] = None,
         if len(sec.get("lines") or []) > 5:
             lines.append(f"…and {len(sec['lines']) - 5} more on the dashboard")
 
+    # A newer lanowl release (selfupdate.py): one line, once a version; already HTML.
+    lines += list(report.get("lanowl_news") or [])[:1]
+
     # Every digest names what is paused, because a pause is silence by design and the one
     # way it goes wrong is being forgotten (pause.py).
     paused = report.get("paused") or []

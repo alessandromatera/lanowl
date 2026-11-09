@@ -190,6 +190,13 @@ logging:
   level: "INFO"
   file: "lanowl.log"
 
+# --- lanowl's own updates ---
+# lanowl never updates itself without the updater container (docker/compose.yaml, profile "updater").
+self_update:
+  check: true                       # ask GitHub once a day for lanowl's latest release (and on Check now); one digest line a new version
+  auto: false                       # true: update by itself at `at` when a newer release is out — needs the updater
+  at: "04:00"                       # the hour an automatic update starts (within two hours after it)
+
 # =============================================================================================
 # Optional features. Each is off until you switch it on and tell it where things are.
 # =============================================================================================

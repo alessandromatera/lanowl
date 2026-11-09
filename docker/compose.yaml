@@ -14,6 +14,12 @@
 # The model's sandboxed shells, once shell.enabled is on (Settings shows this line filled in):
 #   LANOWL_HOST_IP=<this machine's address> docker compose -f docker/compose.yaml --profile shell up -d
 #
+# Updating lanowl from its own Settings page (optional; off unless you start it):
+#   docker compose -f docker/compose.yaml --profile updater up -d
+# The updater is the ONE container that holds Docker's socket, which is root on this machine.
+# It is the same image with no network, a read-only disk and no capabilities; it pulls lanowl's
+# own images and recreates lanowl's own containers, and lanowl can only tell it "update".
+#
 # Host networking: on Linux, lanowl sees the network as the host does — mtr and traceroute see
 # every hop, ARP and packet captures see the real wire. (Docker Desktop on a Mac or Windows
 # works too, behind its own NAT: per-hop tools then see only the target.)
@@ -38,6 +44,7 @@ services:
       - lanowl-ssh:/root/.ssh                   # known_hosts for the host-log watcher
       - sandbox-sock:/run/sandbox:ro
       - sandbox-offline-sock:/run/sandbox-offline:ro
+      - updater-sock:/run/updater               # the updater's socket, once it runs (and what it did: last.json)
 
   # The model's shell, for the owner's questions: internet open, the LAN for handshakes only.
   sandbox:
@@ -90,11 +97,33 @@ services:
     volumes:
       - sandbox-offline-sock:/run/sandbox
 
+  # The updater: Settings → lanowl's "Update now" and `self_update.auto`. It takes only the one word
+  # "update" from lanowl and decides the rest itself (src/lanowl/updater.py): it touches only this
+  # compose project's lanowl, sandbox and sandbox-offline containers, and puts the old ones back
+  # when the new lanowl has not answered for 3 minutes.
+  updater:
+    profiles: ["updater"]
+    image: ghcr.io/alessandromatera/lanowl:latest
+    pull_policy: never                          # it runs the image lanowl already pulled
+    container_name: lanowl-updater
+    command: ["python", "-m", "lanowl.updater"]
+    restart: unless-stopped
+    network_mode: none                          # the Docker daemon does the pulling, not this container
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 32
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # root on this machine: the reason it is a container of its own
+      - updater-sock:/run/updater
+
 volumes:
   lanowl-state:
   lanowl-ssh:
   sandbox-sock:
   sandbox-offline-sock:
+  updater-sock:
 
 networks:
   sandbox:

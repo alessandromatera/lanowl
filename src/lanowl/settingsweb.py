@@ -24,6 +24,12 @@ login is the guard, and nothing asks the password again.
                                   removed (config.yaml)
   POST /api/settings/site/nets    {router}: the networks a router is on, read over its login —
                                   what "Make it a site" proposes
+  GET  /api/settings/lanowl       lanowl itself: its version, the latest release GitHub named, the
+                                  last check, whether the updater answers, the last update
+  POST /api/settings/lanowl/check Check now: ask GitHub (not when self_update.check is off)
+  POST /api/settings/lanowl/update  Update now: the one word "update" to the updater, which
+                                  alone decides what that does (updater.py); only when a newer
+                                  release is known
   GET  /api/setup                 does the first-run setup apply (no devices, or the example's)
   POST /api/setup/router          {dhcp_source, credentials, user?, password?} -> logged in?
                                   how many leases? (a typed login is tried, not written)
@@ -186,6 +192,9 @@ class SettingsRoutes:
         r.add_post("/api/settings/secret", self.secret)
         r.add_post("/api/settings/site", self.site)
         r.add_post("/api/settings/site/nets", self.site_nets)
+        r.add_get("/api/settings/lanowl", self.lanowl)
+        r.add_post("/api/settings/lanowl/check", self.lanowl_check)
+        r.add_post("/api/settings/lanowl/update", self.lanowl_update)
         r.add_get("/api/setup", self.setup)
         r.add_post("/api/setup/router", self.router)
         r.add_post("/api/setup/leases", self.leases)
@@ -291,6 +300,27 @@ class SettingsRoutes:
     async def restart(self, request):
         r = self.a.request_restart(request.remote or "the dashboard")
         return self._j(r, 200 if r["ok"] else 409)
+
+    # --- lanowl itself: its releases and the updater ----------------------------------------------
+    async def lanowl(self, request):
+        from .selfupdate import updater_call
+        su = self.a.selfupdate
+        up = await updater_call("status", timeout=3)
+        return self._j({"ok": True, **su.view(),
+                        "updater": {"answering": bool(up.get("ok")), "absent": bool(up.get("absent")),
+                                    "busy": bool(up.get("busy")), "docker": up.get("docker"),
+                                    "version": up.get("version") or "", "error": "" if up.get("ok") else up.get("error") or ""}})
+
+    async def lanowl_check(self, request):
+        su = self.a.selfupdate
+        if not su.check_on:
+            return self._j({"ok": False, "error": "the check is switched off (self_update.check in config.yaml)"}, 409)
+        v = await su.check()
+        return self._j({"ok": not v["error"], **v, **({"error": v["error"]} if v["error"] else {})})
+
+    async def lanowl_update(self, request):
+        r = await self.a.selfupdate.update_now(request.remote or "the dashboard")
+        return self._j(r, 200 if r.get("ok") else 409)
 
     # --- sites ----------------------------------------------------------------------------
     async def site(self, request):

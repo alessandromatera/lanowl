@@ -100,6 +100,34 @@ login's lock, the history and the Timeline. The one thing it stops is an answer 
 writing at that moment: the sheet says so when there is one, and you ask again once lanowl is
 back. It waits while an action, a backup or a device's reboot is running, and says which.
 
+## lanowl's own updates
+
+**Settings → lanowl's version and updates** says which release you run, which one is the latest,
+what is new in it (a few lines, and a link to the release on GitHub), when lanowl last asked, and
+how to update.
+
+- **The check.** Once a day, and when you press **Check now**, lanowl asks GitHub for the latest
+  full release (never a draft or a pre-release). The request carries `lanowl/<version>` and
+  nothing else about you. A failed check keeps the last good answer and says what went wrong;
+  it never raises an alert. `self_update.check: false` switches it off: then lanowl asks GitHub
+  nothing, not even on the button.
+- **Being told.** A newer release is one line in the next digest, once per version, pointing
+  here. It never pages and never repeats. A development build newer than the latest release (for
+  example `0.2.1.dev0` after `0.2.0`) is said as such, and nothing ever downgrades.
+- **Update now.** With the updater running (below) the page offers **Update now**. It asks first:
+  lanowl restarts for about a minute, and if the new one does not answer within 3 minutes the old
+  one comes back and Telegram says why. Then the choice: **Tell me only** (the default) or
+  **Update by itself at** a time (`self_update.auto` and `self_update.at`): within two hours
+  after that time, once per release. Both are saved like any other setting, from the next restart.
+- **Told after the fact.** When lanowl starts on a different version, Telegram gets one line:
+  "lanowl updated: 0.2.0 → 0.2.1", or that the update was rolled back, with the new container's
+  own last log lines. The page keeps the last outcome.
+
+Without the updater the page says how to add it, and gives the commands to update by hand
+(`docker compose -f docker/compose.yaml pull && docker compose -f docker/compose.yaml up -d`, or
+`pip install -U lanowl` and a restart). [Upgrading](../running/upgrading.md#the-updater-optional)
+says what the updater is and what it is allowed to do.
+
 ## History and undo
 
 **History** lists every save from the dashboard, the newest first: when, which file, what

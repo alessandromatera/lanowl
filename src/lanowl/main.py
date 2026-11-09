@@ -46,6 +46,7 @@ from .chat import Chat
 from .devcmd import DeviceCommands
 from .devread import DeviceReads
 from .devwatch import DevWatch
+from .selfupdate import SelfUpdate
 from .memory import Memory
 from .names import Names, clean as clean_name, mac_key
 from .model import (NO_MODEL, load_config, load_inventory, model_name, model_report, model_set,
@@ -313,6 +314,9 @@ class Auditor:
         self.drift = Drift(self)
         self.configwatch = ConfigWatch(self)
         self.reviews = (self.drift, self.configwatch)
+        # lanowl's own releases (selfupdate.py): a daily look at GitHub, one digest line a
+        # version, and the word "update" for the optional updater container
+        self.selfupdate = SelfUpdate(self)
         # ...the fix for a finding, written out for the owner to apply themselves (never run), and
         # every diagnosis graded once its problem is over (fixes.py, scorecard.py)
         self.fixes = Fixes(self)
@@ -1585,6 +1589,9 @@ class Auditor:
             r.mark_told([k for k, _ in items])
         report["log_news"] = self.devwatch.digest_news()
         self.devwatch.digest_told(now)
+        # a newer lanowl release: one line, once a version (it never sends a digest by itself)
+        report["lanowl_news"] = self.selfupdate.digest_news()
+        self.selfupdate.digest_told()
         self._date_issues(report)
         self._last_digest_fp = digest_fingerprint(report)
         self._last_digest_sent = now
@@ -1828,6 +1835,7 @@ class Auditor:
             await self.dashboard.start()
         except Exception:        # a port clash must not take the monitor down with it
             log.exception("web dashboard failed to start; monitoring continues without it")
+        self.selfupdate.at_start()             # "lanowl updated: 0.2.0 → 0.2.1", once
         body = asyncio.ensure_future(self._loop_body(interval))
         asked = asyncio.ensure_future(self._restart_ev.wait())
         try:
@@ -1906,6 +1914,7 @@ class Auditor:
                         r.start("scheduled")
                 self.scorecard.tick(t0)
                 self.backups.tick(t0)
+                self.selfupdate.tick(t0)
 
                 if t0 - last_prune > prune_every:
                     self.state.prune()
