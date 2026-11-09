@@ -1304,7 +1304,8 @@ function dur(s) {
   s = Math.round(s || 0);
   if (s < 90) return s + "s";
   if (s < 5400) return Math.round(s / 60) + "m";
-  if (s < 172800) return Math.floor(s / 3600) + "h" + String(Math.round((s % 3600) / 60)).padStart(2, "0");
+  // whole minutes first: the leftover minutes rounded alone made 3 h 59.5 min "3h60"
+  if (s < 172800) { const m = Math.round(s / 60); return Math.floor(m / 60) + "h" + String(m % 60).padStart(2, "0"); }
   return Math.round(s / 86400) + "d";
 }
 const hm = ts => new Date(ts * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
