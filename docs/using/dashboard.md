@@ -25,14 +25,21 @@ It is closed until you log in: see [Logging in](#logging-in). The **gear** in th
 What needs you, first.
 
 - **The headline** says the state of the network in one line: "Cam Garage is down", "All
-  clear", and how many of all devices answer (asleep and paused said apart, the same count as
-  the digest's), the internet, and each site.
+  clear", or "All answering · 2 to decide" when every device answers but something waits for
+  your decision (a proposal, a security finding, a new device: tap the count to jump to
+  **Needs you**; the pill at the top reads "All answering" then). It also says how many of
+  all devices answer (asleep and paused said apart, the same count as the digest's), the
+  internet, and each site.
 - **The incident card**, when there is one: the problem, its severity, since when, and its
   trail: when it stopped answering, what Telegram was told about this incident (with the day,
   when not today), the owl's diagnosis, a proposal waiting for you. A service that fails every
   other minute stays on it, marked as coming and going, until its incident is over. **Open**
   shows the device; **Ask about it** starts a question with its facts.
-- **Groups**: one tile per group, with what is down and what went down this week.
+- **Dropped this week**: under the headline, one grey line, "3 devices dropped at least once
+  this week", with **See them on Devices** (the Devices tab, filtered to those devices). It is
+  not drawn when none dropped. Scheduled sleep and paused devices do not count.
+- **Groups**: one tile per group, with what is down. A device that is down now and has already
+  dropped earlier in the week says so under its name ("2nd time this week").
 - **Needs you**: proposals waiting for your approval, the security findings that matter (each
   saying what story it is part of, with **Open the story**), updates waiting, and each device on
   a network for the first time by name, with what the owl said of it. Buttons that change
@@ -44,7 +51,7 @@ What needs you, first.
   look at the week and the monitor's numbers: the same list the digest carries; gear asleep on
   schedule is left out), **What it said before** (each change of mind in the last day), a box
   for a follow-up question, and **Audit now** (the digest goes to Telegram too). When the
-  monitor's reading now differs from the owl's, the card says so. When a scheduled audit was
+  monitor's reading now differs from the owl's, the card says so. When something waits under Needs you, the owl's "Nothing needs you" is not shown there. When a scheduled audit was
   skipped because nothing changed, the card says "Nothing has changed since: checked again
   at" with the time. A sentence of the owl's that states another count of devices up than
   the one printed beside it is dropped before it is shown.
@@ -138,7 +145,10 @@ More: [Updates, backups and the security review](security.md).
 A conversation with the model, with the same tools as the Telegram bot. You watch it work:
 its thinking, each check as it runs, and the answer as it is written. **Stop** stops it;
 **Ask again** retries; follow-ups remember the conversation. Earlier conversations are kept
-across restarts, so one started on the phone can go on at the computer.
+across restarts, so one started on the phone can go on at the computer. When the last
+conversation is more than a day old the tab opens on a new, empty chat, with a few questions
+made from what is happening now (a device that is down, the last internet drop, an open
+security finding); the old conversation is still first in the list.
 
 Beside it, the model's side:
 

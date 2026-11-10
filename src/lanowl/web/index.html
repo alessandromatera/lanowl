@@ -140,6 +140,7 @@ button.row:active,a.row:active{background:var(--fill)}
    the owner in one list, the internet, the model's read, the sites, the last 24 hours ---- */
 .gnow{display:flex;flex-direction:column;margin-top:14px}
 .ncol{display:contents}
+#inbox{scroll-margin-top:64px}
 .o1{order:1}.o2{order:2}.o3{order:3}.o4{order:4}.o5{order:5}.o6{order:6}.o7{order:7}.o8{order:8}
 /* the model's own looks, its fixes, its track record */
 .lkbox{padding:13px 16px 11px}
@@ -180,7 +181,10 @@ button.row:active,a.row:active{background:var(--fill)}
 .gt-h b{font-weight:650;font-size:14px;min-width:0;line-height:1.25}
 .gt-n{margin-left:auto;font-weight:650;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums}
 .gt-s{font-size:13px;color:var(--ink2);margin-top:4px;line-height:1.45}
-.gt-f{font-size:12.5px;color:var(--orange-t);margin-top:3px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.gt-w{font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.35}
+.week{margin:10px 0 0;font-size:13.5px;color:var(--ink2);display:flex;gap:6px 10px;flex-wrap:wrap;align-items:baseline}
+.week .wk-go{all:unset;box-sizing:border-box;cursor:pointer;color:var(--blue-t);font-weight:600}
+.week .wk-go:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
 .ent{padding:0 4px;border-radius:5px;background:var(--card2);box-shadow:inset 0 0 0 1px var(--sep);font-weight:600;cursor:pointer;color:var(--ink)}
 @media (hover:hover){.ent:hover{background:color-mix(in srgb,var(--blue) 12%,var(--card))}}
 .ent.bad{color:var(--red-t)}
@@ -1426,7 +1430,9 @@ function dayAxis(t0, t1, short) {
 
 // ---------------------------------------------------------------- header + tabs
 function renderHeader(d) {
-  const h = d.sweep.ts && !(d.devices || []).length ? HEALTH.empty : HEALTH[d.health] || HEALTH.unknown;
+  let h = d.sweep.ts && !(d.devices || []).length ? HEALTH.empty : HEALTH[d.health] || HEALTH.unknown;
+  // every device answers, but a decision waits: "All good" only says reachability
+  if (h === HEALTH.ok && decideCount(d)) h = ["All answering", "check", "green"];
   const chip = $("hchip");
   chip.className = "hchip c-" + h[2];
   put(chip, ic(h[1]) + esc(h[0]));
@@ -1616,6 +1622,20 @@ function sitesWords(d) {
 }
 const SWORD = {down: "down", shadow: "behind a down link", held: "rebooting", asleep: "asleep", paused: "paused"};
 const SORD = {down: 0, shadow: 1, held: 2, asleep: 3, paused: 4, up: 5};
+// "Went down this week": a device with at least one unscheduled outage in the 7 days. The Devices
+// chip and the Now line both count with this, so the two numbers cannot differ.
+const flapsIn = (O, ip) => (O.m[ip] || []).filter(v => !v.sched).length;
+const weekDown = (d, O, site) => (d.devices || []).filter(x => (site === "all" || x.site === site) && flapsIn(O, x.ip));
+const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+// a device down now: which drop of the week this one is ("2nd time this week"); none on the first
+function repeatLine(O, ip) {
+  const l = (O.m[ip] || []).filter(v => !v.sched), n = l.length + (l.some(v => v.open) ? 0 : 1);
+  return n >= 2 ? `<div class="gt-w">${ordinal(n)} time this week</div>` : "";
+}
+function weekLine(d) {
+  const n = weekDown(d, outages(d), "all").length;
+  return n ? `<p class="week"><span>${n} ${n === 1 ? "device" : "devices"} dropped at least once this week.</span><button class="wk-go" type="button" data-act="weekdown">See them on Devices ›</button></p>` : "";
+}
 function tilesHtml(d) {
   const sh = d.shadowed || {}, O = outages(d), devs = d.devices || [], st = x => devState(x, sh);
   const groups = [...new Set(devs.map(x => x.group))].sort((a, b) => grank(a) - grank(b) || String(a).localeCompare(b));
@@ -1623,10 +1643,9 @@ function tilesHtml(d) {
     const xs = devs.filter(x => x.group === g), odd = xs.filter(x => st(x) !== "up").sort((a, b) => SORD[st(a)] - SORD[st(b)]);
     const upN = xs.filter(x => st(x) === "up").length;
     const c = odd.some(x => st(x) === "down") ? "red" : odd.some(x => st(x) === "shadow") ? "orange" : "green";
-    const fl = xs.filter(x => st(x) === "up" && (O.m[x.ip] || []).some(v => !v.sched));
-    const lines = odd.map(x => `<span class="ent${st(x) === "down" ? " bad" : ""}" data-ip="${esc(x.ip)}">${esc(x.name)}</span> ${SWORD[st(x)]}`);
+    const lines = odd.map(x => [`<span class="ent${st(x) === "down" ? " bad" : ""}" data-ip="${esc(x.ip)}">${esc(x.name)}</span> ${SWORD[st(x)]}`, st(x) === "down" ? repeatLine(O, x.ip) : ""]);
     return `<div class="gt c-${c}" data-act="group" data-g="${esc(g)}"><div class="gt-h"><span class="sd"></span><b>${esc(GN(g))}</b><span class="gt-n">${upN}/${xs.length}</span></div>
-      <div class="gt-s">${lines.length ? lines.join("<br>") : "all answering"}</div>${fl.length ? `<div class="gt-f">↓ ${esc(fl.slice(0, 3).map(x => x.name).join(", "))}${fl.length > 3 ? ` +${fl.length - 3}` : ""} this week</div>` : ""}</div>`;
+      <div class="gt-s">${lines.length ? lines.map(([l, w], i) => (i && !lines[i - 1][1] ? "<br>" : "") + l + w).join("") : "all answering"}</div></div>`;
   }).join("") + `</div>`;
 }
 function issueTitle(i) { return i.kind === "down" ? `${i.device} is down` : String(i.device || i.label || "A problem"); }
@@ -1649,6 +1668,33 @@ function incHtml(d, i) {
     ${steps.length ? `<ol class="itl">${steps.map(v => `<li class="${v[2]}">${v[0] ? `<span class="t">${esc(hmd(v[0], NOW))}</span>` : ""}${esc(v[1])}</li>`).join("")}</ol>` : ""}
     ${known ? `<div class="ibtns"><button class="sbtn" type="button" data-ip="${esc(i.ip)}">Open ${esc(name)}</button><button class="sbtn" type="button" data-act="askabout" data-q="${esc(`What is wrong with ${name} (${i.ip}) right now?`)}">Ask about it</button></div>` : ""}</div>`;
 }
+// The new devices on every site, as the Needs you list shows them (phones and guests apart)
+function newDevRows(d) {
+  const nrows = (d.sites || []).flatMap(x => (((x.dhcp || {}).rows) || []).filter(r => r.new && !r.known).map(r => ({...r, site: x})));
+  const phoneish = r => (r.vendor || "").startsWith("private") || r.guest;
+  return {nrows, phoneish, named: nrows.filter(r => !phoneish(r)), phones: nrows.filter(phoneish)};
+}
+// How many Needs-you items ask the owner for a decision (the headline and the pill say so):
+// a proposal waiting for Approve/Reject, a security item (Handled / Accept), a new device with
+// Watch / Known. The cards that only point elsewhere (updates -> Security, more new devices ->
+// Devices, lanowl's own check -> Ask) ask for nothing, and neither does a proposal already
+// decided or a new device on a site whose router cannot take Watch/Known (routed === false).
+function decideCount(d) {
+  const ps = ((d.actions || {}).pending || []).filter(p => p.status === "pending");
+  const sec = secItems(d, true).filter(x => x.top && !x.dis);
+  return ps.length + sec.length + newDevRows(d).named.slice(0, 3).filter(r => r.routed !== false).length;
+}
+// The owl's stock "Nothing needs you." cannot sit on a page whose Needs-you column holds something
+// waiting for a decision. Dashboard only, at render time: the model is not asked again, the
+// Timeline keeps what was said word for word. Only a whole-network statement goes (alone, or
+// with generic time/place words); a sentence that names a thing, or a clause inside a longer
+// sentence, is the owl's to say.
+const OWL_NOTHING = /^(?:nothing needs (?:you|your attention)|nothing to do|no action (?:is )?(?:needed|required|necessary)|niente richiede la tua attenzione|nulla richiede la tua attenzione|niente ha bisogno di te|nessuna azione (?:è )?(?:necessaria|richiesta)|niente da fare)(?:\s+(?:right now|today|at the moment|at present|for now|on the network|adesso|ora|oggi|al momento|in questo momento|sulla rete))*$/i;
+function owlSaidFor(summary, nDecide) {
+  const t = String(summary || "");
+  if (!nDecide) return t;
+  return t.split(/(?<=[.!?])\s+/).filter(x => !OWL_NOTHING.test(x.trim().replace(/[.!?]+$/, ""))).join(" ").trim();
+}
 function renderStatus(d) {
   const sh = d.shadowed || {}, devs = d.devices || [], n = {up: 0, asleep: 0, paused: 0, held: 0, shadow: 0, down: 0};
   devs.forEach(x => n[devState(x, sh)]++);
@@ -1659,13 +1705,14 @@ function renderStatus(d) {
   const missed = devs.filter(x => devState(x, sh) === "down" && ["critical", "high", "warning"].includes(x.criticality)
                                   && !all.some(i => i.ip === x.ip));
   const tone = !d.sweep.ts ? "gray" : worst ? TONE[worst] || "orange" : missed.length ? "gray" : "green";
+  const nDec = !d.sweep.ts || !devs.length || iss.length || missed.length ? 0 : decideCount(d);
   const title = !d.sweep.ts ? "Waiting for the first sweep" : !devs.length ? "Nothing watched yet" : iss.length > 1 ? `${iss.length} problems` : iss.length ? issueTitle(iss[0])
-    : missed.length === 1 ? `${missed[0].name} missed a check` : missed.length ? `${missed.length} devices missed a check` : "All clear";
+    : missed.length === 1 ? `${missed[0].name} missed a check` : missed.length ? `${missed.length} devices missed a check` : nDec ? "All answering" : "All clear";
   // one count everywhere (the digest's "58/60 up · 1 asleep · 1 paused"): answering of every device
   const said = !d.sweep.ts ? "" : [`${n.up} of ${devs.length} devices answering${n.asleep ? `, ${n.asleep} asleep on schedule` : ""}${n.held ? `, ${n.held} rebooting` : ""}${n.paused ? `, ${n.paused} paused` : ""}.`,
     wanWords(d), sitesWords(d)].filter(Boolean).join(" ");
-  put("status", `<div class="card status c-${tone}"><div class="shl"><span class="beacon"></span><h1>${esc(title)}</h1></div>
-    ${said ? `<p class="ssum">${esc(said)}</p>` : ""}${iss.map(i => incHtml(d, i)).join("")}
+  put("status", `<div class="card status c-${tone}"><div class="shl"><span class="beacon"></span><h1>${esc(title)}${nDec ? ` · <button class="more" type="button" data-act="goinbox" style="font:inherit;letter-spacing:inherit;padding:0">${nDec} to decide</button>` : ""}</h1></div>
+    ${said ? `<p class="ssum">${esc(said)}</p>` : ""}${devs.length ? weekLine(d) : ""}${iss.map(i => incHtml(d, i)).join("")}
     ${info.length ? `<div class="fine" style="margin-top:12px">Also: ${esc(info.map(i => `${i.label || i.device} — ${i.detail}`).join(" · "))}</div>` : ""}
     ${devs.length ? tilesHtml(d) : ""}</div>`);
 }
@@ -1695,9 +1742,7 @@ function renderInbox(d) {
     <div class="ibtns"><a class="sbtn" href="#sec">See them on Security${ic("chev")}</a></div></div>`);
   // each new device by name, with what the owl said of it and the way to its story; phones and
   // guests on one line together
-  const nrows = (d.sites || []).flatMap(x => (((x.dhcp || {}).rows) || []).filter(r => r.new && !r.known).map(r => ({...r, site: x})));
-  const phoneish = r => (r.vendor || "").startsWith("private") || r.guest;
-  const named = nrows.filter(r => !phoneish(r)), phones = nrows.filter(phoneish);
+  const {nrows, phoneish, named, phones} = newDevRows(d);
   for (const r of named.slice(0, 3)) {
     const st = ((d.stories || {}).dev || {})[String(r.mac || "").toLowerCase()] || {}, o = st.owl || {};
     parts.push(`<div class="nit c-blue"><div class="k">New device · ${esc(r.site.name)}</div><div class="t">${esc(r.name || r.vendor || r.ip)}</div>
@@ -1825,12 +1870,13 @@ function renderModel(d) {
   if (l.health) { const hh = HEALTH[l.health] || HEALTH.unknown; h += `<span class="tagx c-${hh[2]}">${esc(l.health)}</span>`; }
   h += `<span class="fine" style="margin-left:auto">${l.at ? esc(ago(l.at)) + (l.fresh ? "" : " · stale") : ""}</span></div>`;
   if (l.running) h += `<div class="running"><span class="spin"></span>${l.queued ? "Starting — a fresh sweep first, then the owl…" : "The owl is reading the network…"}</div>`;
-  if (l.summary) {
-    const long = l.summary.length > 240;
-    h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, noCall(l.summary))}</p>`;
+  const said = owlSaidFor(noCall(l.summary), decideCount(d));
+  if (said) {
+    const long = said.length > 240;
+    h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, said)}</p>`;
     if (long) h += `<button class="more" data-act="expand" id="owlmore">${S.expanded ? "Less" : "More"}</button>`;
   } else if (!l.running) h += `<p class="mtext muted">No assessment yet — the owl looks about hourly.</p>`;
-  if (l.unchanged_at && l.summary) h += `<div class="fine">Nothing has changed since: checked again at ${esc(clock(l.unchanged_at))}.</div>`;
+  if (l.unchanged_at && said) h += `<div class="fine">Nothing has changed since: checked again at ${esc(clock(l.unchanged_at))}.</div>`;
   // the owl read the network a while ago; the monitor reads it every minute. When they differ
   // the card says so, instead of OK under a Degraded header (10-08)
   const mon = (d.issues || []).filter(i => i.severity !== "info");
@@ -1958,9 +2004,10 @@ function newDevHtml(d) {
 function renderDevices(d) {
   put("devnew", newDevHtml(d));
   const sh = d.shadowed || {}, devs = (d.devices || []).filter(x => S.site === "all" || x.site === S.site), O = outages(d);
-  const flaps = ip => (O.m[ip] || []).filter(v => !v.sched).length;
+  const flaps = ip => flapsIn(O, ip);
   const count = {all: devs.length, down: 0, unstable: 0, asleep: 0, paused: 0};
-  devs.forEach(x => { const v = devState(x, sh); if (v === "down" || v === "shadow") count.down++; if (v === "asleep") count.asleep++; if (v === "paused") count.paused++; if (flaps(x.ip)) count.unstable++; });
+  devs.forEach(x => { const v = devState(x, sh); if (v === "down" || v === "shadow") count.down++; if (v === "asleep") count.asleep++; if (v === "paused") count.paused++; });
+  count.unstable = weekDown(d, O, S.site).length;
   const up = devs.filter(x => x.up && !x.paused).length;
   put("dev-sub", devs.length ? `${devs.length} watched · ${up} answering${count.asleep ? ` · ${count.asleep} asleep on schedule` : ""}${count.paused ? ` · ${count.paused} paused` : ""}` : "No sweep yet.");
   put("dev-filters", (S.group ? `<button class="chip" data-act="clrgroup" aria-pressed="true">${esc(GN(S.group))} ${ic("x")}</button>` : "") +
@@ -2318,7 +2365,47 @@ function renderSeen(d) {
 // While an answer is being written the page polls /api/chat every second and shows it arrive:
 // the model thinking, each read-only check it makes, then the text.
 const SUGGEST = ["Why did the internet drop last?", "Which devices are getting worse?", "Anything unusual in the logs today?", "Did anyone try to log in to my servers?"];
-const CH = {cid: load("chat", null), conv: null, recent: [], model: {}, loaded: false, busy: false, timer: 0,
+// The Ask tab opens on a new, empty chat when the last conversation is over a day old
+// (the old one stays first in the list). Never while an answer is coming, once the owner chose
+// a conversation in this page, or while they are typing.
+const FRESH_AFTER = 86400;
+function askStartsFresh(cid, turns, nowTs, picked, typing) {
+  if (!cid || !turns || !turns.length || picked || typing) return false;
+  if (turns.some(t => t.status === "pending")) return false;
+  return nowTs - Math.max(...turns.map(t => Math.max(t.ts || 0, t.done_ts || 0))) > FRESH_AFTER;
+}
+// Up to four questions worth asking about right now, from what the page already holds, most
+// useful first; the static ones fill up. Names, hosts and titles come from the network: they
+// are only ever escaped (sugHtml), never trusted.
+const sugCut = (t, n) => { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t; };
+function askSuggestions(d, nowTs) {
+  d = d || {};
+  const out = [], sh = d.shadowed || {};
+  const down = (d.devices || []).filter(x => devState(x, sh) === "down").sort((a, b) => (RANK[a.criticality] ?? 3) - (RANK[b.criticality] ?? 3))[0];
+  if (down) out.push({q: `Why is ${sugCut(down.name || down.ip, 40)} down?`});
+  const ev = ((d.wan || {}).events || []).filter(e => nowTs - e.ts < 172800 && e.ts <= nowTs).slice(-1)[0];
+  if (ev) {
+    const when = sameDay(ev.ts, nowTs) ? "today" : sameDay(ev.ts, nowTs - 86400) ? "yesterday" : "on " + wd(ev.ts);
+    const what = ev.kind === "main-outage" ? `the ${LK().main}` : "the internet";
+    out.push({q: `Why did ${what} drop ${when} at ${hm(ev.ts)}?`, wan: ev.ts});
+  }
+  const sec = secItems(d, true).filter(x => x.top && !x.dis)[0];
+  if (sec) out.push({q: `What should I do about: ${sugCut(sec.text, 60)}?`});
+  const nd = newDevRows(d).nrows[0];
+  if (nd) out.push({q: `What is ${sugCut(nd.name || nd.ip || nd.vendor, 40)}?`});
+  if (((d.updates || {}).hosts || []).some(h => !h.error && h.updates)) out.push({q: "Which updates matter most?"});
+  const top = out.slice(0, 4);
+  for (const x of SUGGEST) {
+    if (top.length >= 4) break;
+    if (top.some(y => y.wan) && x === SUGGEST[0]) continue;      // the internet question is already there, with its facts
+    top.push({q: x});
+  }
+  return top;
+}
+const sugHtml = list => list.map(x => x.wan
+  ? `<button class="chip sug" type="button" data-act="askwan" data-wts="${esc(x.wan)}">${esc(x.q)}</button>`
+  : `<button class="chip sug" type="button" data-suggest="${esc(x.q)}">${esc(x.q)}</button>`).join("");
+const CH = {cid: load("chat", null), decided: false, picked: false, conv: null, recent: [], model: {}, loaded: false, busy: false, timer: 0,
             seen: load("chatSeen", 0), bottom: false, arm: null, armT: 0, how: new Set()};
 const turnsOf = () => (CH.conv && CH.conv.turns) || [];
 const pendingTurn = () => turnsOf().find(t => t.status === "pending");
@@ -2409,7 +2496,7 @@ function renderAsk() {
   const near = onAsk && (kb ? se.scrollTop + se.clientHeight : innerHeight + scrollY) >= se.scrollHeight - 160;
   $("newchat").disabled = !turns.length;
   $("ask-empty").hidden = !!turns.length || !CH.loaded;
-  put("suggest", SUGGEST.map(x => `<button class="chip sug" type="button" data-suggest="${esc(x)}">${esc(x)}</button>`).join(""));
+  put("suggest", sugHtml(askSuggestions(S.d, now())));
   renderThread();
   syncSend();
   const m = CH.model || {}, p = pendingTurn();
@@ -2438,6 +2525,11 @@ async function chatRefresh() {
     if ((CH.cid || "") !== cid) { CH.again = true; return; }
     NOW = d.now || NOW; gotAt = Date.now();
     CH.conv = d.conv; CH.recent = d.recent || []; CH.model = d.model || {}; CH.loaded = true;
+    // once per page, when the Ask tab first shows a conversation: an old one gives way to a new chat
+    if (!CH.decided && S.tab === "ask") {
+      CH.decided = true;
+      if (askStartsFresh(CH.cid, turnsOf(), NOW, CH.picked, !!askq.value.trim())) { CH.cid = null; save("chat", null); CH.conv = null; }
+    }
     if (CH.cid && !d.conv) { CH.cid = null; save("chat", null); }   // deleted, or aged out of the list
     renderAsk();
   } catch (e) { /* the state poll reports an unreachable lanowl */ }
@@ -2456,6 +2548,7 @@ function chatSchedule() {
   if (ms) CH.timer = setTimeout(chatRefresh, ms);
 }
 function useChat(cid) {
+  if (cid) CH.picked = true;      // the owner chose it (or asked about something): never switch away
   CH.cid = cid || null; save("chat", CH.cid);
   CH.conv = cid ? CH.conv && CH.conv.id === cid ? CH.conv : null : null;
   CH.bottom = true;
@@ -4059,7 +4152,9 @@ document.addEventListener("click", async e => {
   if (t.dataset.wan) { openWan(t.dataset.wan); return; }
   const act = t.dataset.act;
   if (act === "close") closeSheet();
+  else if (act === "goinbox") $("inbox").scrollIntoView({behavior: "smooth", block: "start"});   // on a phone the column is below
   else if (act === "group") { S.group = t.dataset.g; S.filter = "all"; setTab("devices"); if (S.site !== "all") setSite("all"); else renderDevices(S.d); }
+  else if (act === "weekdown") { S.group = null; S.filter = "unstable"; setTab("devices"); renderDevices(S.d); }
   else if (act === "clrgroup") { S.group = null; renderDevices(S.d); }
   else if (act === "seenall") { SEEN.open = true; renderLog(S.d); }
   else if (act === "lanes") { S.lanes = !S.lanes; save("lanes", S.lanes); renderLog(S.d); }

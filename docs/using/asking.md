@@ -44,7 +44,10 @@ answer, each with the owl's 🪶, in a quote ("6 checks · 32s") that shows the 
 for the rest.
 
 **On the dashboard** **Ask again** retries, and **Copy** copies the answer. Conversations are
-kept across restarts.
+kept across restarts. The Ask tab opens on a new chat when the last conversation is more than
+a day old, with up to four questions made from what the dashboard already shows (a device that
+is down, the last internet drop, an open security finding, a new device, updates waiting);
+tap one to use it.
 
 **On Telegram** the work is one silent message, kept up to date, with **Stop** under it. The
 answer arrives as a message of its own, so the phone buzzes once, and the working message is
