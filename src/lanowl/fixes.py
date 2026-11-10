@@ -70,7 +70,7 @@ class Fixes:
     def __init__(self, auditor):
         self.a = auditor
         c = auditor.cfg.get("fixes") or {}
-        self.enabled = bool(c.get("enabled", True))
+        self.enabled = bool(c.get("enabled", False))
         self.timeout_s = float(c.get("model_timeout_s", 600))
         try:
             self.rec = auditor.state.load_record(RECORD) or {}

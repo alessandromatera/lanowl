@@ -158,6 +158,12 @@ def clean_device(d: dict, kinds: dict) -> tuple:
                 return None, "a check's port is a number"
             if not 0 < c["port"] < 65536:
                 return None, f"a {c['type']} check needs a port"
+        if c["type"] == "http" and "path" in c:
+            from .probes import clean_path
+            try:
+                c["path"] = clean_path(c["path"])
+            except ValueError as e:
+                return None, f"an http check's {e}"
         if c["type"] == "link" and not (c.get("iface") or c.get("interface")):
             return None, "a link check needs the router port the device hangs off, e.g. ether3"
         checks.append(c)

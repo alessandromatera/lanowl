@@ -104,9 +104,23 @@ async def tcp_check(ip: str, port: int, timeout_ms: int = 1500) -> ProbeResult:
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
+def clean_path(path) -> str:
+    """The path of an http check: "/" if empty, a leading "/" always. Raises ValueError for one
+    that could carry a scheme or host, or break the request line (the inventory can be edited
+    from the dashboard, and the model's http_get passes its own)."""
+    p = str(path or "").strip()
+    if "://" in p or "\\" in p or any(ord(c) <= 32 or ord(c) == 127 for c in p):
+        raise ValueError("a path is like /status: no scheme, host, spaces or control characters")
+    return p if p.startswith("/") else "/" + p
+
+
 async def http_check(ip: str, port: int = 80, path: str = "/", timeout_ms: int = 4000,
                      scheme: Optional[str] = None) -> ProbeResult:
     """A 2xx/3xx/4xx response means the service is up (401/403 still = alive)."""
+    try:
+        path = clean_path(path)
+    except ValueError:
+        return ProbeResult(False, None, "http bad path")
     if aiohttp is None:
         # Fall back to a bare TCP check if aiohttp isn't installed.
         r = await tcp_check(ip, port, timeout_ms)

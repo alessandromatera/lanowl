@@ -20,11 +20,11 @@ Each field says where its value comes from:
 
 - **config.yaml**: it is in your file.
 - **not in your file**: lanowl uses its built-in default. For a switch that is lanowl's own
-  default, read from its code, and the switch is drawn that way (six differ from the example:
-  `telegram.chat`, `web`, `discovery.notify_new_devices` and `weekly` are off without your file,
-  `fixes` and `scorecard` on). For other values the example file's is shown as a hint: it is a
-  starting point, not always the default. Type a value and it goes into your file, with the
-  example's comment beside it.
+  default, read from its code, and the switch is drawn that way (four differ from the example:
+  `telegram.chat`, `web`, `discovery.notify_new_devices` and `weekly` are off without your
+  file). For other values the example file's is shown as a hint: it is a starting point, not
+  always the default. Type a value and it goes into your file, with the example's comment
+  beside it.
 - **the environment**: set by a variable in `docker/.env` (`LANOWL_MODEL_URL`,
   `LANOWL_HOST_IP`, `LANOWL_WEB_PORT`, `TZ`), which wins over the file. The field is locked:
   change it there.

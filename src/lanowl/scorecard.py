@@ -75,7 +75,7 @@ class Scorecard:
     def __init__(self, auditor):
         self.a = auditor
         c = auditor.cfg.get("scorecard") or {}
-        self.enabled = bool(c.get("enabled", True))
+        self.enabled = bool(c.get("enabled", False))
         self.max_per_day = int(c.get("max_per_day", 12))
         try:
             self.rec = auditor.state.load_record(RECORD) or {}

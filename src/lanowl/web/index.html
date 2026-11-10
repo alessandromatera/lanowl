@@ -1308,6 +1308,13 @@ function dur(s) {
   if (s < 172800) { const m = Math.round(s / 60); return Math.floor(m / 60) + "h" + String(m % 60).padStart(2, "0"); }
   return Math.round(s / 86400) + "d";
 }
+// the paging floor is a setting the owner typed (90 s by default): said exactly, never rounded
+// the way dur() does (90 s read "2m")
+function floorTxt(s) {
+  s = Math.round(s || 0);
+  if (s < 120) return s + "s";
+  return Math.floor(s / 60) + "m" + (s % 60 ? String(s % 60).padStart(2, "0") + "s" : "");
+}
 const hm = ts => new Date(ts * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
 const sameDay = (a, b) => new Date(a * 1000).toDateString() === new Date(b * 1000).toDateString();
 function clock(ts) {
@@ -2925,12 +2932,16 @@ function renderShell(d) {
 }
 
 // ---------------------------------------------------------------- more
+// svc-site: the Services list follows the site chips, by the address each row belongs to; a row
+// with no address (no model host known) belongs to no site and shows under "All sites" only
+const svcInSite = (d, x) => x.ip ? inSite(d, x.ip) : S.site === "all";
+// svc-site-end
 function renderMore(d) {
-  const s = d.services || [];
+  const s = (d.services || []).filter(x => svcInSite(d, x));
   put("services", s.length ? `<div class="list">` + s.map(x => `<div class="row"><span class="sd c-${x.ok ? "green" : "red"}"></span>
     <span class="rt"><span class="rn">${esc(x.name)}${x.port ? ` <span class="muted" style="font-weight:400">:${esc(x.port)}</span>` : ""}</span>
     <span class="rs${x.ok ? "" : " wrap"}">${esc(x.host)}${x.ok ? "" : " · " + esc(x.detail)}</span></span><span class="rv">${esc(x.ok ? x.detail : "failing")}</span></div>`).join("") + `</div>`
-    : `<div class="list"><div class="empty">No named services.</div></div>`);
+    : `<div class="list"><div class="empty">No named services${S.site === "all" ? "" : " at this site"}.</div></div>`);
 
   const sw = d.sweep || {}, l = d.llm || {};
   const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`;
@@ -3534,7 +3545,7 @@ function renderWan() {
   const v = x.verdict || {}, e = x.evidence, L = x.length || {};
   h += `<div class="card wv c-${WHERE_C[v.where] || "gray"}"><div class="mh">${ic("globe")}<b>${esc(cap(v.short))}</b></div>` +
     (v.lines || []).map(l => `<p class="mtext">${esc(l)}</p>`).join("") +
-    `<div class="fine" style="margin-top:8px">${esc(cap(L.how || ""))}.${x.kind !== "main-outage" ? ` ${x.paged ? "It passed" : "Under"} the ${esc(dur(x.floor_s))} paging floor.` : ""} The monitor's own reading, from what it kept — not the owl's words.</div></div>`;
+    `<div class="fine" style="margin-top:8px">${esc(cap(L.how || ""))}.${x.kind !== "main-outage" ? ` ${x.paged ? "It passed" : "Under"} the ${esc(floorTxt(x.floor_s))} paging floor.` : ""} The monitor's own reading, from what it kept — not the owl's words.</div></div>`;
   const kv = (k, val) => val ? `<div class="kv"><span>${esc(k)}</span><span style="text-align:right">${val}</span></div>` : "";
   let facts = "";
   if (e) {

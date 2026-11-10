@@ -204,7 +204,7 @@ async def _run_check(dev: Device, check: dict, cfg: dict, sem: asyncio.Semaphore
         elif ctype == "tcp":
             r = await probes.tcp_check(dev.ip, int(port), _t("tcp_timeout_ms", 1500))
         elif ctype == "http":
-            r = await probes.http_check(dev.ip, int(port or 80), "/", _t("http_timeout_ms", 4000))
+            r = await probes.http_check(dev.ip, int(port or 80), check.get("path") or "/", _t("http_timeout_ms", 4000))
         elif ctype == "snmp":
             community = check.get("community", p.get("snmp_community", "public"))
             r = await probes.snmp_get(dev.ip, probes.OID_SYSUPTIME, community, p.get("snmp_timeout_s", 2))

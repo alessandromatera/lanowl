@@ -1495,7 +1495,14 @@ class Auditor:
         # The daily re-state is a safety net for a real problem nobody has fixed. It must
         # not resurrect an `info` issue: "the TV is still off" is not worth a message a
         # day later, which is the whole point of reporting it once.
-        worth_restating = any(i.get("severity") != "info" for i in report.get("issues", []))
+        # A critical that opened less than a reminder ago was alerted at once: restating it in
+        # the next digest only because no digest went out for a day is a second message for
+        # one incident (an audit and a new critical on the same sweep).
+        def alerted_lately(i: dict) -> bool:
+            began = self.gate.episode_start(self._key(i))
+            return i.get("severity") == "critical" and began > 0 and now - began < repeat_s
+        worth_restating = any(i.get("severity") != "info" and not alerted_lately(i)
+                              for i in report.get("issues", []))
         stale = repeat_s > 0 and worth_restating and \
             (now - self._last_digest_sent) >= repeat_s
 
@@ -1881,10 +1888,14 @@ class Auditor:
                 # clock while the model thinks, which is the whole point.
                 if forced:
                     # on-demand full audit with digest
-                    self._start_llm_audit(snap, report, send_digest=True, reason="check-now")
+                    self._start_llm_audit(snap, report, send_digest=True, reason="check-now",
+                                          incident_issues=dict(self._incident_issues) if incident else None)
                 elif self._due_for_scheduled_llm(t0):
                     self._last_digest = t0
-                    self._start_llm_audit(snap, report, send_digest=True, reason="scheduled")
+                    # a new critical on this same sweep is not triaged by a second audit: this
+                    # one explains it, into its alert
+                    self._start_llm_audit(snap, report, send_digest=True, reason="scheduled",
+                                          incident_issues=dict(self._incident_issues) if incident else None)
                 # incident triage (cooldown-limited), digest suppressed to avoid noise
                 elif incident and self.cad.get("llm_on_incident", True) and \
                         (t0 - self._last_incident_llm) >= self.cad.get("llm_incident_cooldown_s", 600):

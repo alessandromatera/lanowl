@@ -329,4 +329,3 @@ value. These differ:
 | `cadence.llm_max_wall_s` | `600` |
 | `telegram.chat.answer_max_wall_s` | `420` |
 | `probes.icmp_timeout_ms` | `1000` |
-| `fixes.enabled`, `scorecard.enabled` | `true` |

@@ -19,6 +19,8 @@ from .sweep import OLLAMA_KEY, Snapshot
 _SEV = {"critical": "critical", "high": "high", "warning": "warning", "low": "info", "info": "info"}
 _SEV_RANK = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 _EMOJI = {"critical": "🔴", "high": "🟠", "warning": "🟡", "info": "⚪", "ok": "🟢"}
+# how a degraded issue's detail starts; the recovery message reads the services back from it
+_DEGRADED_PREFIX = "service degraded: "
 _HOO = re.compile(r"^\s*(🦉\s*)?Hoo\.\s*")       # the owl's call, once a message: not in a list line
 
 
@@ -192,7 +194,7 @@ def build_report(snapshot: Snapshot, inv: Inventory, down_ips: set,
         if d.ip not in down_ips and d.up and failed and not d.excused \
                 and d.ip not in shadow:
             issues.append(Issue(d.name, d.ip, d.group, "warning",
-                                f"service degraded: {', '.join(failed)}", kind="degraded"))
+                                f"{_DEGRADED_PREFIX}{', '.join(failed)}", kind="degraded"))
 
     # 3b) the model server: a service of lanowl's own host, not an inventory device
     #     (see Auditor._probe_ollama). Without it every audit quietly falls back to the
@@ -562,9 +564,16 @@ def format_critical(device_name: str, ip: str, detail: str, snapshot: Snapshot) 
     return f"{_EMOJI['critical']} <b>CRITICAL</b> {when}\n{who}\n{detail}"
 
 
-def format_recovery(device_name: str, ip: str, kind: str = "down", idx=None) -> str:
+def format_recovery(device_name: str, ip: str, kind: str = "down", idx=None, detail: str = "") -> str:
     if kind in ("wan-path", "wan-link"):
         return f"{_EMOJI['ok']} RECOVERED\nInternet is back on the MAIN link"
+    if kind == "degraded":
+        # the device answered all along; only a service check failed — it never went offline
+        who = label(device_name, ip, idx)
+        svc = detail[len(_DEGRADED_PREFIX):].strip() if detail.startswith(_DEGRADED_PREFIX) else ""
+        what = f"{svc} is answering again" if svc and "," not in svc else \
+            f"{svc} are answering again" if svc else "its service is answering again"
+        return f"{_EMOJI['ok']} RECOVERED\n{who}: {what}"
     return f"{_EMOJI['ok']} RECOVERED\n{label(device_name, ip, idx)} is back online"
 
 
@@ -683,9 +692,10 @@ def format_alerts(events: list, snapshot: Snapshot) -> list:
             e = healed[0]
             i = e.issue
             base = format_recovery(i["device"], i.get("ip", ""),
-                                   kind=i.get("kind", "down"), idx=idx)
+                                   kind=i.get("kind", "down"), idx=idx, detail=i.get("detail", ""))
             extra = _blackout_note(i)
-            out.append(f"{base}\n<i>{_recovery_span(e, 'was down')}</i>{extra}")
+            tense = "failed for" if i.get("kind") == "degraded" else "was down"
+            out.append(f"{base}\n<i>{_recovery_span(e, tense)}</i>{extra}")
         else:
             lines = [f"{_EMOJI['ok']} <b>RECOVERED</b> {when} — {len(healed)} issues"]
             for e in healed:
