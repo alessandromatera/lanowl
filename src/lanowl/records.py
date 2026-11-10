@@ -60,7 +60,8 @@ TOPICS = {
     "device": "EVERYTHING about one device (ip= required): what it is, its probes right now, "
               "its DHCP lease, what it depends on and what hangs off it, whether and how it can "
               "be rebooted / updated / backed up / scanned from here, its waiting updates, open "
-              "issues, paused or not, the last actions on it",
+              "issues, paused or not, the last actions on it, and the log lines the owl no longer "
+              "reads on it because the device writes them all the time (devlog.routine_lines)",
     "actions": "every action proposed by the model (audit or question) or pressed by the owner: "
                "when, what, on which device, the reason, and what became of it — approved, "
                "rejected, refused and why, expired, its result or error (hours=, ip=)",

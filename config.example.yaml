@@ -255,6 +255,10 @@ devwatch:
   logs: true                       # read the logs of the devices with `manage: [logs]`
   quiet_days: 7                    # the first days: the owl's verdicts are kept, not sent
   triage: {timeout_s: 120, max_lines: 60, notify_severities: ["critical", "warning"]}
+  # lines a device writes all the time (a cron job, the same session): after the owl says "nothing
+  # worth telling" about the same line `after` times, it is not shown to the owl again until
+  # `forget_days` pass without it. A burst of it is still read. after: 0 learns nothing.
+  routine: {after: 3, forget_days: 30}
 
 # The auth logs of the Linux devices that `manage: [logs]` by lanowl's ssh key, every two
 # minutes, for security events. lanowl's ssh key (secrets.yaml `ssh_key`) is how every key

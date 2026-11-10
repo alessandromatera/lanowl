@@ -45,6 +45,7 @@ import re
 import shlex
 import socket
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -68,6 +69,11 @@ PENDING_MAX = 200       # lines waiting for the owl (it was busy, or off)
 FINDINGS_N = 30
 DIGEST_MAX = 100        # notes waiting for the next digest
 MORNING_H = 8           # a note waiting since before this hour sends the first digest after it
+ROUTINE_AFTER = 3       # "nothing worth telling" verdicts in a row on a line's shape: it is routine
+ROUTINE_FORGET_D = 30   # a shape not seen for this long is forgotten
+ROUTINE_BURST = 3       # a routine shape seen more than this many times its usual count is news
+ROUTINE_MAX = 200       # shapes kept a device: a noisy or hostile log cannot grow the record
+SHAPE_MAX = 160         # characters of a shape kept
 
 # --- the commands --------------------------------------------------------------------------------
 # Every section starts with a marker line, so one login answers both reads.
@@ -146,7 +152,8 @@ TAGS = (
     ("hardware", re.compile(r"temperature|overheat|thermal|voltage|\bpsu\b|power supply|\bfan\b|"
                             r"Machine check|\bECC\b", re.I)),
     ("memory", re.compile(r"out of memory|oom-killer|Killed process|oom_reaper", re.I)),
-    ("login", re.compile(r"logged in|session (?:was )?opened|Accepted (?:password|publickey|keyboard)|"
+    # a cron job's own PAM session ("pam_unix(cron:session): session opened") is no one logging in
+    ("login", re.compile(r"logged in|(?<!\(cron:session\): )session (?:was )?opened|Accepted (?:password|publickey|keyboard)|"
                          r"auth succeeded", re.I)),
     ("failed-login", re.compile(r"login failure|Failed password|authentication failure|Invalid user|"
                                 r"auth(?:entication)? fail|Bad password", re.I)),
@@ -397,6 +404,54 @@ def own(line: str, user: str, addrs: set) -> bool:
     return False
 
 
+# --- the shape of a line ---------------------------------------------------------------------------
+# A line with only what changes every time replaced by a placeholder: a time, a process id, a source
+# port, a counter, the number of a duration or a size, a long digest. What says WHO and WHAT stays — user names,
+# addresses, host names, program names, the words — so "root logged in from A" and the same from B
+# are two shapes. Applied in this order (a time before its digits, a port after its address); a MAC
+# address (aa:bb:cc:00:11:22) is an identity and is left alone.
+_EPH = r"(?:3[3-9]\d{3}|[4-6]\d{4})"
+_SHAPE = (
+    (re.compile(r"\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}(?:\s+\d{4})?"), "<time>"),
+    (re.compile(r"\b[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}(?:\s+\d{4})?"), "<time>"),
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?"), "<time>"),
+    (re.compile(r"\b[a-z]{3}/\d{1,2}/\d{4}\s+\d{2}:\d{2}:\d{2}"), "<time>"),                    # RouterOS
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}/\d{2,4}\b"), "<date>"),
+    (re.compile(r"(?<![\w:])\d{1,2}:\d{2}:\d{2}(?:[.,]\d+)?(?![\w:])"), "<time>"),
+    (re.compile(r"\[\s*\d+\.\d+\]"), "[<uptime>]"),                                  # kernel: [ 1234.567890]
+    (re.compile(r"(?<=\w)\[\d+\]"), "[<pid>]"),                                          # sshd[1234]
+    (re.compile(r"\b(pid|tid|sid|sess|session|seq|sequence|count|counter|serial|len|"
+                r"size|bytes|packets|pkts|rx|tx|sent|rcvd|received)(\s*[=:#]\s*|\s+)\d+\b"), r"\1\2<n>"),
+    # only a port from the range a client is given for one connection (33000 and up): a low one
+    # names a service, and "the same line on another port" must stay another shape
+    (re.compile(r"\bport\s+%s\b" % _EPH), "port <port>"),                              # sshd: from A port 51234
+    (re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3}):%s\b" % _EPH), r"\1:<port>"),       # 192.168.10.5:51234
+    (re.compile(r"(\]):%s\b" % _EPH), r"\1:<port>"),                                      # [fe80::1]:51234
+    # a duration or a size loses its number and keeps its unit: 5 s and 5 hours, 10 MB and 10 GB
+    # are not the same line
+    (re.compile(r"\b\d+m\d+s\b"), "<n>m<n>s"),
+    (re.compile(r"(?<![\w.])\d+(?:\.\d+)?(ms|us|s)\b"), r"<n>\1"),
+    (re.compile(r"\b\d+(?:\.\d+)?\s(ms|us|secs?|seconds?|min|minutes?|hours?)\b"), r"<n> \1"),
+    (re.compile(r"\b\d+(?:\.\d+)?(\s?)([KMGT]i?B|bytes?)\b"), r"<n>\1\2"),
+    (re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"), "<hex>"),
+    # only a long digest (32 and up): a shorter hex word can be a name, a key id, a MAC without colons
+    (re.compile(r"\b(?:0x)?[0-9a-fA-F]{32,}\b"), "<hex>"),
+    (re.compile(r"\*[0-9A-F]+\b"), "*<id>"),                                             # RouterOS ids
+    (re.compile(r"#\d+\b"), "#<n>"),
+)
+
+
+def shape_of(line: str) -> str:
+    """The line with its volatile parts replaced (see above); '' for a blank one. Pure."""
+    s = line or ""
+    for rx, rep in _SHAPE:
+        s = rx.sub(rep, s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # a long line keeps its head to read and a mark of the whole: two lines that differ only past
+    # the cut (the user, the address) must never share a shape
+    return s if len(s) <= SHAPE_MAX else f"{s[:SHAPE_MAX - 15]}… #{_h(s)}"
+
+
 # --- the module --------------------------------------------------------------------------------------
 @dataclass
 class Target:
@@ -472,6 +527,9 @@ class DevWatch:
         t = c.get("triage") or {}
         self.timeout_s = float(t.get("timeout_s", 120))
         self.max_lines = int(t.get("max_lines", 60))
+        rc = c.get("routine") if isinstance(c.get("routine"), dict) else {}
+        self.routine_after = max(0, _num(rc.get("after"), ROUTINE_AFTER, int))     # 0: learns nothing
+        self.routine_forget_s = _num(rc.get("forget_days"), ROUTINE_FORGET_D, float) * 86400
         self.notify = [str(x) for x in (t.get("notify_severities") or ["critical", "warning"])]
         try:
             self.rec = self.a.state.load_record("devwatch") or {}
@@ -564,6 +622,7 @@ class DevWatch:
         """The devices whose hour is up, one at a time; then the ports read again a minute after
         they looked slower."""
         now = time.time()
+        self._forget_removed()
         for t in self.targets():
             if self._stop:
                 return
@@ -765,7 +824,7 @@ class DevWatch:
             d["log_error"] = "no log to read on it (no journal, syslog or logread)"
             return
         d.pop("log_error", None)
-        fresh, routine = [], 0
+        cands, routine = [], 0
         anchors = d.setdefault("anchor", {})
         for src, text in logs.items():
             if t.kind == "linux" and src == "journal":
@@ -796,14 +855,95 @@ class DevWatch:
                 if own(ln, user, addrs) or hum(t.kind, ln, tp):
                     routine += 1
                     continue
-                tg = tags_of(ln)
-                fresh.append((f"[{','.join(tg)}] " if tg else "") + ln[:400])
-        d["routine"] = int(d.get("routine") or 0) + routine
+                cands.append((ln[:400], tags_of(ln)))
+        # what this device writes all the time, learned from the owl's own verdicts (below)
+        shapes = self._shapes(d, now)
+        per_read = Counter(shape_of(ln) for ln, tg in cands if not tg)
+        fresh, learned = [], 0
+        for ln, tg in cands:
+            st = None if tg or not self.routine_after else shapes.get(shape_of(ln))
+            if st is not None and self._is_routine(st) and per_read[shape_of(ln)] <= ROUTINE_BURST * max(1, int(st.get("max") or 1)):
+                st["seen"], st["last"] = int(st.get("seen") or 0) + 1, now         # still written: not forgotten
+                learned += 1
+                continue
+            fresh.append((f"[{','.join(tg)}] " if tg else "") + ln)
+        d["routine"] = int(d.get("routine") or 0) + routine + learned
+        if learned and not fresh:
+            log.info("devwatch: %s: only routine lines (%d)", t.name, learned)
         if not fresh:
             return
         d["recent"] = (list(d.get("recent") or []) + [{"ts": now, "line": x} for x in fresh])[-RECENT_N:]
         d["pending"] = (list(d.get("pending") or []) + fresh)[-PENDING_MAX:]
-        await self._triage(t, d, routine)
+        await self._triage(t, d, routine + learned)
+
+    # --- the routine this device writes all the time, learned ----------------------------------
+    def _is_routine(self, st: dict) -> bool:
+        return self.routine_after > 0 and int(st.get("n") or 0) >= self.routine_after
+
+    def _shapes(self, d: dict, now: float) -> dict:
+        """The device's shapes, those not seen for `forget_days` dropped first."""
+        sh = d.get("shapes")
+        if not isinstance(sh, dict):
+            sh = d["shapes"] = {}
+        for k in [k for k, v in sh.items() if not isinstance(v, dict)
+                  or now - float(v.get("last") or 0) > self.routine_forget_s]:
+            sh.pop(k, None)
+        return sh
+
+    def _forget_removed(self):
+        """A device taken out of the inventory takes its shapes with it."""
+        for ip, d in self.rec["dev"].items():
+            if d.get("shapes") and self.a.inv.get(ip) is None:
+                d.pop("shapes", None)
+
+    def _learn(self, d: dict, batch: list, told: bool, now: float):
+        """What a real verdict teaches: nothing worth telling adds one to the streak of every shape
+        in the batch; anything told sets them back to nothing. A tagged line (a link, a reboot, a
+        login…) is never learned: the code already knows it matters."""
+        if not self.routine_after:
+            return
+        shapes = self._shapes(d, now)
+        counts = Counter()
+        for ln in batch:
+            if _TAGGED.match(ln) or tags_of(ln):
+                continue
+            sp = shape_of(ln)
+            if sp:
+                counts[sp] += 1
+        for sp, n in counts.items():
+            st = shapes.get(sp)
+            if told:
+                if st is not None:
+                    st["n"] = 0
+                continue
+            st = shapes.setdefault(sp, {"n": 0, "seen": 0, "max": 0, "last": now})
+            st.update(n=int(st.get("n") or 0) + 1, seen=int(st.get("seen") or 0) + n,
+                      max=max(int(st.get("max") or 0), n), last=now)
+        # a noisy or hostile log cannot grow the record: what is not routine yet goes first, then the oldest
+        for k in sorted(shapes, key=lambda k: (self._is_routine(shapes[k]), shapes[k].get("last") or 0))[:max(0, len(shapes) - ROUTINE_MAX)]:
+            shapes.pop(k, None)
+
+    def forget_routine(self, ip: str, shape: Optional[str] = None) -> dict:
+        """The owner: this shape (or, with none named, all of them) is read by the owl again."""
+        d = self.rec["dev"].get(ip)
+        if d is None or self.a.inv.get(ip) is None:
+            return {"ok": False, "error": f"no device {ip}"}
+        n = 0
+        for k, st in (d.get("shapes") or {}).items():
+            if (shape is None or k == shape) and self._is_routine(st):
+                st["n"] = 0
+                n += 1
+        if shape is not None and not n:
+            return {"ok": False, "error": "no such routine line"}
+        self._save()
+        return {"ok": True, "forgot": n}
+
+    def routine_of(self, ip: str) -> list:
+        """The shapes the owl no longer reads on this device, the latest seen first."""
+        d = self.rec["dev"].get(ip) or {}
+        out = [{"shape": k, "seen": int(v.get("seen") or 0), "last": v.get("last") or 0}
+               for k, v in (d.get("shapes") or {}).items() if isinstance(v, dict) and self._is_routine(v)]
+        return sorted(out, key=lambda x: -x["last"])
 
     def _journal(self, d: dict, text: str) -> Optional[list]:
         """The journal's new lines, and its new cursor kept; None on its first read."""
@@ -892,6 +1032,7 @@ class DevWatch:
         d["pending"] = []
         sev = str(v.get("severity") or "info").lower()
         problem = bool(v.get("problem"))
+        self._learn(d, batch, problem, now)
         summary = str(v.get("summary") or "").strip()
         held = problem and sev in self.notify and now < self.quiet_until
         # the door: at once from a critical device, or for a critical verdict; else the digest
@@ -995,8 +1136,18 @@ class DevWatch:
                 "at_once": bool(dev is not None and dev.criticality == "critical"),
                 "every_h": self.every_s / 3600, "last": d.get("last"), "ok": d.get("ok"),
                 "error": d.get("error") or d.get("log_error") or "", "routine": d.get("routine") or 0,
-                "recent": list(d.get("recent") or [])[-10:][::-1],
+                "recent": list(d.get("recent") or [])[-10:][::-1], "routine_lines": self.routine_of(ip),
                 "quiet_until": self.quiet_until if self.quiet_days else 0}
+
+
+_TAGGED = re.compile(r"^\[[a-z,-]+\] ")        # a line the code tagged, as the owl is given it
+
+
+def _num(v, default, cast):
+    try:
+        return cast(default if v is None else v)
+    except (TypeError, ValueError):
+        return cast(default)
 
 
 def _nth(n: int) -> str:

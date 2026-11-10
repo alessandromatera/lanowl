@@ -126,3 +126,17 @@ device; from any other it waits for the next digest, unless the owl reads someon
 the device about to fail ([How alerts work](../using/alerts.md#a-port-slower-a-devices-own-log)).
 For the first `quiet_days` (7) nothing is sent: what the owl would have said is on the Timeline
 and under **Log checks**, so you can read it first.
+
+lanowl also learns what each device writes all the time (a cron job every minute, the same
+session every hour). A line is compared by its shape: the line with only what changes every time
+replaced (the time, a process id, a client's source port, a counter, the number of a duration
+or a size, a long digest); names, addresses, service ports and words stay, so the same line
+from another address or on another port is another shape. When
+the owl has said "nothing worth telling" about a shape three times in a row, that device's lines
+of that shape are no longer shown to it: it is given only the rest and a count, and with nothing
+else new, no model call is made at all. Anything the owl does tell resets the shapes it read, and
+a line lanowl tags (`[link]`, `[reboot]`, `[login]`…) is never learned. A routine shape that shows
+up more than three times as often as it ever did while it was learned is read again for that
+round, and one not seen for 30 days is forgotten. The sheet's **Routine lines the owl no longer
+reads** lists them, each with **Forget** (and **Forget all**). `devwatch.routine` sets it:
+`after: 3`, `forget_days: 30`; `after: 0` learns and skips nothing.

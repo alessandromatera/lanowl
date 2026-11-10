@@ -3482,6 +3482,8 @@ function detailsHtml() {
   }).join("") + `</div>`;
   // the lines worth a look its log had, newest first: what the owl was given
   if ((DL.recent || []).length) h += `<details class="pkl" style="margin-top:10px"><summary>Its log: the last ${DL.recent.length} line${DL.recent.length > 1 ? "s" : ""} that were not routine${ic("chev")}</summary><div class="wlog">${esc(DL.recent.map(x => x.line).join("\n"))}</div></details>`;
+  // the lines this device writes all the time, which the owl has said "nothing" about often enough to stop reading
+  if ((DL.routine_lines || []).length) h += `<details class="pkl" style="margin-top:10px"><summary>Routine lines the owl no longer reads (${DL.routine_lines.length})${ic("chev")}</summary><div class="list">` + DL.routine_lines.map(x => `<div class="row"><span class="rt"><span class="rn wrap mono">${esc(x.shape)}</span><span class="rs">seen ${esc(x.seen)}× · last ${esc(clock(x.last))}</span></span><button class="rowbtn" type="button" data-act="routineforget" data-rip="${esc(I.ip)}" data-shape="${esc(x.shape)}">Forget</button></div>`).join("") + `</div><div class="ibtns"><button class="sbtn" type="button" data-act="routineforget" data-rip="${esc(I.ip)}">Forget all</button></div></details>`;
   // its named services ARE the named probes above — listed once, under Watched by
   if ((I.issues || []).length) h += `<div class="sh">Open alerts</div><div class="list">` + I.issues.map(x => `<div class="row"><span class="sd c-${SEV[x.severity] || "gray"}"></span><span class="rt"><span class="rn wrap">${esc(x.detail || "")}</span><span class="rs">${esc(x.severity || "")}${x.since ? " · since " + esc(clock(x.since)) : ""}</span></span></div>`).join("") + `</div>`;
   if ((I.actions || []).length) h += `<div class="sh">Last actions</div><div class="list">` + I.actions.map(x => `<div class="row"><span class="sd c-${x.status === "done" ? "green" : ["failed", "refused"].includes(x.status) ? "red" : "gray"}"></span><span class="rt"><span class="rn">#${x.id} ${esc(x.title)}</span><span class="rs wrap">${esc(x.words || x.status)}</span></span>${x.ts ? `<span class="rv">${esc(clock(x.ts))}</span>` : ""}</div>`).join("") + `</div>`;
@@ -4169,6 +4171,11 @@ document.addEventListener("click", async e => {
     const mute = !!t.dataset.mute;
     const r = await post("/api/ports", {ip: t.dataset.pip, port: t.dataset.port, mute}).catch(() => ({ok: false, error: "lanowl is not answering."}));
     toast(r.ok ? (mute ? "Muted — its speed changes are no longer told." : "Its speed changes are told again.") : r.error || "Could not do it.");
+    loadHist();
+  } else if (act === "routineforget") {
+    t.disabled = true;
+    const r = await post("/api/routine", {ip: t.dataset.rip, shape: t.dataset.shape === undefined ? null : t.dataset.shape}).catch(() => ({ok: false, error: "lanowl is not answering."}));
+    toast(r.ok ? "The owl reads those lines again." : r.error || "Could not do it.");
     loadHist();
   } else if (act === "bkone" || act === "bkall") {
     const ip = act === "bkone" ? t.dataset.bk : null;

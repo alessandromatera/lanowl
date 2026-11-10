@@ -831,6 +831,19 @@ class Dashboard:
         r = dw.set_mute(str(body.get("ip") or ""), str(body.get("port") or ""), bool(body.get("mute")))
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
+    async def api_routine(self, request):
+        """{"ip", "shape": a line's shape or null for all}: the owl reads those lines again
+        (devwatch.py, forget_routine)."""
+        body = await self._body(request)
+        if body is None:
+            return web.json_response({"ok": False, "error": "bad request"}, status=400)
+        dw = getattr(self.a, "devwatch", None)
+        if dw is None:
+            return web.json_response({"ok": False, "error": "logs are not read"}, status=409)
+        shape = body.get("shape")
+        r = dw.forget_routine(str(body.get("ip") or ""), None if shape is None else str(shape))
+        return web.json_response(r, status=200 if r.get("ok") else 409)
+
     async def api_backups(self, request):
         """{"ip": a machine} or {"ip": null} for all of them — Back up now. It only
         copies configurations onto the homehub's disk."""
@@ -965,6 +978,7 @@ class Dashboard:
         app.router.add_post("/api/memory", self.api_memory)
         app.router.add_post("/api/rename", self.api_rename)
         app.router.add_post("/api/ports", self.api_ports)
+        app.router.add_post("/api/routine", self.api_routine)
         app.router.add_post("/api/reviews", self.api_reviews)
         app.router.add_post("/api/fix", self.api_fix)
         app.router.add_post("/api/scorecard", self.api_scorecard)
