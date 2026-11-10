@@ -100,7 +100,9 @@ other devices at 14:02 — AP or power blip"), and one concrete thing to check. 
 could not establish is "unknown" plus what you ruled out — never a guess dressed as a fact.
 - The summary sits above the issues, and each issue's root_cause and recommendation are \
 printed under its device: the summary says what matters and whether it needs the owner, in \
-at most two short sentences, without repeating them.
+at most two short sentences, without repeating them. Never say how many devices are up, \
+answering or online, nor that "all devices are up": the code prints those counts next to your \
+words, and it counts the asleep and the paused apart.
 - An issue about a NEW device also gets a `note`: the one text the owner reads in that \
 device's own message. Say which device it is (its name or hostname, its address and its \
 maker) and what to check, in one or two short sentences.

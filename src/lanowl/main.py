@@ -55,7 +55,7 @@ from .oui import vendor
 from .pause import Pauses, event_detail, intervals, overlaps
 from .prompts import (CALL_AUDIT, CALL_WEEKLY, WEEKLY_SYSTEM, build_user_context, call_block,
                       build_weekly_context, system_prompt, with_actions, with_shell_offline)
-from .report import (_SEV_RANK, _html, build_report, digest_fingerprint, format_alerts,
+from .report import (_SEV_RANK, check_summary, _html, build_report, digest_fingerprint, format_alerts,
                      format_diagnosis_note, format_digest, label, merge_llm, missed_checks,
                      wan_words)
 from .exposure import Exposure
@@ -234,6 +234,12 @@ class Auditor:
         # sweep replaces with a fresh deterministic one within a minute.
         self._last_llm_report: Optional[dict] = None
         self._last_llm_at = 0.0
+        # What the last COMPLETED audit was told (_audit_fingerprint) and when it started: a
+        # scheduled audit that would be told the same is not run (_audit_unchanged). In memory
+        # only, like the report it belongs to: after a restart the first audit always runs.
+        self._audit_fp: Optional[tuple] = None
+        self._audit_fp_at = 0.0
+        self._audit_skipped_at = 0.0     # the last check that found nothing changed (Now says so)
         self._logbook_cache: Optional[dict] = None
         self._started = time.time()
         self._sweeps = 0          # published in the heartbeat: proof the loop is turning
@@ -1234,10 +1240,101 @@ class Auditor:
                     flaps.pop(ip)
         return transitions[:30], flaps
 
+    def _audit_fingerprint(self, snap, report) -> tuple:
+        """What a scheduled audit would be told that matters, without what changes every sweep
+        (latencies, timestamps, "x ago"): the open issues, which devices are down / asleep /
+        paused, the internet's state, the devices new to a network or unknown, the proposals
+        waiting, the device-log notes waiting. All of it is already in memory: nothing is asked
+        of the network."""
+        rep = self._last_report or report or {}
+        sd = snap.to_dict()
+        devs = sd.get("devices", [])
+        wp = sd.get("wan_path") or {}
+        unknown = (self._discovery or {}).get("unknown") or []
+        return (
+            tuple(sorted((self._key(i), str(i.get("severity"))) for i in rep.get("issues") or [])),
+            tuple(sorted(d["ip"] for d in devs if not d.get("paused") and not d.get("up")
+                         and not d.get("expected_down"))),
+            tuple(sorted(d["ip"] for d in devs if not d.get("paused") and not d.get("up")
+                         and d.get("expected_down"))),
+            tuple(sorted(d["ip"] for d in devs if d.get("paused"))),
+            tuple(sorted((a["ip"], tuple(sorted(map(str, a.get("failed") or []))))
+                         for a in snap.anomalies())),
+            (self.wanwatch.state, bool(sd.get("wan_ok")), wp.get("link"), bool(wp.get("on_backup"))),
+            tuple(sorted(str(x.get("mac") or x.get("ip")) for x in self.sites.recent_new())),
+            tuple(sorted(str(x.get("mac") or x.get("ip")) for x in unknown)),
+            tuple(sorted((p.get("id"), p.get("status")) for p in self.actions.items)
+                  if self.actions.enabled else ()),
+            tuple(sorted(float(n.get("ts") or 0) for n in self.devwatch.rec.get("digest") or [])),
+        )
+
+    def _audit_news_since(self, since: float) -> list:
+        """What happened after `since` that the audit would be told: a device's change of state
+        (by-design cycles left out, as the audit's own history leaves them), an internet outage,
+        a log finding, a device new to a network. Said in words, for the log."""
+        news = []
+        if any(t["ts"] > since for t in self._llm_history(since)[0]):
+            news.append("a device changed state")
+        if max(self.wanwatch._last_down_at, self.wanwatch._back_at) > since:
+            news.append("the internet had an outage")
+        if any(f.get("ts", 0) > since for f in self.executor._findings(24)):
+            news.append("a log check found something")
+        if any((x.get("first_seen") or 0) > since for x in self.sites.recent_new()):
+            news.append("a device is new to a network")
+        return news
+
+    def _audit_unchanged(self, snap, report, fp: tuple, now: float) -> bool:
+        """True when a SCHEDULED audit would be told what the last completed audit was told,
+        and that one is under a day old: ~95% of hourly audits on a quiet network end with
+        their digest held back, and each holds the model for minutes the owner's questions
+        wait behind. Never for any other reason ("Audit now", an incident, a new device), and
+        never after a failed audit: only a completed one arms it."""
+        if self.cad.get("llm_when_unchanged", False):
+            return False
+        if self._audit_fp is None or not self._last_llm_at or now - self._last_llm_at >= 86400:
+            return False
+        if not (self._last_llm_report or {}).get("llm"):
+            return False
+        return fp == self._audit_fp and not self._audit_news_since(self._audit_fp_at)
+
+    def _skip_audit(self, snap, report, send_digest: bool, reason: str, now: float):
+        """No model call, but everything that follows an audit that found nothing new still
+        happens — the digest's own gate decides (reminder, device-log notes, the reviews' news),
+        exactly as with the model off — and the record says the audit was skipped and why."""
+        since = time.strftime("%H:%M", time.localtime(self._last_llm_at))
+        log.info("audit skipped: nothing changed since %s", since)
+        self._audit_skipped_at = now
+        last = (self._last_llm_report or {}).get("llm") or {}
+        report = merge_llm(self._last_report or report, last)
+        pending, self._pending_digest_reason = self._pending_digest_reason, None
+        digest = (self._maybe_send_digest(report, pending or reason) if send_digest or pending
+                  else "no digest: not asked for")
+        d = {"reason": pending or reason, "skipped": True, "digest": digest,
+             "result": f"skipped: nothing changed since the {since} audit — its words stand"}
+        if digest.startswith("sent"):
+            # so the Timeline still shows the digest, under the words it carried
+            d.update(health=last.get("overall_health"), summary=last.get("summary"),
+                     issues=[{"device": i.get("device"), "severity": i.get("severity")}
+                             for i in last.get("issues") or []])
+        self._on_event("audit", None, json.dumps(d, ensure_ascii=False, default=str))
+        return report
+
     async def run_llm_audit(self, snap, report, send_digest: bool, reason: str,
                             incident_issues: Optional[dict] = None):
         if self.no_llm:
             return self._digest_without_model(report, send_digest, reason)
+        # What this audit will be told; kept only once it completes (below). Armed no earlier:
+        # an audit cut half-way leaves nothing for the next one to be compared with.
+        fp, fp_at = None, time.time()
+        try:
+            fp = self._audit_fingerprint(snap, report)
+            if reason == "scheduled" and not incident_issues \
+                    and self._audit_unchanged(snap, report, fp, fp_at):
+                return self._skip_audit(snap, report, send_digest, reason, fp_at)
+        except Exception:
+            log.exception("audit: could not tell whether anything changed; running it")
+            fp = None
+        self._audit_fp = None
         # Held for the whole audit so the log triages stand aside and a question waits its
         # turn: the 27b is dense and ~18GB, and two callers interleaving means reload churn
         # that shows up directly as latency.
@@ -1284,13 +1381,23 @@ class Auditor:
         # The audit no longer blocks the sweep, so several sweeps have run underneath it and
         # `_last_report` knows about devices this snapshot has never heard of. The narrative
         # is the only part of an audit that ages well; the numbers must be current.
-        report = merge_llm(self._last_report or report, llm)
+        fresh = self._last_report or report
+        if llm is not None and isinstance(llm.get("summary"), str):
+            # once, here, before it is stored: the Now card, the digest and the Timeline all
+            # read it from this one place
+            kept, dropped = check_summary(llm["summary"], fresh)
+            for sent, why in dropped:
+                log.info("audit summary: dropped %r — %s", sent, why)
+            if dropped:
+                llm = {**llm, "summary": kept}
+        report = merge_llm(fresh, llm)
         if ran:
             # listed under the digest, like the checks under a Telegram answer
             report["checks_ran"] = [{"label": r.get("label"), "ok": bool(r.get("ok"))} for r in ran]
         self._last_report = report
         if llm is not None:
             self._last_llm_report, self._last_llm_at = report, time.time()
+            self._audit_fp, self._audit_fp_at, self._audit_skipped_at = fp, fp_at, 0.0
             # each cause it named, kept to be checked once the problem is over (scorecard.py)
             try:
                 self.scorecard.note_audit(llm, self._last_report)

@@ -78,7 +78,11 @@ def state_payload(a, now: float = 0.0) -> dict:
     llm_rep = a._last_llm_report or {}
     llm = llm_rep.get("llm") if llm_rep else None
     llm_at = getattr(a, "_last_llm_at", 0.0) or 0.0
-    fresh = bool(llm) and (now - llm_at) <= LLM_FRESH_S
+    # a scheduled audit that found nothing changed (main._audit_unchanged) is a look at the
+    # network too: the words still stand, and are as fresh as that look
+    unchanged = getattr(a, "_audit_skipped_at", 0.0) or 0.0
+    unchanged = unchanged if unchanged > llm_at else 0.0
+    fresh = bool(llm) and (now - max(llm_at, unchanged)) <= LLM_FRESH_S
     llm_issues = list((llm or {}).get("issues") or [])
 
     issues, used = [], set()
@@ -134,7 +138,7 @@ def state_payload(a, now: float = 0.0) -> dict:
         "issues": issues,
         "llm": {"health": llm_rep.get("overall_health") if llm else None,
                 "summary": (llm or {}).get("summary"), "at": llm_at or None,
-                "fresh": fresh, "also": extra,
+                "unchanged_at": unchanged or None, "fresh": fresh, "also": extra,
                 "running": auditing or asked, "queued": asked and not auditing,
                 "busy": bool(a._llm_busy)},
         # each device with its site (sites.py), and the sites themselves; a router that could

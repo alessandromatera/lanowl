@@ -71,6 +71,11 @@ once more, so a real problem cannot go silent.
 
 ### The digest
 
+On a network where nothing has changed, the scheduled audit is skipped (the log says "audit
+skipped: nothing changed since 14:05", and the Now card says so); the digest rules below apply
+all the same. At least one audit a day runs, and "Audit now" always does
+(`cadence.llm_when_unchanged`).
+
 The digest is sent by the owl's hourly audit (`cadence.llm_interval_s`), and **only when
 there is something new to say**:
 

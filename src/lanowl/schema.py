@@ -49,6 +49,7 @@ HASHES = {("web", "password_hash")}
 DEFAULTS = {
     ("model", "think"): True, ("telegram", "chat", "enabled"): False, ("web", "enabled"): False,
     ("web", "login"): True, ("cadence", "llm_on_incident"): True, ("cadence", "digest_when_ok"): False,
+    ("cadence", "llm_when_unchanged"): False,
     ("alerts", "notify_recovery"): True, ("wan", "watch", "enabled"): True,
     ("wan", "watch", "state_messages"): True, ("wan", "watch", "log_triage", "enabled"): True,
     ("wan", "path", "backup_standby"): False, ("mikrotik", "verify_tls"): False, ("mikrotik", "api", "enabled"): False,

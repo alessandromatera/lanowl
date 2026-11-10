@@ -100,12 +100,19 @@ cadence:
   llm_times: ["08:00", "13:00", "20:00"]
   llm_on_incident: true           # a new critical: the owl diagnoses it at once
   llm_incident_cooldown_s: 600
+  llm_when_unchanged: false       # false: skip a scheduled audit when nothing changed
   llm_max_wall_s: 900             # an audit is abandoned after this
   digest_when_ok: false           # no digest when there is nothing to say
 ```
 
 The sweep and the model run on separate clocks: an audit never delays a sweep. With
 `llm_mode: times`, the audit runs at the listed times instead of every `llm_interval_s`.
+A scheduled audit is skipped when nothing the owl would be told has changed since the last
+completed one (the issues, the devices down, asleep or paused, the internet, a new device, a
+log finding, a waiting proposal) and that one is under a day old, so at least one full audit
+runs every 24 hours. The digest's rules, the daily reminder included, run as if the audit had
+found nothing new. "Audit now" and an incident always run one. `llm_when_unchanged: true` runs
+every scheduled audit.
 A device can carry its own `debounce_fails` in the inventory (a site behind a tunnel wants
 more patience).
 

@@ -464,6 +464,55 @@ def merge_llm(report: dict, llm: Optional[dict]) -> dict:
     return report
 
 
+# --- the owl's summary against the code's own numbers ------------------------------------
+# The dashboard prints how many devices answer next to the owl's words; a summary that says
+# another number ("all 53 devices up" with two asleep and one paused) contradicts the page it
+# sits on. The code's count wins: the sentence is dropped, not asked for again.
+_UPW = (r"(?:up|online|answering|reachable|healthy|responding|responsive|alive|working|ok|fine"
+        r"|attiv[oie]|raggiungibil[ei]|funzionant[ei]|operativ[oie]|in linea|rispond\w+)")
+_DEV = r"(?:devices?|dispositiv[oi])"
+_ALL_UP = re.compile(rf"\b(?:all|every|each|tutt[io]|ogni)\b[^.;:]{{0,40}}?\b{_DEV}\b[^.;:]{{0,40}}?\b{_UPW}\b", re.I)
+_N_OF = re.compile(rf"\b(\d+)\s*(?:/|of|out of|su|di)\s*\d+(?:\s+{_DEV}[^.;:]{{0,30}}?|\s+)\b{_UPW}\b", re.I)
+_N_DEV = re.compile(rf"(?<!of )(?<!/)(?<!su )(?<!di )\b(\d+)\s+{_DEV}\b[^.;:]{{0,30}}?\b{_UPW}\b", re.I)
+# a count that is negated ("2 devices not answering"), or a sentence that excepts something
+# ("all up but the NAS"), says less than a count, and is kept
+_NEG = re.compile(r"\b(?:not|no|non|nessun\w*)\b|n't", re.I)
+_EXCEPT = re.compile(r"\b(?:except|but|apart|other than|tranne|eccetto|salvo|ma)\b", re.I)
+
+
+def _count_claim_wrong(sentence: str, counts: dict) -> Optional[str]:
+    """Why this sentence's count of devices up is not the code's, or None."""
+    up, total = counts.get("up"), counts.get("total")
+    if up is None or total is None:
+        return None
+    if _EXCEPT.search(sentence):
+        return None
+    m = _ALL_UP.search(sentence)
+    if m and not _NEG.search(m.group(0)) and up != total:
+        return f"it says every device is up; the code counts {up} of {total} answering"
+    for rx in (_N_OF, _N_DEV):
+        for m in rx.finditer(sentence):
+            if not _NEG.search(m.group(0)) and int(m.group(1)) != up:
+                return f"it says {m.group(1)} devices are up; the code counts {up} answering"
+    return None
+
+
+def check_summary(summary: str, report: dict) -> tuple:
+    """(the summary without the sentences that contradict the code's counts, [(sentence, why)]).
+
+    Only a claim about the devices as a whole is checked ("all 53 devices up", "50 of 53
+    answering"): a sentence about one device is the owl's to say. If nothing is left, the
+    monitor's own line stands in, as when the model is off."""
+    counts = report.get("counts") or {}
+    kept, dropped = [], []
+    for sent in re.split(r"(?<=[.!?])\s+", summary.strip()):
+        why = _count_claim_wrong(sent, counts) if sent else None
+        (dropped.append((sent, why)) if why else kept.append(sent))
+    if not dropped:
+        return summary, []
+    return (" ".join(kept) or _auto_summary(report)), dropped
+
+
 def missed_checks(report: dict) -> list:
     """Devices that matter which missed this sweep but are not confirmed down yet
     (`debounce_fails`): no issue and no alert, but not "all good" either."""

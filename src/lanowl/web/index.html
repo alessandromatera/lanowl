@@ -1830,6 +1830,7 @@ function renderModel(d) {
     h += `<p class="mtext${long && !S.expanded ? " clamp" : ""}">${linkify(d, noCall(l.summary))}</p>`;
     if (long) h += `<button class="more" data-act="expand" id="owlmore">${S.expanded ? "Less" : "More"}</button>`;
   } else if (!l.running) h += `<p class="mtext muted">No assessment yet — the owl looks about hourly.</p>`;
+  if (l.unchanged_at && l.summary) h += `<div class="fine">Nothing has changed since: checked again at ${esc(clock(l.unchanged_at))}.</div>`;
   // the owl read the network a while ago; the monitor reads it every minute. When they differ
   // the card says so, instead of OK under a Degraded header (10-08)
   const mon = (d.issues || []).filter(i => i.severity !== "info");

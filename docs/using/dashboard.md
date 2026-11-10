@@ -44,7 +44,10 @@ What needs you, first.
   look at the week and the monitor's numbers: the same list the digest carries; gear asleep on
   schedule is left out), **What it said before** (each change of mind in the last day), a box
   for a follow-up question, and **Audit now** (the digest goes to Telegram too). When the
-  monitor's reading now differs from the owl's, the card says so.
+  monitor's reading now differs from the owl's, the card says so. When a scheduled audit was
+  skipped because nothing changed, the card says "Nothing has changed since: checked again
+  at" with the time. A sentence of the owl's that states another count of devices up than
+  the one printed beside it is dropped before it is shown.
 
 ![An internet blip and its evidence](../img/wan-wide.png)
 

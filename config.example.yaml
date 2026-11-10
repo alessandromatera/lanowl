@@ -66,6 +66,7 @@ cadence:
   llm_times: ["08:00", "13:00", "20:00"]
   llm_on_incident: true             # a new critical: the model diagnoses it, edited into the alert
   llm_incident_cooldown_s: 600
+  llm_when_unchanged: false         # false: a scheduled audit is skipped when nothing changed since the last one (at least one a day runs)
   llm_max_wall_s: 900
   digest_when_ok: false             # no digest when there is nothing to say
 
