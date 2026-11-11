@@ -40,8 +40,12 @@ password**; it is never shown, and a new one logs every browser out, yours too.
 
 ## Saving
 
-Change what you want; a bar at the bottom counts the changes. **Check and save** shows what the save
-would do before it does anything:
+Change what you want; a bar at the bottom counts the changes. Until you save or discard them, this
+browser tab keeps them: a reload or a restart brings them back (never a password, a token, or a
+device whose checks hold a secret: type those again). One whose field was changed in the file
+meanwhile is dropped, so it never overwrites that change. In a device's sheet, a click beside the sheet, Escape or a swipe down does not close
+it while its settings hold changes you have not saved; the **✕**, **‹** and **Discard** still do.
+**Check and save** shows what the save would do before it does anything:
 
 1. What changes, in words: "model.name qwen3:30b → qwen3:32b", "NVR (192.168.88.20) added".
    The file itself is not shown; the save keeps its comments and order.

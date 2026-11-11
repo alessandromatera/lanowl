@@ -1365,6 +1365,19 @@ const isDown = x => !x.up && !x.asleep && !x.paused;
 const TABS = ["home", "devices", "log", "sec", "ask"];
 function load(k, dflt) { try { const v = localStorage.getItem("lanowl." + k); return v == null ? dflt : JSON.parse(v); } catch (e) { return dflt; } }
 function save(k, v) { try { localStorage.setItem("lanowl." + k, JSON.stringify(v)); } catch (e) {} }
+// A Settings form's unsaved edits, kept in this tab (not shared, gone with it) until saved or discarded:
+// a reload or a restart brings them back. null removes. Never a password, token or key: callers strip them.
+function dload(k, dflt) { try { const v = sessionStorage.getItem("lanowl.draft." + k); return v == null ? dflt : JSON.parse(v); } catch (e) { return dflt; } }
+function dsave(k, v) { try { if (v == null) sessionStorage.removeItem("lanowl.draft." + k); else sessionStorage.setItem("lanowl.draft." + k, JSON.stringify(v)); } catch (e) {} }
+// a secret-looking name is never kept, whatever the form holds under it
+const SECRETISH = /pass|token|secret|community|_key|^key$|private/i;
+const hasSecrets = o => Array.isArray(o) ? o.some(hasSecrets)
+  : !!o && typeof o === "object" && Object.entries(o).some(([k, v]) => SECRETISH.test(k) || hasSecrets(v));
+function noSecrets(o) {
+  if (Array.isArray(o)) return o.map(noSecrets);
+  if (o && typeof o === "object") { const r = {}; for (const [k, v] of Object.entries(o)) if (!SECRETISH.test(k)) r[k] = noSecrets(v); return r; }
+  return o;
+}
 const S = {d: null, tab: "home", scroll: {}, pane: load("pane", "events"), sched: load("sched", false),
            filter: "all", q: "", sheet: null, hist: null, histAt: 0, expanded: false,
            upgBusy: {}, rebootBusy: {},   // ip -> true while its Update / Reboot is being checked
@@ -3685,7 +3698,19 @@ function closeSheet() {
 $("sheet").addEventListener("close", () => { S.sheet = null; S.wan = null; S.sheetProp = null; S.sheetFocus = null; S.whatAll = null; devSetLeave();
   for (const k of [...CH.how]) if (k.startsWith("cve:")) CH.how.delete(k);     // its folds close with it
   document.documentElement.classList.remove("modal"); $("sheet-in").__h = null; $("sheet-in").__ip = null; });
-$("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
+// The device's settings, with edits not saved yet, shown in this sheet: it stays open until Save, Discard, Back or the ✕
+const sheetKeeps = () => ST.devIn === "sheet" && !!ST.dev && devEdited(ST.dev);
+// a click beside the sheet closes it only when the pointer went down there too: a text selection dragged
+// from a field and let go outside makes the browser click the dialog itself
+let sheetDown = null;
+$("sheet").addEventListener("pointerdown", e => { sheetDown = e.target; }, true);
+$("sheet").addEventListener("click", e => {
+  const d = sheetDown; sheetDown = null;
+  if (e.target === $("sheet") && d === $("sheet") && !sheetKeeps()) closeSheet();
+});
+// Escape: the dialog's own cancel; the key too, as a second Escape without a touch between is not cancelable
+$("sheet").addEventListener("cancel", e => { if (sheetKeeps()) e.preventDefault(); });
+$("sheet").addEventListener("keydown", e => { if (e.key === "Escape" && sheetKeeps()) e.preventDefault(); });
 
 async function loadHist() {
   const ip = S.sheet;
@@ -3945,7 +3970,7 @@ function drawChart(outs) {
   dlg.addEventListener("touchend", () => {
     if (y0 == null) return;
     y0 = null; dlg.style.transition = "transform .25s cubic-bezier(.2,.8,.2,1)";
-    if (dy > 110) { dlg.style.transform = "translateY(100%)"; setTimeout(() => { closeSheet(); dlg.style.transform = ""; dlg.style.transition = ""; }, 200); }
+    if (dy > 110 && !sheetKeeps()) { dlg.style.transform = "translateY(100%)"; setTimeout(() => { closeSheet(); dlg.style.transform = ""; dlg.style.transition = ""; }, 200); }
     else dlg.style.transform = "";
   });
 })();
@@ -3968,6 +3993,7 @@ function applyState(d) {
   NOW = d.now || Date.now() / 1000; gotAt = Date.now(); lastOk = Date.now();
   S.d = d;
   renderAll();
+  if (!draftsBack) restoreDrafts();
 }
 async function refresh() {
   if (busy) return;
@@ -4590,6 +4616,27 @@ function fieldHtml(f) {
   return `<div class="${cls}">${head}${ctl}${was}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
 }
 function editCount() { return Object.keys(ST.edits).length; }
+// the sections' unsaved edits, kept per tab; brought back (with a line saying so) when their page is drawn
+// Not kept: a secret-looking name, a block of YAML (free text: no name in it can be checked), a value that holds a
+// secret anyway (a URL with user:password@ in it)
+const keepable = ([k, e]) => !SECRETISH.test(k) && !e.yaml && !/\/\/[^\/\s@]*:[^\/\s@]*@/.test(JSON.stringify(e.value ?? ""));
+function keepEdits() {
+  const ok = Object.entries(ST.edits).filter(keepable);
+  dsave("edits", ok.length ? noSecrets(Object.fromEntries(ok)) : null);
+}
+// Kept edits, against every section's file value now (not only the section on screen: a save plans them all):
+// one the file already has, on a field the environment now sets, or whose field changed since it was made (`was`)
+// is dropped, so a reload never overwrites someone else's change
+function checkKept(D) {
+  const fs = {};
+  for (const s of (D || {}).sections || []) for (const f of s.fields || []) if (f.path) fs[pkey(f.path)] = f;
+  for (const [k, e] of Object.entries(ST.edits)) {
+    const f = fs[k], now = f && (f.source === "default" ? undefined : f.value);
+    if (!f || f.source === "env" || e.yaml || !sameV(e.was, now) || (!e.del && sameV(e.value, now))) delete ST.edits[k];
+  }
+}
+function dropEdits() { ST.edits = {}; ST.editsKept = false; dsave("edits", null); }
+ST.edits = dload("edits", {}) || {}; ST.editsKept = editCount() > 0;
 function barHtml(n, act) {
   return `<div class="sbar" id="sbar"${n ? "" : " hidden"}><span class="cnt"><b>${n} change${n === 1 ? "" : "s"}</b>, not saved</span>
     <button class="sbtn" type="button" data-sact="discard">Discard</button><button class="btn" type="button" data-sact="${act}">Check and save</button></div>`;
@@ -4604,6 +4651,13 @@ async function setSection(key) {
   const fields = shown.filter(f => !f.advanced), adv = shown.filter(f => f.advanced && f.type !== "group");
   let h = back("set", "Settings") + setHead(sec.title, esc(sec.help || ""));
   h += pendHtml(D) + fileWarn(D);
+  // what was kept from before a reload, against the file as it is now: an edit it already has, or on a field the
+  // environment now sets, is dropped
+  if (ST.editsKept) {
+    checkKept(D);
+    keepEdits();
+    if (sec.fields.some(f => f.path && ST.edits[pkey(f.path)])) h += `<p class="fine kept" id="kept">Unsaved changes, kept from before.</p>`;
+  }
   if (key === "sites") h += sitesListHtml(D);
   let body = "";
   for (const f of fields) body += f.type === "group" ? `<div class="fsub">${esc(f.group)}${f.help ? `<div class="fhelp" style="text-transform:none;letter-spacing:0;font-weight:400">${esc(f.help)}</div>` : ""}</div>` : fieldHtml(f);
@@ -4643,9 +4697,10 @@ function onField(el) {
     try { v = parseField(t, t === "bool" ? el.checked : el.value, f); } catch (e) { v = el.value; }
     const orig = f.source === "default" ? undefined : f.value;
     if (t === "choice" && el.value === "" && f.source === "default") v = undefined;
-    if (v === undefined) { if (f.source === "default") delete ST.edits[k]; else ST.edits[k] = {path: f.path, del: true}; }
+    // `was`: the file's value it was made against (checkKept)
+    if (v === undefined) { if (f.source === "default") delete ST.edits[k]; else ST.edits[k] = {path: f.path, del: true, was: orig}; }
     else if (sameV(v, orig) || (f.source === "default" && t === "bool" && v === !!f.example && false)) delete ST.edits[k];
-    else ST.edits[k] = {path: f.path, value: v};
+    else ST.edits[k] = {path: f.path, value: v, was: orig};
   }
   const fld = el.closest(".fld");
   if (fld) {
@@ -4653,6 +4708,7 @@ function onField(el) {
     const chip = fld.querySelector(".fh .src");
     if (chip) chip.outerHTML = srcChip(f);
   }
+  ST.editsKept = false; keepEdits();
   const bar = $("sbar"), n = editCount();
   if (bar) { bar.hidden = !n; bar.querySelector(".cnt").innerHTML = `<b>${n} change${n === 1 ? "" : "s"}</b>, not saved`; }
 }
@@ -4699,7 +4755,9 @@ function openSet(title, body, go, opts) {
 function closeSet() { const d = $("setdlg"); if (d.open) d.close(); }
 // a close event arrives a moment after close(): a sheet opened in that moment is not closed by it
 $("setdlg").addEventListener("close", () => { if ($("setdlg").open) return; ST.sheet = null; if (!$("sheet").open) document.documentElement.classList.remove("modal"); $("set-in").__h = null; });
-$("setdlg").addEventListener("click", e => { if (e.target === $("setdlg")) closeSet(); });
+let setDown = null;
+$("setdlg").addEventListener("pointerdown", e => { setDown = e.target; }, true);
+$("setdlg").addEventListener("click", e => { const d = setDown; setDown = null; if (e.target === $("setdlg") && d === $("setdlg")) closeSet(); });
 $("setf").addEventListener("submit", async e => {
   e.preventDefault();
   if (!ST.sheet || ST.busy) return;
@@ -4727,7 +4785,7 @@ async function reviewSection() {
   if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
   openSet("Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">The config.yaml it replaces is kept: History can put it back.</p>`, async () => {
     const r = await saveCall("/api/settings/save", {file: "config", ops, base: p.base});
-    if (r.ok) { ST.edits = {}; await setData(true); renderSet(); refresh(); toast("Saved. Restart lanowl to apply."); }
+    if (r.ok) { dropEdits(); await setData(true); renderSet(); refresh(); toast("Saved. Restart lanowl to apply."); }
     else if (r.why === "changed") { await setData(true); renderSet(); }
     return r;
   }, {blocked: (p.problems || []).length > 0});
@@ -5039,6 +5097,10 @@ function siteStart(key, router) {
   const X = (ST.data || {}).sites || {}, id = key === "new" ? "new/" + router : key;
   if (!ST.site || ST.site.id !== id) {
     const orig = key === "new" ? null : (X.list || []).find(s => s.key === key) || null;
+    // kept from before a reload: only when the site is as it was; else the draft is someone else's change to overwrite
+    const k = dload("site");
+    if (k && k.id === id && sameV(k.orig || null, orig || null) && k.d && typeof k.base === "string") { ST.site = {...k, restored: true}; return ST.site; }
+    if (k && k.id === id) dsave("site", null);
     let d;
     if (orig) d = {name: orig.name, nets: orig.nets.join(", "), router: orig.router, criticality: orig.criticality};
     else {
@@ -5077,6 +5139,7 @@ async function setSitePage(rest) {
   let h = (fromR ? back("set/device/" + encodeURIComponent(router), fromR.name) : back("set/s/sites", "Sites")) +
     setHead(T.orig ? T.orig.name : fromR ? "Make it a site" : "A new site", T.orig ? (home ? "The main site: the network lanowl runs on." : `${esc(T.orig.key)} · in config.yaml`) : "It goes into config.yaml, under sites.");
   h += pendHtml(D) + fileWarn(D);
+  if (T.restored) h += `<p class="fine kept" id="kept">Unsaved changes, kept from before.</p>`;
   h += `<div class="list">` + fld("Name", inp("name", "Office")) +
     fld("Networks", inp("nets", home ? (X.home_default || []).join(", ") : "192.168.0.0/24"),
       home ? `Empty: ${esc((X.home_default || []).join(", "))}, every address no other site has.`
@@ -5089,13 +5152,19 @@ async function setSitePage(rest) {
         `For the devices you Watch from its DHCP list: ${esc(CRITH[d.criticality] || "")}.`)) + `</div>`;
   if (T.orig && !home) h += `<button class="btn ghost" type="button" data-sact="siterm" data-k="${esc(T.key)}" style="background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red-t)">Remove this site</button>`;
   const changed = !T.orig || JSON.stringify(d) !== T.base;
+  siteKeep();
   h += `<div class="sbar" id="sbar"${changed ? "" : " hidden"}><span class="cnt"><b>${T.orig ? "Changed" : "New"}</b>, not saved</span><button class="sbtn" type="button" data-sact="sitereset">Discard</button><button class="btn" type="button" data-sact="sitereview">Check and save</button></div>`;
   put("set", `<div class="setw">${h}</div>`);
 }
 const CRITS_UI = ["critical", "high", "warning", "low", "info"];
+// the site form, kept per tab once it differs from what it was opened with (no secret in it: name, networks, router, criticality)
+function siteKeep() {
+  const T = ST.site;
+  dsave("site", T && JSON.stringify(T.d) !== T.base ? {id: T.id, key: T.key, orig: T.orig, d: noSecrets(T.d), base: T.base, router: T.router, netsHow: T.netsHow} : null);
+}
 function onSiteField(el, redraw) {
   const T = ST.site; if (!T) return;
-  T.d[el.dataset.sf] = el.value;
+  T.d[el.dataset.sf] = el.value; T.restored = false; siteKeep();
   if (redraw) { setSitePage(T.id); return; }
   const bar = $("sbar"); if (bar) bar.hidden = JSON.stringify(T.d) === T.base && !!T.orig;
 }
@@ -5110,7 +5179,7 @@ async function siteReview(removeKey) {
     : `From the next restart: its chip next to All sites, its devices${body.site.router ? ", its router's DHCP list" : ""}.`;
   openSet(removeKey ? `Remove ${s.name || removeKey}?` : "Save to config.yaml", planHtml(p, "config.yaml") + `<p class="fine" style="margin:10px 4px 0">${esc(after)} The config.yaml it replaces is kept: History can put it back.</p>`, async () => {
     const r = await saveCall("/api/settings/site", {...body, base: p.base});
-    if (r.ok) { ST.site = null; await setData(true); setNav("set/s/sites"); if (S.setp === "set/s/sites") renderSet(); refresh(); toast((removeKey ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
+    if (r.ok) { ST.site = null; dsave("site", null); await setData(true); setNav("set/s/sites"); if (S.setp === "set/s/sites") renderSet(); refresh(); toast((removeKey ? "Removed" : "Saved") + ". Restart lanowl to apply."); }
     else if (r.why === "changed") { await setData(true); renderSet(); }
     return r;
   }, {blocked: (p.problems || []).length > 0, label: removeKey ? "Remove it" : "Save"});
@@ -5138,6 +5207,11 @@ async function setDevices() {
   if (!V.devices.length) h += `<div class="list"><div class="empty">No devices yet: add them from the router's list.</div></div>`;
   put("set", `<div class="setw">${h}</div>`);
 }
+// in inventory.yaml by the address the file gives it (DHCP may have moved the device since)
+function invOrig(V, ip) {
+  const x = ((S.d || {}).devices || []).find(v => v.ip === ip);
+  return (V.devices || []).find(v => String(v.ip) === String((x && x.inv_ip) || ip)) || null;
+}
 function devStart(ip) {
   const V = ST.devs || {};
   const orig = ip === "new" ? null : (V.devices || []).find(d => String(d.ip) === ip) || null;
@@ -5149,6 +5223,13 @@ function devStart(ip) {
     else if (c && L) S2.lmode = "use:" + c;
     else if (c) Object.assign(S2, {lmode: "own-pw", luser: "", lname: c, lset: false});
     else S2.lmode = S2.d.kind && (V.secrets || {}).writable ? "own-pw" : "none";
+    // kept from before a reload: only for the device as it was (its inventory entry unchanged), else it is dropped
+    const k = dload("dev"), mode = ST.devIn === "sheet" ? "sheet" : "set";
+    if (k && k.key === ip && k.in === mode) {
+      if (sameV(k.orig || null, orig || null) && k.d && (mode !== "sheet" || k.ip === S.sheet)) {
+        Object.assign(S2, {d: k.d, ckt: k.ckt || "icmp", lmode: k.lmode, luser: k.luser || "", lname: k.lname || "", lset: !!k.lset, lchanged: !!k.lkeep, lkeep: !!k.lkeep, newGroup: !!k.newGroup, restored: true});
+      } else dsave("dev", null);
+    }
   }
   return ST.dev;
 }
@@ -5157,6 +5238,22 @@ const CRITH = CRIT_WORDS;
 const scanOf = (d, V) => typeof d.scan === "boolean" ? d.scan : !((V || {}).scan_deny || ["security", "iot"]).includes(d.group || "misc");
 // The device's settings, on Settings → Devices or in its sheet (the sheet's gear): one form,
 // drawn where ST.devIn says, its fields and buttons looked up there
+// the form differs from the device as it is in the file (or, with `kept`, in what is worth keeping: no password)
+const devChanged = (S2, kept) => (!sameV(S2.d, S2.orig || null) && (S2.orig || S2.d.ip || S2.d.name)) || (kept ? S2.lkeep : S2.lchanged);
+// touched by the owner: a device not in the file yet opens filled in from what lanowl knows of it (`base`), which
+// is "New, not saved" for the bar but nothing to keep, nor a reason to hold the sheet open
+const devEdited = (S2, kept) => S2.base ? JSON.stringify(S2.d) !== S2.base || !!(kept ? S2.lkeep : S2.lchanged) : devChanged(S2, kept);
+// kept per tab until saved or discarded. NEVER lpw or htok (the password and the token typed here): the fields are listed, not copied.
+// A device whose entry holds a secret (an SNMP check's community) is not kept at all: a copy without it would
+// take it out of inventory.yaml at the next save.
+function devKeep() {
+  const S2 = ST.dev;
+  if (!S2) return;
+  const mode = ST.devIn === "sheet" ? "sheet" : "set";
+  if (devEdited(S2, true) && !hasSecrets(S2.d) && !hasSecrets(S2.orig)) dsave("dev", {key: S2.key, in: mode, ip: mode === "sheet" ? S.sheet : null, orig: S2.orig || null,
+    d: S2.d, ckt: S2.ckt, lmode: S2.lmode, luser: S2.luser, lname: S2.lname, lset: S2.lset, lkeep: !!S2.lkeep, newGroup: !!S2.newGroup});
+  else { const k = dload("dev"); if (k && k.key === S2.key && k.in === mode) dsave("dev", null); }   // an untouched form never wipes another's draft
+}
 const devRoot = () => $(ST.devIn === "sheet" ? "sheet-in" : "set");
 async function devSetOpen(btn) {
   const ip = S.sheet; if (!ip) return;
@@ -5166,7 +5263,7 @@ async function devSetOpen(btn) {
   if (!V.ok) { toast(V.error || "Settings did not load."); return; }
   const d = S.d || {}, x = (d.devices || []).find(v => v.ip === ip);
   // in inventory.yaml by the address the file gives it (DHCP may have moved the device since)
-  const orig = (V.devices || []).find(v => String(v.ip) === String((x && x.inv_ip) || ip));
+  const orig = invOrig(V, ip);
   ST.dev = null; ST.devIn = "sheet"; S.sheetSet = true;
   if (orig) devStart(String(orig.ip));
   else {
@@ -5174,8 +5271,11 @@ async function devSetOpen(btn) {
     const lb = (d.logbook || []).find(e => e.ip === ip) || {};
     const known = ((d.updates || {}).hosts || []).find(h => h.ip === ip) || ((d.backups || {}).machines || []).find(m => m.key === ip) || {};
     devStart("new");
-    Object.assign(ST.dev.d, {ip, name: x ? x.name : lb.name || known.name || ""},
-      x && x.group && !["watched", "remote"].includes(x.group) ? {group: x.group} : {}, x && x.criticality ? {criticality: x.criticality} : {});
+    if (!ST.dev.restored) {
+      Object.assign(ST.dev.d, {ip, name: x ? x.name : lb.name || known.name || ""},
+        x && x.group && !["watched", "remote"].includes(x.group) ? {group: x.group} : {}, x && x.criticality ? {criticality: x.criticality} : {});
+      ST.dev.base = JSON.stringify(ST.dev.d);
+    }
   }
   await setDevice(ST.dev.key);
   const sh = $("sheet"); if (sh) sh.scrollTop = 0;
@@ -5186,9 +5286,26 @@ function devSetClose() {
   renderSheet();
   const sh = $("sheet"); if (sh) sh.scrollTop = 0;
 }
+let keepRestoring = false;     // the sheet is being reopened on its kept form: leaving it must not drop that
 function devSetLeave() {
-  if (ST.devIn === "sheet") { ST.dev = null; ST.devIn = null; }
+  if (ST.devIn === "sheet") { ST.dev = null; ST.devIn = null; if (!keepRestoring) dsave("dev", null); }
   S.sheetSet = false;
+}
+// after a reload: the sheet's device form comes back on its device, if the device and its entry are as they were
+let draftsBack = false;
+async function restoreDrafts() {
+  draftsBack = true;
+  const k = dload("dev");
+  if (!k || k.in !== "sheet" || !k.ip) return;
+  if (!((S.d || {}).devices || []).some(v => v.ip === k.ip)) { dsave("dev", null); return; }
+  const V = await devData(true);
+  if (!V.ok) return;
+  const orig = invOrig(V, k.ip);
+  if (!sameV(k.orig || null, orig || null) || k.key !== (orig ? String(orig.ip) : "new")) { dsave("dev", null); return; }
+  if (S.sheet || (ST.dev && devEdited(ST.dev, true))) return;
+  keepRestoring = true;
+  try { openSheet(k.ip); } finally { keepRestoring = false; }
+  await devSetOpen(null);
 }
 async function setDevice(ip) {
   const V = await devData(), D = await setData();
@@ -5196,7 +5313,7 @@ async function setDevice(ip) {
   if (inSheet && !S.sheetSet) return;          // the sheet was closed meanwhile
   if (!V.ok) { if (inSheet) { toast(V.error || "Settings did not load."); devSetClose(); } else renderSet(); return; }
   const S2 = devStart(ip), d = S2.d, can = (V.kinds || {})[d.kind || ""] || [];
-  const changed = (!sameV(S2.d, S2.orig || null) && (S2.orig || d.ip || d.name)) || S2.lchanged;
+  const changed = devChanged(S2);
   const inp = (k, ph, mode) => `<input class="fin" data-dk="${k}" value="${esc(d[k] == null ? "" : d[k])}" placeholder="${esc(ph || "")}"${mode ? ` inputmode="${mode}"` : ""} autocomplete="off" spellcheck="false">`;
   const fld = (k, body, help) => `<div class="fld"><div class="fh"><span class="lab">${esc(k)}</span></div>${body}${help ? `<div class="fhelp">${help}</div>` : ""}</div>`;
   const groups = groupList(V.groups, d.group || "misc");
@@ -5208,6 +5325,7 @@ async function setDevice(ip) {
     ? `<div class="shd" id="shd"><div class="grab"></div><div class="shd-row"><button class="sback" type="button" data-act="devsetback">${ic("chev")}${esc(sname)}</button><span style="flex:1"></span><button class="x" data-act="close" aria-label="Close">${ic("x")}</button></div></div>` +
       setHead(S2.orig ? "Its settings" : "Add a device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "Not in inventory.yaml yet: it goes there, filled in with what lanowl knows of it.")
     : back("set/devices", "Devices") + setHead(S2.orig ? (S2.orig.name || S2.orig.ip) : "A new device", S2.orig ? `${esc(S2.orig.ip)} · in inventory.yaml` : "It goes into inventory.yaml.");
+  if (S2.restored) h += `<p class="fine kept" id="kept">Unsaved changes, kept from before.</p>`;
   h += `<div class="sh">Watching</div><div class="list">` +
     fld("name", inp("name", "A name you will recognise"), shown ? `shown as “${esc(shown.name)}”: the ✎ name ${inSheet ? "" : "on its sheet "}wins` : "") + fld("ip", inp("ip", "192.168.88.10", "decimal")) +
     fld("mac", inp("mac", "optional"), `follows it when DHCP moves it<span id="macq">${macLine(S2) ? "<br>" + macLine(S2) : ""}</span>`) +
@@ -5242,6 +5360,7 @@ async function setDevice(ip) {
   put(devRoot(), `<div class="setw">${h}</div>`);
   const pw = devRoot().querySelector("input[data-dk=lpw]");
   if (pw) pw.value = S2.lpw || "";
+  devKeep();
   macLook(S2);
 }
 // The MAC the network gives its address now (POST /api/settings/mac: lanowl's own ARP table,
@@ -5276,8 +5395,9 @@ async function macLook(S2) {
 function onDevField(el) {
   const S2 = ST.dev; if (!S2) return;
   const k = el.dataset.dk;
-  if (k === "lmode") { S2.lmode = el.value; S2.lchanged = true; if (S2.lmode.startsWith("own") && !S2.lname) S2.lset = false; setDevice(S2.key); return; }
-  if (k === "luser" || k === "lpw" || k === "htok") { S2[k] = el.value; S2.lchanged = true; S2.tryRes = null; const bar = devRoot().querySelector("#sbar"); if (bar) bar.hidden = false; return; }
+  S2.restored = false;
+  if (k === "lmode") { S2.lmode = el.value; S2.lchanged = S2.lkeep = true; if (S2.lmode.startsWith("own") && !S2.lname) S2.lset = false; setDevice(S2.key); return; }
+  if (k === "luser" || k === "lpw" || k === "htok") { S2[k] = el.value; S2.lchanged = true; if (k === "luser") S2.lkeep = true; devKeep(); S2.tryRes = null; const bar = devRoot().querySelector("#sbar"); if (bar) bar.hidden = false; return; }
   if (k === "group" && el.value === "__new") {
     // a box for the new group's name, under the list: part of the page, so a redraw keeps it
     S2.newGroup = true; S2.d.group = ""; setDevice(S2.key);
@@ -5296,6 +5416,7 @@ function onDevField(el) {
     setDevice(S2.key); return;
   }
   if (k === "mac") macShow(S2);
+  devKeep();
   const bar = devRoot().querySelector("#sbar"); if (bar) bar.hidden = false;
 }
 // the device as the form has it, and its own login: {device, login} or {error}
@@ -5325,7 +5446,7 @@ async function devReview(remove) {
     const r = await saveCall("/api/settings/device", {...body, base: p.base, ...(p.secrets ? {sbase: p.secrets.base} : {})});
     if (r.ok) {
       const inSheet = ST.devIn === "sheet";
-      ST.dev = null; await devData(true); await setData(true);
+      ST.dev = null; dsave("dev", null); await devData(true); await setData(true);
       if (inSheet) { S.sheetSaved = S.sheet; devSetClose(); } else setNav("set/devices");
       refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply.");
     }
@@ -5773,7 +5894,7 @@ document.addEventListener("click", async e => {
   if (a === "gear") { setNav("set"); return; }
   if (a === "sclose") { closeSet(); return; }
   if (a === "review") { withSpin(t, "Checking…", reviewSection); return; }
-  if (a === "discard") { ST.edits = {}; renderSet(); return; }
+  if (a === "discard") { dropEdits(); renderSet(); return; }
   if (a === "restart") { withSpin(t, "One moment…", async () => { await setData(true); restartSheet(); }); return; }
   if (a === "password") { await setData(); passwordSheet(); return; }
   if (a === "lcheck") { withSpin(t, "Asking GitHub…", lanowlCheck); return; }
@@ -5782,6 +5903,7 @@ document.addEventListener("click", async e => {
   if (a === "undo") { withSpin(t, "Checking…", () => undoSheet(+t.dataset.id)); return; }
   if (a === "migrate") { withSpin(t, "Checking…", migrateSheet); return; }
   const S2 = ST.dev;
+  if (S2) S2.restored = false;
   if (a === "crit" && S2) { S2.d.criticality = t.dataset.v; setDevice(S2.key); return; }
   if (a === "eo" && S2) { if (t.dataset.v) S2.d.expect_offline = t.dataset.v; else delete S2.d.expect_offline; setDevice(S2.key); return; }
   if (a === "scan" && S2) { S2.d.scan = t.dataset.v === "true"; setDevice(S2.key); return; }
@@ -5794,9 +5916,9 @@ document.addEventListener("click", async e => {
     S2.ckt = type; S2.d.checks = [...(S2.d.checks || []), type === "link" ? {type, iface: port} : {type, ...(port ? {port: +port} : {})}]; setDevice(S2.key); return;
   }
   if (a === "macuse" && S2 && S2.macq && S2.macq.mac) { S2.d.mac = S2.macq.mac; setDevice(S2.key); return; }
-  if (a === "devreset") { if (ST.devIn === "sheet") devSetClose(); else { ST.dev = null; renderSet(); } return; }
-  if (a === "sitecrit" && ST.site) { ST.site.d.criticality = t.dataset.v; setSitePage(ST.site.id); return; }
-  if (a === "sitereset") { ST.site = null; renderSet(); return; }
+  if (a === "devreset") { dsave("dev", null); if (ST.devIn === "sheet") devSetClose(); else { ST.dev = null; renderSet(); } return; }
+  if (a === "sitecrit" && ST.site) { ST.site.d.criticality = t.dataset.v; ST.site.restored = false; setSitePage(ST.site.id); return; }
+  if (a === "sitereset") { ST.site = null; dsave("site", null); renderSet(); return; }
   if (a === "sitereview") { withSpin(t, "Checking…", () => siteReview(null)); return; }
   if (a === "siterm") { withSpin(t, "Checking…", () => siteReview(t.dataset.k)); return; }
   if (a === "devreview") { withSpin(t, "Checking…", () => devReview(false)); return; }
