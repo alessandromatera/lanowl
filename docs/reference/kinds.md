@@ -140,3 +140,14 @@ up more than three times as often as it ever did while it was learned is read ag
 round, and one not seen for 30 days is forgotten. The sheet's **Routine lines the owl no longer
 reads** lists them, each with **Forget** (and **Forget all**). `devwatch.routine` sets it:
 `after: 3`, `forget_days: 30`; `after: 0` learns and skips nothing.
+
+A line that comes back is counted. A line lanowl tags `[link]`, `[reboot]`, `[storage]`,
+`[hardware]` or `[memory]` that shows on 3 different days within 30 is a pattern. Nothing is left
+untold because it recurs: the owl judges the new lines first, without the history, exactly as it
+judges a first time. Only for what it found worth telling is it then given the history of the same
+lines on that device (how many days, the first and the last, the hours they cluster in: a 3-hour
+window, when most of the days fit one) to write its words again: "again", the count and the usual
+hours, and what a line on a clock points to, as a guess. The first time it tells a pattern it
+tells the pattern; after that, one short sentence, unless the event is outside its usual hours or
+there is more of it than ever on a day. The history starts from the log checks lanowl already
+kept.

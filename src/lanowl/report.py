@@ -895,6 +895,48 @@ def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None,
     return "\n".join(lines)
 
 
+def _log_line(g: dict, prefix: str, idx=None, section: bool = False) -> str:
+    """A device-log note (devwatch.digest_news) as one line: a row of "Device logs", or, under the
+    open issue about the same event, the owl's line (no device name: the issue line has it)."""
+    s = _HOO.sub("", str(g.get("summary") or ""))
+    tail = f" <i>({g['n']} times since the last digest)</i>" if g.get("n", 1) > 1 else ""
+    if section:
+        # the owl names the device itself most of the time: then not twice
+        who = "" if g.get("ip") and f"({g['ip']})" in s else _html(label(g.get("name"), g.get("ip"), idx)) + ": "
+        return f"{prefix}{who}{_html(_short(s, 320))}{tail}"
+    s = _short(s, 320)
+    return f"{prefix}<i>{_html(s)}</i>{tail}" if s else ""
+
+
+# an address anywhere in a sentence: the owl writes "(192.168.88.20)" and "(192.168.88.20, private MAC)"
+_ADDR = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])")
+
+
+def _untold(summary: str, ips: set) -> str:
+    """The owl's summary without what a line of its own below tells again. The sentences before the
+    first one that names an address are the verdict and stay; from there a chunk
+    runs until the next sentence that names one, and goes when its first sentence names only
+    addresses in `ips`. A chunk that says "needs you" anywhere stays whole: what the owner has to
+    do is never cut for the sake of saying a thing once. "" when nothing but the owl's call is left."""
+    head, chunks = [], []
+    for s in re.split(r"(?<=[.!?])\s+", str(summary or "").strip()):
+        if not s:
+            continue
+        a = _ADDR.findall(s)
+        if a:
+            chunks.append((set(a), [s]))
+        elif chunks:
+            chunks[-1][1].append(s)
+        else:
+            head.append(s)
+    kept = []
+    for a, c in chunks:
+        if not a <= set(ips) or any(re.search(r"\bneeds you\b", s, re.I) for s in c):
+            kept += c
+    out = " ".join(head + kept)
+    return "" if not _HOO.sub("", out).strip() else out
+
+
 def format_digest(report: dict, now: Optional[float] = None,
                   title: str = "lanowl digest") -> str:
     now = time.time() if now is None else now
@@ -911,9 +953,8 @@ def format_digest(report: dict, now: Optional[float] = None,
     idx = _label_index(report)
     lines = [f"{e} <b>{title}</b> — {report['overall_health'].upper()}",
              f"{c['up']}/{c['total']} up{asleep} · WAN {wan}"]
-    if report.get("summary"):
-        # the model's summary carries the owl's mark; the monitor's own does not
-        lines.append(("🦉 " if report.get("summary_by_model") else "") + _html(report["summary"]))
+    # The summary line goes in here once what has an owl line of its own below is known (_untold).
+    sum_at = len(lines)
     # Every open issue is listed, info included — the ⚪ lines are how "the vacuum is off"
     # reaches you. The gate upstream guarantees a given issue only reaches a digest once,
     # so listing them here cannot become a repeating message.
@@ -924,16 +965,35 @@ def format_digest(report: dict, now: Optional[float] = None,
     used = set()
     issues = report["issues"]
     shown, rest = issues[:10], issues[10:]
+    logs = report.get("log_news") or []
+    owl_ips = set()                 # the devices that get an owl line below: the summary does not retell them
+    tied = set()                    # the device-log notes that are the same event as an open issue
     for i in shown:
         lines.append(f"{_EMOJI.get(i['severity'], '•')} "
                      f"{label(i.get('device'), i.get('ip'), idx)}: {i['detail']}"
                      f"{_since_note(i, now)}")
+        # One event, one block: a device-log note about this issue (same device, its event no earlier
+        # than 15 minutes before the issue began) is the owl's line under it, not a second section.
+        since, ip = float(i.get("since") or 0), str(i.get("ip") or "")
+        g = next((g for g in logs if id(g) not in tied and since and ip and g.get("ip") == ip
+                  and g.get("at") is not None and float(g["at"]) >= since - 900), None)
+        ol = _log_line(g, "   ↳ ") if g is not None else ""
+        if ol:                      # a note with no words ties nothing: the model's cause line stands
+            tied.add(id(g))
+            owl_ips.add(ip)
+            d = match_diagnosis(i, llm_issues)
+            if d:
+                used.add(id(d))
+            lines.append(ol)
+            continue
         d = match_diagnosis(i, llm_issues) if i.get("severity") != "info" else None
         if d:
             used.add(id(d))
             dl = _diag_line(d)
             if dl:
                 lines.append(dl)
+                if ip and ip != "-":
+                    owl_ips.add(ip)
     if rest:
         lines.append(f"…and {len(rest)} more (see dashboard)")
 
@@ -944,6 +1004,8 @@ def format_digest(report: dict, now: Optional[float] = None,
     if extra:
         lines.append("🦉 <b>The owl also noticed</b>")
         for d in extra:
+            m = re.search(r"\((\d{1,3}(?:\.\d{1,3}){3})\)", str(d.get("device") or ""))
+            owl_ips.update(x for x in (str(d.get("ip") or ""), m.group(1) if m else "") if x and x != "-")
             lines.append(f"• {label(d.get('device'), d.get('ip'), idx)}: "
                          f"{_html(_short(d.get('root_cause'), 140))}"
                          + (f" → {_html(_short(d.get('recommendation'), 100))}"
@@ -951,16 +1013,13 @@ def format_digest(report: dict, now: Optional[float] = None,
 
     # What a device's own log showed that was not normal, from a device that does not page
     # (devwatch.py): one line a device, its newest note, and how many since the last digest.
-    logs = report.get("log_news") or []
+    logs = [g for g in logs if id(g) not in tied]
     if logs:
         worst = "warning" if any(g.get("severity") in ("critical", "warning") for g in logs) else "info"
         lines.append(f"{_EMOJI[worst]} <b>Device logs</b> <i>(the owl's read — the dashboard has the lines)</i>")
         for g in logs[:6]:
-            s = _HOO.sub("", str(g.get("summary") or ""))
-            # the owl names the device itself most of the time: then not twice
-            who = "" if g.get("ip") and f"({g['ip']})" in s else _html(label(g.get("name"), g.get("ip"), idx)) + ": "
-            lines.append(f"• {who}{_html(_short(s, 320))}"
-                         + (f" <i>({g['n']} times since the last digest)</i>" if g.get("n", 1) > 1 else ""))
+            owl_ips.add(str(g.get("ip") or ""))
+            lines.append(_log_line(g, "• ", idx, True))
         if len(logs) > 6:
             lines.append(f"…and {len(logs) - 6} more on the dashboard")
 
@@ -1012,6 +1071,12 @@ def format_digest(report: dict, now: Optional[float] = None,
     if ran:
         lines.append("<i>The audit looked for itself:</i>")
         lines += ran_lines(ran, 8)
+    if report.get("summary"):
+        # the model's summary carries the owl's mark; the monitor's own does not (and is never cut)
+        by_model = bool(report.get("summary_by_model"))
+        text = _untold(report["summary"], owl_ips) if by_model else str(report["summary"])
+        if text:
+            lines.insert(sum_at, ("🦉 " if by_model else "") + _html(text))
     return "\n".join(lines)
 
 

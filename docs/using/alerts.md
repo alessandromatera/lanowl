@@ -128,6 +128,10 @@ device, the next digest.
 | Its log shows something that is not normal, on a critical device | 🟡 or 🔴 **DEVICE LOG**: one 🦉 text from the owl, with the device's own words. Nothing for the first `quiet_days` (7): kept on the Timeline instead |
 | The same, on any other device | A line under **Device logs** in the next digest: the owl's newest note on it, and how many since the last digest. It never sends a digest by itself: one still waiting at 08:00 goes with the first digest after it |
 
+One event is one block in a digest: when a device's open issue and its log note are about the same
+thing, the digest shows the owl's line once, under the issue, and the owl's opening summary does not
+retell what has a line of its own below it.
+
 ## What never reaches you
 
 - A single missed ping.

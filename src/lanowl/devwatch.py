@@ -46,6 +46,7 @@ import shlex
 import socket
 import time
 from collections import Counter
+from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -74,6 +75,12 @@ ROUTINE_FORGET_D = 30   # a shape not seen for this long is forgotten
 ROUTINE_BURST = 3       # a routine shape seen more than this many times its usual count is news
 ROUTINE_MAX = 200       # shapes kept a device: a noisy or hostile log cannot grow the record
 SHAPE_MAX = 160         # characters of a shape kept
+HISTORY_TAGS = ("link", "reboot", "storage", "hardware", "memory")   # tagged lines whose history is counted and given to the model
+PATTERN_DAYS = 3        # the same line on this many different days...
+PATTERN_WITHIN_D = 30   # ...within this many days is a pattern
+PATTERN_HOURS = 3       # "same hours": the days cluster in a window this wide
+PATTERN_SHARE = 0.8     # the share of its days inside the window for a pattern to have "usual hours" (one stray daytime occurrence must not erase a nightly pattern)
+EVENTS_MAX = 60         # shapes kept a device
 
 # --- the commands --------------------------------------------------------------------------------
 # Every section starts with a marker line, so one login answers both reads.
@@ -452,6 +459,143 @@ def shape_of(line: str) -> str:
     return s if len(s) <= SHAPE_MAX else f"{s[:SHAPE_MAX - 15]}… #{_h(s)}"
 
 
+# --- recurring events --------------------------------------------------------------------------------
+# The same tagged line on many nights (a port that drops at about the same hour) is judged once, then
+# counted: the code keeps, per device, the days each shape was seen and the minute of the day; the
+# owl reads that history and interprets it.
+_PREFIX = re.compile(r"^\[([a-z,-]+)\]\s+")
+_MON = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
+_T_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})")
+_T_ROS = re.compile(r"\b([A-Za-z]{3})/(\d{1,2})/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})")
+_T_SYS = re.compile(r"\b([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})(?:\s+(\d{4}))?")
+_T_BARE = re.compile(r"^(\d{1,2}):(\d{2}):(\d{2})(?![\w:])")
+
+
+def line_time(line: str, now: float) -> float:
+    """The event's own time read from the line, as local time; `now` when the line has none or it is
+    not plausible (older than 35 days, more than a day ahead). A leading "[tag,tag] " is skipped."""
+    s = _PREFIX.sub("", line or "", count=1)
+    t = None
+    try:
+        m = _T_ISO.search(s)
+        if m:
+            t = datetime(*(int(x) for x in m.groups())).timestamp()
+        else:
+            m = _T_ROS.search(s)
+            if m and m.group(1).lower() in _MON:
+                t = datetime(int(m.group(3)), _MON[m.group(1).lower()], int(m.group(2)), int(m.group(4)),
+                             int(m.group(5)), int(m.group(6))).timestamp()
+            else:
+                m = _T_SYS.search(s)
+                if m and m.group(1).lower() in _MON:
+                    mo, dd, hh, mi, ss = _MON[m.group(1).lower()], *(int(m.group(i)) for i in (2, 3, 4, 5))
+                    if m.group(6):
+                        t = datetime(int(m.group(6)), mo, dd, hh, mi, ss).timestamp()
+                    else:
+                        y = datetime.fromtimestamp(now).year
+                        t = datetime(y, mo, dd, hh, mi, ss).timestamp()
+                        if t > now + 86400:                 # December's line read in January
+                            t = datetime(y - 1, mo, dd, hh, mi, ss).timestamp()
+                else:
+                    m = _T_BARE.match(s)
+                    if m:
+                        dt = datetime.fromtimestamp(now).replace(hour=int(m.group(1)), minute=int(m.group(2)),
+                                                                 second=int(m.group(3)), microsecond=0)
+                        t = (dt - timedelta(days=1) if dt.timestamp() > now else dt).timestamp()
+    except (ValueError, OverflowError, OSError):
+        t = None
+    return t if t is not None and now - 35 * 86400 <= t <= now + 86400 else now
+
+
+def event_shape(line: str) -> str:
+    """The shape of the line without its "[tags] " prefix: the same event on another night is one shape."""
+    return shape_of(_PREFIX.sub("", line or "", count=1))
+
+
+def shape_words(shape: str) -> str:
+    """The shape for people: no <time>/<date> placeholders, one space, at most 90 characters."""
+    s = re.sub(r"\s+", " ", re.sub(r"<(?:time|date)>", "", shape or "")).strip()
+    return s if len(s) <= 90 else s[:89].rstrip() + "…"
+
+
+def _day(ts: float) -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(ts))
+
+
+def _minute(ts: float) -> int:
+    lt = time.localtime(ts)
+    return lt.tm_hour * 60 + lt.tm_min
+
+
+def _hm(m: int) -> str:
+    return f"{int(m) // 60:02d}:{int(m) % 60:02d}"
+
+
+def _dmy(day: str) -> str:
+    try:
+        d = datetime.strptime(day, "%Y-%m-%d")
+        return f"{d.day} {d:%b}"
+    except ValueError:
+        return day
+
+
+def pattern_of(days: dict, today: str, now: float) -> Optional[dict]:
+    """`days`: {"YYYY-MM-DD": {"n": lines that day, "min": minute of day of the first}}. A pattern is
+    the same line on PATTERN_DAYS different days (not `today`) within PATTERN_WITHIN_D days; None
+    with fewer. Its "window" is the PATTERN_HOURS-wide stretch of the 24h circle (it can wrap
+    midnight) that holds most days, as (start_min, end_min), when it holds at least PATTERN_DAYS
+    days and PATTERN_SHARE of all of them; else None."""
+    cut = _day(now - PATTERN_WITHIN_D * 86400)
+    use = {k: v for k, v in (days or {}).items() if k != today and k >= cut and isinstance(v, dict)}
+    if len(use) < PATTERN_DAYS:
+        return None
+    mins = [int(v.get("min") or 0) % 1440 for v in use.values()]
+    span = PATTERN_HOURS * 60
+    best = None
+    for s0 in sorted(set(mins)):
+        held = [m for m in mins if (m - s0) % 1440 <= span]
+        if best is None or len(held) > len(best[1]):
+            best = (s0, held)
+    s0, held = best
+    win = None
+    if len(held) >= PATTERN_DAYS and len(held) >= PATTERN_SHARE * len(mins):
+        win = (s0, (s0 + max((m - s0) % 1440 for m in held)) % 1440)
+    ds = sorted(use)
+    inside = len(held) if win else 0
+    return {"days": len(use), "first": ds[0], "last": ds[-1], "max": max(int(v.get("n") or 1) for v in use.values()),
+            "window": win, "inside": inside, "outside": len(use) - inside}
+
+
+def in_window(window, minute: int) -> bool:
+    """Whether `minute` is inside the observed span padded evenly on both sides to PATTERN_HOURS."""
+    if not window:
+        return False
+    a, b = window
+    span = (b - a) % 1440
+    total = max(span, PATTERN_HOURS * 60)
+    return (minute - (a - (total - span) / 2)) % 1440 <= total
+
+
+def hours_words(window) -> str:
+    return f"{_hm(window[0])}–{_hm(window[1])}" if window else ""
+
+
+def _line_tags(line: str) -> list:
+    """The tags a line reaches the owl with ("[link] ..."); tags_of for one that has no prefix."""
+    m = _PREFIX.match(line or "")
+    return m.group(1).split(",") if m else tags_of(line or "")
+
+
+def history_items(batch: list, now: float) -> list:
+    """(shape, first history tag, the event's time) for each line of the batch with a HISTORY tag."""
+    out = []
+    for ln in batch:
+        h = [x for x in _line_tags(ln) if x in HISTORY_TAGS]
+        if h:
+            out.append((event_shape(ln), h[0], line_time(ln, now)))
+    return out
+
+
 # --- the module --------------------------------------------------------------------------------------
 @dataclass
 class Target:
@@ -495,6 +639,31 @@ Reply with ONLY this JSON object, no prose and no code fence:
 "kind": "security" for access (logins, users, failed passwords, configuration changed by
 someone), "health" for the device working. "critical" only for someone getting in or a device
 about to fail; a restart or a flapping link is "warning"."""
+
+# The words for an event that recurs, asked only AFTER the verdict above said it is worth telling:
+# a model that knows "this happens most nights" calls the same night nothing, and an event the
+# owner is told once must be told every time. So the history never reaches the verdict, only the
+# words — and the code keeps the verdict's "problem" and "severity" whatever this call answers.
+AGAIN = SYSTEM + """
+
+THIS TIME the lines were already judged worth telling: "problem" is true and "severity" is
+"{sev}". Keep both; write the words again, with what lanowl counted.
+
+THE SAME LINES BEFORE is how often lanowl saw each of these lines on this device in the last 30
+days, counted by the code: use its numbers and no others.
+  - The summary says today's event, that it happened again, on how many days, and the usual
+    hours when lanowl gives them. The count is lanowl's: "on 13 of the last 30 days", never
+    "every night" or "always" when the number says less.
+  - A line that returns at the same hours points to something on a clock (what is at the other
+    end of the cable restarting or updating itself at night, a timer, a scheduled job), not to a
+    loose cable or a one-off fault. Name that as a guess ("likely", once): it is the one reason
+    you may give that the lines do not show.
+  - NEW PATTERN: two sentences. What happens, on how many days of the 30 and at which hours;
+    then the guess. Never that it is new, or that the owner was not told.
+  - No NEW PATTERN marker: the owner was told the pattern already. One short sentence: today's
+    event, "again", the count.
+  - OUTSIDE ITS USUAL HOURS or MORE THAN USUAL: that is the news, say it first.
+Never "nothing needs you" here: the event is told."""
 
 
 @dataclass
@@ -891,10 +1060,11 @@ class DevWatch:
         return sh
 
     def _forget_removed(self):
-        """A device taken out of the inventory takes its shapes with it."""
+        """A device taken out of the inventory takes its shapes (and its recurring events) with it."""
         for ip, d in self.rec["dev"].items():
-            if d.get("shapes") and self.a.inv.get(ip) is None:
+            if (d.get("shapes") or d.get("events")) and self.a.inv.get(ip) is None:
                 d.pop("shapes", None)
+                d.pop("events", None)
 
     def _learn(self, d: dict, batch: list, told: bool, now: float):
         """What a real verdict teaches: nothing worth telling adds one to the streak of every shape
@@ -1006,7 +1176,119 @@ class DevWatch:
         bits.append(f"ROUTINE LINES ALREADY REMOVED: {routine}.")
         return "\n".join(bits)
 
+    # --- recurring events: the same tagged line on many nights ----------------------------------
+    def _events(self, d: dict, now: float) -> dict:
+        """The device's {shape: {"tag", "days": {date: {"n", "min"}}, "told"}}: days older than
+        PATTERN_WITHIN_D dropped, a shape with none left dropped, the oldest beyond EVENTS_MAX dropped."""
+        ev = d.get("events")
+        if not isinstance(ev, dict):
+            ev = d["events"] = {}
+        cut = _day(now - PATTERN_WITHIN_D * 86400)
+        for k in list(ev):
+            v = ev[k]
+            if not isinstance(v, dict) or not isinstance(v.get("days"), dict):
+                ev.pop(k)
+                continue
+            for dk in [x for x in v["days"] if x < cut]:
+                v["days"].pop(dk)
+            if not v["days"]:
+                ev.pop(k)
+        for k in sorted(ev, key=lambda k: max(ev[k]["days"]))[:max(0, len(ev) - EVENTS_MAX)]:
+            ev.pop(k)
+        return ev
+
+    def _record(self, d: dict, items: list, now: float):
+        ev = self._events(d, now)
+        for shape, tag, ts in items:
+            e = ev.setdefault(shape, {"tag": tag, "days": {}, "told": 0})
+            day = e["days"].setdefault(_day(ts), {"n": 0, "min": _minute(ts)})
+            day["n"] += 1
+            day["min"] = min(int(day["min"]), _minute(ts))
+        self._events(d, now)
+
+    def _backfill(self, now: float):
+        """Once: what the stored findings read in the last 30 days, so an install with history does
+        not wait for three new days. Nothing is marked told."""
+        if self.rec.get("events_backfilled") or not getattr(self.a, "_persist_alerts", True):
+            return
+        self.rec["events_backfilled"] = True
+        try:
+            rows = self.a.state.events(now - PATTERN_WITHIN_D * 86400, "finding", limit=5000)
+            for e in sorted(rows, key=lambda e: e["ts"]):
+                try:
+                    f = json.loads(e["detail"])
+                except (ValueError, TypeError):
+                    continue
+                ip = f.get("ip") if isinstance(f, dict) else None
+                if not (ip and str(f.get("source") or "").startswith("device log ") and f.get("log")
+                        and self.a.inv.get(ip) is not None):
+                    continue
+                d = self.rec["dev"].setdefault(ip, {})
+                self._record(d, history_items([str(x) for x in f["log"]], float(f.get("ts") or e["ts"])),
+                             now)
+        except Exception as e:
+            log.debug("devwatch: backfill of the recurring events: %s", e)
+        self._save()
+
+    def _judge(self, d: dict, items: list, now: float) -> dict:
+        """For each shape of the batch, what the record says before today's lines are added."""
+        ev = self._events(d, now)
+        today = _day(items[0][2])
+        cut = _day(now - PATTERN_WITHIN_D * 86400)
+        cnt = Counter(i[0] for i in items)
+        out = {}
+        for shape, n in cnt.items():
+            e = ev.get(shape) or {}
+            days = e.get("days") or {}
+            out[shape] = {"pat": pattern_of(days, today, now), "told": e.get("told") or 0, "n": n,
+                          "today_n": int((days.get(today) or {}).get("n") or 0),
+                          "others": sorted(k for k in days if k != today and k >= cut)}
+        return out
+
+    @staticmethod
+    def _history_block(judged: dict, minute: int) -> str:
+        at = _hm(minute)
+        rows = []
+        for shape, j in list(judged.items())[:8]:
+            p, w = j["pat"], shape_words(shape)
+            if p is None:
+                k = len(j["others"])
+                rows.append(f'- "{w}": ' + (f"on {k} other day{'' if k == 1 else 's'} "
+                                            f"({', '.join(_dmy(x) for x in j['others'])}); today at {at}." if k else
+                                            f"never before in these {PATTERN_WITHIN_D} days."))
+                continue
+            win = p["window"]
+            s = f'- "{w}": on {p["days"]} other days (first {_dmy(p["first"])}, last {_dmy(p["last"])})'
+            if win:
+                s += (f", {p['inside']} of them between {_hm(win[0])} and {_hm(win[1])}; today at {at}"
+                      + (", inside those hours." if in_window(win, minute) else "."))
+            else:
+                s += f", not at the same hours; today at {at}."
+            if not j["told"]:
+                s += " NEW PATTERN."
+            if win and not in_window(win, minute):
+                s += " OUTSIDE ITS USUAL HOURS."
+            if j["today_n"] + j["n"] > p["max"]:
+                s += f" MORE THAN USUAL: {j['today_n'] + j['n']} line(s) today, at most {p['max']} on a day before."
+            rows.append(s)
+        return (f"THE SAME LINES BEFORE, on this device (counted by lanowl over the last {PATTERN_WITHIN_D} days: "
+                "correct, use no other numbers):\n" + "\n".join(rows))
+
+    def _add_finding(self, f: dict):
+        self.findings = (self.findings + [f])[-FINDINGS_N:]
+        if self.on_event is not None:
+            try:
+                self.on_event("finding", None, json.dumps(f, ensure_ascii=False), None)
+            except Exception:
+                pass
+
     async def _triage(self, t: Target, d: dict, routine: int):
+        batch = list(d.get("pending") or [])[-self.max_lines:]
+        now = time.time()
+        self._backfill(now)
+        items = history_items(batch, now)
+        judged = self._judge(d, items, now) if items else {}
+        minute = _minute(items[0][2]) if items else 0
         if self.agent is None or (self.model_on is not None and not self.model_on()):
             return                                  # kept on its sheet, waiting
         for _ in range(40):                         # the hourly audit has the model: wait for it
@@ -1016,12 +1298,12 @@ class DevWatch:
         else:
             log.info("devwatch: %s's lines wait for the next round (the model is busy)", t.name)
             return
-        batch = list(d.get("pending") or [])[-self.max_lines:]
         now = time.time()
+        ctx = self._context(t, d, routine, now)
+        lines = f"\n\nNEW LINES ({len(batch)}):\n" + "\n".join(batch)
+        about = ABOUT.get(t.kind, t.kind)
         try:
-            v = await self.agent.ask_json(SYSTEM.format(about=ABOUT.get(t.kind, t.kind)),
-                                          self._context(t, d, routine, now) + "\n\nNEW LINES "
-                                          f"({len(batch)}):\n" + "\n".join(batch),
+            v = await self.agent.ask_json(SYSTEM.format(about=about), ctx + lines,
                                           timeout_s=self.timeout_s, call=CALL_SUMMARY)
         except Exception as e:
             log.warning("devwatch: %s's triage failed: %s", t.name, e)
@@ -1032,7 +1314,23 @@ class DevWatch:
         d["pending"] = []
         sev = str(v.get("severity") or "info").lower()
         problem = bool(v.get("problem"))
+        if problem and any(j["pat"] for j in judged.values()):
+            # it recurs: the same verdict, its words written again with the count (see AGAIN)
+            try:
+                w = await self.agent.ask_json(AGAIN.format(about=about, sev=sev),
+                                              ctx + "\n" + self._history_block(judged, minute) + lines,
+                                              timeout_s=self.timeout_s, call=CALL_SUMMARY)
+            except Exception as e:
+                log.warning("devwatch: %s: the words for a recurring event failed (%s): the first ones stand", t.name, e)
+                w = None
+            if w and str(w.get("summary") or "").strip():
+                v = {**v, "summary": w["summary"], "detail": w.get("detail") or v.get("detail")}
         self._learn(d, batch, problem, now)
+        self._record(d, items, now)
+        if problem:                                 # told as a pattern: from now on "again", in one sentence
+            for s in judged:
+                if judged[s]["pat"] and s in d["events"]:
+                    d["events"][s]["told"] = now
         summary = str(v.get("summary") or "").strip()
         held = problem and sev in self.notify and now < self.quiet_until
         # the door: at once from a critical device, or for a critical verdict; else the digest
@@ -1044,12 +1342,7 @@ class DevWatch:
              "summary": summary[:200], "detail": str(v.get("detail") or "")[:1500],
              "log": kept_lines(batch), **({"held": True} if held else {}),
              **({"digest": True} if later else {})}
-        self.findings = (self.findings + [f])[-FINDINGS_N:]
-        if self.on_event is not None:
-            try:
-                self.on_event("finding", None, json.dumps(f, ensure_ascii=False), None)
-            except Exception:
-                pass
+        self._add_finding(f)
         if not problem:
             log.info("devwatch: %s: nothing worth telling (%s)", t.name, summary[:80])
             return
@@ -1065,7 +1358,8 @@ class DevWatch:
         if later:
             self.rec["digest"] = (list(self.rec.get("digest") or [])
                                   + [{"ts": now, "ip": t.ip, "name": t.name, "severity": sev,
-                                      "summary": summary[:500]}])[-DIGEST_MAX:]
+                                      "summary": summary[:500],
+                                      "at": min((line_time(ln, now) for ln in batch if _line_tags(ln)), default=now)}])[-DIGEST_MAX:]
             self._save()
             log.info("devwatch: %s: %s — for the next digest (a %s device)", t.name, summary[:80],
                      dev.criticality if dev is not None else "removed")
@@ -1086,7 +1380,8 @@ class DevWatch:
         for n in self.rec.get("digest") or []:
             g = by.setdefault(n["ip"], {"ip": n["ip"], "name": n.get("name") or "", "n": 0,
                                         "severity": "info", "first": n["ts"]})
-            g.update(n=g["n"] + 1, summary=n.get("summary") or "", last=n["ts"], name=n.get("name") or g["name"])
+            g.update(n=g["n"] + 1, summary=n.get("summary") or "", last=n["ts"], name=n.get("name") or g["name"],
+                     at=n.get("at"))
             if rank.get(n.get("severity"), 0) > rank.get(g["severity"], 0):
                 g["severity"] = n["severity"]
         return sorted(by.values(), key=lambda g: -g["last"])
