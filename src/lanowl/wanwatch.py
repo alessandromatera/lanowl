@@ -310,7 +310,7 @@ class WanWatcher:
     _arrived: list = field(default_factory=list)     # followed rows not merged yet
     _wake: Optional[asyncio.Event] = None            # a main link edge line / a new follow: scan now
     _router: Optional[object] = None                 # routeros.Router
-    _access: Optional[object] = None                 # access.Access, for _routine_patterns
+    _access: Optional[object] = None                 # the app's Access (config + inventory), set by main.py
 
     # --- route-poll state (the sweep's poll, or ours over the API; see set_path) ---
     path: Optional[dict] = None                      # last {link, on_backup, detail}

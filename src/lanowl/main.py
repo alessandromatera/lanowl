@@ -298,6 +298,10 @@ class Auditor:
         # nothing is executed). See actions.py.
         # The owner's device logins (secrets.yaml), for reboots, updates and backups.
         self.access = Access(cfg, inv)
+        # The WAN watcher logs in to the backup router (and finds the update check's login)
+        # with these too: a login may be named only in the inventory (`credentials:`), and an
+        # Access built from the config alone would not find it.
+        self.wanwatch._access = self.access
         self.actions = Actions(self)
         self.executor.actions = self.actions
         # Updates, pending reboots, known vulnerabilities: daily, and a monthly scan.
