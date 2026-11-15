@@ -5351,6 +5351,9 @@ async function setDevice(ip) {
         ? `<span style="color:var(--orange-t)">${esc(f)}: switched off in config.yaml (${esc((V.switch_names || {})[f] || f)}.enabled)</span>`
         : `<span class="muted">${esc(f)}: switched on, from the next restart</span>`).join("<br>")) +
     ((d.manage || []).includes("restart") ? fld("restart: units", `<input class="fin" data-dk="units" value="${esc(((d.restart || {}).units || []).join(", "))}" placeholder="mosquitto, nginx" autocomplete="off" spellcheck="false">`, "the services it may restart, and nothing else") : "") +
+    (d.kind === "linux" && (d.manage || []).includes("backup") ? fld("backup: paths", `<input class="fin" data-dk="bpaths" value="${esc(((d.backup || {}).paths || []).join(", "))}" placeholder="/etc, /home, /opt/app" autocomplete="off" spellcheck="false">`,
+      (S2.lmode === "own-key" || ((S2.lmode || "").startsWith("use:") && (logins.find(l => l.name === S2.lmode.slice(4)) || {}).how === "key"))
+        ? "what the backup takes; empty: the server's own configuration (/etc, ssh, cron…)" : "what the backup takes: needed with a password login") : "") +
     fld("scan", `<div class="segc" role="group">${[[true, "on"], [false, "off"]].map(([v, l]) => `<button type="button" data-sact="scan" data-v="${v}" aria-pressed="${scanOf(d, V) === v}">${l}</button>`).join("")}</div>`,
       "The monthly deep scan for known vulnerabilities, and the owl's port scans. Off for what may not survive one: some cameras and smart plugs hang." +
       (typeof d.scan === "boolean" ? "" : ` Not chosen yet: ${scanOf(d, V) ? "on" : "off"}, by its group.`)) + `</div>`;
@@ -5406,6 +5409,11 @@ function onDevField(el) {
   }
   if (k === "ip") { clearTimeout(S2.macT); S2.macT = setTimeout(() => macLook(S2), 700); }
   if (k === "units") S2.d.restart = {...(S2.d.restart || {}), units: el.value.split(",").map(x => x.trim()).filter(Boolean)};
+  else if (k === "bpaths") {
+    const ps = el.value.split(",").map(x => x.trim()).filter(Boolean), bk = {...(S2.d.backup || {})};
+    if (ps.length) bk.paths = ps; else delete bk.paths;
+    if (Object.keys(bk).length) S2.d.backup = bk; else delete S2.d.backup;
+  }
   else if (el.value === "") delete S2.d[k];
   else S2.d[k] = el.value;
   if (k === "kind") {

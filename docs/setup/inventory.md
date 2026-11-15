@@ -142,7 +142,7 @@ A feature's options sit under its own name on the device:
 | Option | Meaning |
 |---|---|
 | `restart.units` | The systemd units it may restart. Nothing else can be restarted. |
-| `backup.paths` | What a Linux machine's backup copies. Required over a password login; over lanowl's key a default list of configuration paths is used. |
+| `backup.paths` | What a Linux machine's backup copies. Required over a password login; over lanowl's key a default list of configuration paths is used. In the dashboard it is the `backup: paths` field of the device form, shown once `backup` is ticked. |
 | `reboot.risk`, `upgrade.risk` | A line shown with the proposal: what you lose while it runs. |
 | `hold_min` | How long its alerts are held while it restarts (default 5 minutes). |
 | `also_hold` | Other addresses held with it, or `wan` for the internet. |

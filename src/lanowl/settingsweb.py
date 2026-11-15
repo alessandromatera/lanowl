@@ -94,6 +94,42 @@ def guess_kind(vendor: str) -> str:
     return next((k for m, k in GUESS if m in v), "")
 
 
+def _clean_backup(b: dict) -> tuple:
+    """(backup dict, "") or (None, why): what a device's `backup:` may hold."""
+    from .backups import path_problem, vm_problem
+    extra = [k for k in b if k not in ("paths", "sudo", "snapshot", "name")]
+    if extra:
+        return None, f"backup has no {extra[0]!r}: paths, sudo, snapshot, name"
+    out = {}
+    if "paths" in b:
+        ps = b["paths"]
+        if not isinstance(ps, list) or not all(isinstance(p, str) and p.strip() for p in ps):
+            return None, "backup paths is a list of paths"
+        if len(ps) > 200:
+            return None, "backup paths holds at most 200 paths"
+        for p in ps:
+            if len(p) > 4096:
+                return None, "a backup path is at most 4096 characters"
+            bad = path_problem(p)
+            if bad:
+                return None, bad
+        out["paths"] = ps
+    if "sudo" in b:
+        if not isinstance(b["sudo"], bool):
+            return None, "backup sudo is true or false"
+        out["sudo"] = b["sudo"]
+    for k in ("snapshot", "name"):
+        if k in b:
+            if not isinstance(b[k], str):
+                return None, f"backup {k} is a name"
+            if k == "snapshot" and b[k] and vm_problem(b[k]):
+                return None, vm_problem(b[k])
+            if k == "name" and len(b[k]) > 100:
+                return None, "a backup name is at most 100 characters"
+            out[k] = b[k]
+    return out, ""
+
+
 def clean_device(d: dict, kinds: dict) -> tuple:
     """(device, error): what the device form sent, checked and in the example's key order.
     Only the fields the form edits are touched; others the file already had are kept by the
@@ -145,7 +181,13 @@ def clean_device(d: dict, kinds: dict) -> tuple:
         out["manage"] = man
     for k in ("restart", "logs", "reboot", "upgrade", "backup"):
         if isinstance(d.get(k), dict) and d[k]:
-            out[k] = d[k]
+            if k == "backup":
+                bk, err = _clean_backup(d[k])
+                if bk is None:
+                    return None, err
+                out[k] = bk
+            else:
+                out[k] = d[k]
     checks = []
     for c in d.get("checks") or []:
         if not isinstance(c, dict) or c.get("type") not in CHECKS:

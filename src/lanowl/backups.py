@@ -99,11 +99,39 @@ VPS_STATE = ("echo '# wg'; wg show 2>&1; echo '# addresses'; ip -br a; echo '# r
 STORE_PATHS = "etc home root var/spool/cron opt usr/local"
 STORE_TAR = ("tar czf {out} --ignore-failed-read --warning=no-file-changed "
              "--exclude=node_modules --exclude='home/*/.cache' "
-             "--exclude='home/*/.npm' --exclude='*.log' -C / {paths}")
+             "--exclude='home/*/.npm' --exclude='*.log' -C / -- {paths}")
 
 
 class BackupError(Exception):
     pass
+
+
+def path_problem(p) -> str:
+    """"" for a backup path tar can take as a file name, else a plain sentence: a name that starts
+    with - (after the leading slashes tar is given without) would be read as one of tar's options."""
+    if not isinstance(p, str) or not p.strip():
+        return "a backup path is a file or folder name"
+    if "\0" in p or "\n" in p or "\r" in p:
+        return f"a backup path cannot hold a line break: `{p!r}`"
+    if p.lstrip("/").startswith("-"):
+        return f"a backup path cannot start with -: `{p}`"
+    return ""
+
+
+def vm_problem(name) -> str:
+    """"" for a VM name that is safe to hand the ESXi's shell, else a plain sentence."""
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name):
+        return f"a VM name is letters, digits, . _ -: `{name}`"
+    return ""
+
+
+def _paths_ok(m) -> list:
+    ps = list(m.get("paths") or [])
+    for p in ps:
+        bad = path_problem(p)
+        if bad:
+            raise BackupError(bad)
+    return ps
 
 
 def slug(name: str) -> str:
@@ -375,7 +403,7 @@ class Backups:
         h = next((x for x in hl.hosts if x.ip == m["ip"]), None)
         if h is None:
             raise BackupError(f"lanowl has no ssh login to {m['ip']}")
-        paths = " ".join(Q(p.lstrip("/")) for p in m.get("paths") or []) or VPS_PATHS
+        paths = " ".join(Q(p.lstrip("/")) for p in _paths_ok(m)) or VPS_PATHS
         tar = (f"for p in {paths}; do [ -e \"/$p\" ] && echo \"$p\"; done "
                "| tar czf - -C / -T -")
         pw = None
@@ -396,7 +424,7 @@ class Backups:
         # tarred where it lives, onto its own disk: nothing crosses the network
         fname = f"{slug(self.name(m))}.tgz"
         out_f = f"{d}/{fname}"
-        paths = " ".join(Q(p.lstrip("/")) for p in m.get("paths") or []) or STORE_PATHS
+        paths = " ".join(Q(p.lstrip("/")) for p in _paths_ok(m)) or STORE_PATHS
         grp = f"chgrp -R {Q(self.group)} {Q(d)}; " if self.group else ""
         script = (f"umask 007; {STORE_TAR.format(out=Q(out_f), paths=paths)} 2>/tmp/lanowl-tar.err; "
                   f"rc=$?; {grp}echo RC=$rc; stat -c %s {Q(out_f)}")
@@ -412,10 +440,10 @@ class Backups:
         return [(fname, int(size) if size.isdigit() else 0)]
 
     async def _files(self, m, d, stamp) -> list:
-        paths = " ".join(Q(p) for p in m.get("paths") or [])
+        paths = " ".join(Q(p) for p in _paths_ok(m))
         if not paths:
             raise BackupError("no paths configured")
-        tar = f"tar czf - --ignore-failed-read {paths} 2>/dev/null"
+        tar = f"tar czf - --ignore-failed-read -- {paths} 2>/dev/null"
         if m.get("sudo"):
             tar = "sudo -S -p '' sh -c " + Q(tar)
         cmd = self.a.access.command(m["ip"], tar)
@@ -558,8 +586,10 @@ class Backups:
 
     async def snapshots(self, vm: str) -> Optional[list]:
         """The VM's snapshots: [{"name", "id", "created", "mine"}]; None = could not read."""
+        if vm_problem(vm):
+            return None
         rc, out, _ = await self.a.access.ssh(
-            self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk '$2==\"{vm}\"{{print $1}}'); "
+            self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk -v n={Q(vm)} '$2==n{{print $1}}'); "
                              "vim-cmd vmsvc/snapshot.get $id", timeout_s=60)
         if rc != 0:
             return None
@@ -585,6 +615,8 @@ class Backups:
                 "keep": [s["name"] for s in snaps if not s["mine"]]}
 
     async def snapshot(self, vm: str, replace: Optional[list] = None) -> tuple:
+        if vm_problem(vm):
+            return False, vm_problem(vm)
         # the approved replacement first: never a chain of lanowl's own snapshots
         for old in [x for x in (replace or []) if x.startswith("lanowl-before-update-")]:
             cur = await self.snapshots(vm) or []
@@ -592,7 +624,7 @@ class Backups:
             if hit is None:
                 continue
             rc, out, err = await self.a.access.ssh(
-                self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk '$2==\"{vm}\"{{print $1}}'); "
+                self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk -v n={Q(vm)} '$2==n{{print $1}}'); "
                                  f"vim-cmd vmsvc/snapshot.remove $id {hit['id']}", timeout_s=900)
             if rc != 0:
                 return False, f"could not remove the older snapshot {old}: {_last(err or out)}"
@@ -600,7 +632,7 @@ class Backups:
         name = time.strftime("lanowl-before-update-%Y-%m-%d_%H%M")
         rc, out, err = await self.a.access.ssh(
             self._esxi_ip(),
-            f"id=$(vim-cmd vmsvc/getallvms | awk '$2==\"{vm}\"{{print $1}}'); "
+            f"id=$(vim-cmd vmsvc/getallvms | awk -v n={Q(vm)} '$2==n{{print $1}}'); "
             f"[ -n \"$id\" ] || {{ echo NOVM; exit 1; }}; "
             f"vim-cmd vmsvc/snapshot.create $id {name} 'taken by lanowl before an update' 0 0 "
             f"&& vim-cmd vmsvc/snapshot.get $id", timeout_s=600)
@@ -614,8 +646,10 @@ class Backups:
     async def prune_snapshots(self):
         """lanowl's own snapshots older than `snapshot_days` go. Others are left alone."""
         for vm in {str(m["snapshot"]) for m in self.machines if m.get("snapshot")}:
+            if vm_problem(vm):
+                continue
             rc, out, _ = await self.a.access.ssh(
-                self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk '$2==\"{vm}\"{{print $1}}'); "
+                self._esxi_ip(), f"id=$(vim-cmd vmsvc/getallvms | awk -v n={Q(vm)} '$2==n{{print $1}}'); "
                                  "echo VMID=$id; vim-cmd vmsvc/snapshot.get $id", timeout_s=60)
             vmid = re.search(r"VMID=(\d+)", out or "")
             if rc != 0 or not vmid:

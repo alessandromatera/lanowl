@@ -280,6 +280,10 @@ def _how(f: str, kind: str, dev, lg, prof: Optional[Profile], ctx: dict) -> tupl
     if f == "reboot" and o.get("ha_button"):
         return (("ha_button", "") if ctx["ha"] else
                 ("", "a reboot by a Home Assistant button needs access.ha_url and its token"))
+    if f == "backup" and o.get("snapshot"):
+        from .backups import vm_problem
+        if vm_problem(o["snapshot"]):
+            return "", vm_problem(o["snapshot"])
     if prof is not None:
         op = FEATURE_OP.get(f)
         if not op or op not in prof.ops:
@@ -302,6 +306,14 @@ def _how(f: str, kind: str, dev, lg, prof: Optional[Profile], ctx: dict) -> tupl
         return "", "restart needs the services it may restart: `restart: {units: [...]}`"
     if how == "files" and not o.get("paths"):
         return "", "a backup over a password login needs what to take: `backup: {paths: [...]}`"
+    if kind == "linux" and f == "backup" and how in ("files", "vps", "store"):
+        from .backups import path_problem
+        if o.get("paths") and not isinstance(o["paths"], list):
+            return "", "backup paths is a list of paths: `backup: {paths: [...]}`"
+        for p in o.get("paths") or []:
+            bad = path_problem(p)
+            if bad:
+                return "", bad
     return how, ""
 
 
