@@ -108,7 +108,8 @@ your bot from the phone you want the alerts on; the chat appears on the page wit
 **Use this chat** sets it, and the bot says hello there.
 
 Optional: **Skip** it and the dashboard works alone. Settings → Secrets sets the token later
-([Telegram](telegram.md)).
+([Telegram](telegram.md)). Or the alerts go to an address of your own instead (ntfy, Apprise,
+a gateway): [Webhook](../reference/webhook.md).
 
 ## 6. Write
 

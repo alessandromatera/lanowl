@@ -59,5 +59,6 @@ WireGuard. None of it is a real network.
 - [Command line](reference/cli.md)
 - [Environment variables](reference/environment.md)
 - [MQTT topics](reference/mqtt.md)
+- [Webhook](reference/webhook.md)
 - [The security model](reference/security-model.md)
 - [Roadmap](reference/roadmap.md)

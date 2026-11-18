@@ -47,6 +47,28 @@ def _first_line(text: str) -> str:
     return t.strip().split("\n")[0][:200]
 
 
+def to_of(d: dict):
+    """Where a message went, from its record: a list of "telegram" and "webhook" (empty: it
+    went nowhere), or None for a record from before the records said, which only ever meant
+    Telegram. The page labels it (index.html sentTo)."""
+    to = d.get("to") if isinstance(d, dict) else None
+    return [x for x in ("telegram", "webhook") if x in to] if isinstance(to, list) else None
+
+
+def to_all(msgs: list):
+    """Where a verdict's or a device's messages went, together: the union, or None when any of
+    them is an old record (no `to`), which the page reads as Telegram."""
+    tos = [m.get("to") for m in msgs]
+    if not tos or any(t is None for t in tos):
+        return None
+    return [x for x in ("telegram", "webhook") if any(x in t for t in tos)]
+
+
+def _to(m: dict) -> dict:
+    """`{"to": [...]}` for a message record that has it, else nothing."""
+    return {"to": m["to"]} if m.get("to") is not None else {}
+
+
 def _key_ip(key: str) -> str:
     """An issue key is kind:ip:group:device (main.Auditor._key); only `down` keys name an
     outage the logbook knows."""
@@ -172,7 +194,7 @@ def owl_items(audits: list, telegram: list, since: float) -> list:
                                 "cause": i.get("cause") or i.get("root_cause")} for i in a.get("issues") or []],
                     "changed": changed, "digest": a.get("digest") or "",
                     "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
-                              "_m": m} for m in told]})
+                              **_to(m), "_m": m} for m in told]})
     return out
 
 
@@ -199,7 +221,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
              findings: list, groups: dict, now: float, days: float = 7.0,
              wan_since: Optional[float] = None, renames: tuple = (), why=None,
              audits: tuple = (), configs: tuple = (), lan: tuple = ()) -> dict:
-    """rows: logbook entries; wan: [{ts, kind, s}]; telegram: [{ts, channel, text, keys?}];
+    """rows: logbook entries; wan: [{ts, kind, s}]; telegram: [{ts, channel, text, keys?, to?}];
     actions: public proposals; seclog: SecLog.view(); seen: Sites.seen(); findings: the log
     checks' verdicts; groups: {ip: inventory group}; why: {ts, kind, s} -> the code's reading
     of a WAN event ({where, short}, wanexplain.py). Returns {items, lanes, since, now}."""
@@ -253,7 +275,8 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                     continue
                 keys = {_key_ip(k) for k in m.get("keys") or []} - {""}
                 if (keys & ips) or (not keys and any(n and n in m.get("text", "") for n in names)):
-                    told.append({"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text"))})
+                    told.append({"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
+                                 **_to(m)})
                     attached.add(id(m))
         items.append({"type": "incident", "ts": a, "a": a, "b": b, "cat": cat,
                       "open": any(o["open"] for o in ms),
@@ -290,7 +313,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                       "status": p.get("status"), "via": p.get("via"), "owner": bool(p.get("owner")),
                       "words": p.get("words"), "decided_from": p.get("decided_from"),
                       "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
-                                "full": str(m.get("text") or "")[:1500]} for m in told]})
+                                "full": str(m.get("text") or "")[:1500], **_to(m)} for m in told]})
     for day, ps in refused.items():
         items.append({"type": "refused", "ts": max(p["ts"] for p in ps), "n": len(ps),
                       "ids": [p.get("id") for p in ps]})
@@ -304,8 +327,8 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
             items.append({"type": "security", "ts": x["ts"], "id": x.get("id"), "title": x.get("title"),
                           "sev": x.get("sev"), "ip": x.get("ip"), "source": x.get("source"),
                           "handled": x.get("handled"), "count": x.get("count") or 1,
-                          "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text"))}
-                                   for m in told]})
+                          "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
+                                    **_to(m)} for m in told]})
     handled = {x.get("id"): x.get("handled") for x in (seclog.get("handled") or [])}
     others = []
     for c in configs:
@@ -336,7 +359,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                          # when the router or lanowl last HEARD from it — not when a table last listed it
                          "last": r.get("heard"), "here": bool(r.get("here")),
                          "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
-                                   "full": str(m.get("text") or "")[:1500]} for m in told]})
+                                   "full": str(m.get("text") or "")[:1500], **_to(m)} for m in told]})
     st = stories(news, others, tuple(lan))
     for d in news:
         d["owl"] = owl_words(d, list(audits))
@@ -353,7 +376,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
         if m["ts"] >= since:
             items.append({"type": "telegram", "ts": m["ts"], "channel": m.get("channel"),
                           "text": _first_line(m.get("text")), "full": str(m.get("text") or "")[:1500],
-                          **({"attached": True} if id(m) in attached else {})})
+                          **_to(m), **({"attached": True} if id(m) in attached else {})})
     for r in renames:                                # the owner's names (names.py)
         if (r.get("ts") or 0) >= since:
             items.append({"type": "rename", "ts": r["ts"], "ip": r.get("ip") or "", "site": r.get("site") or "",
@@ -382,7 +405,9 @@ def build(a, now: Optional[float] = None, days: float = 7.0) -> dict:
             d = json.loads(e.get("detail") or "{}")
         except ValueError:
             d = {}
-        tg.append({"ts": e["ts"], "channel": d.get("channel"), "text": d.get("text") or "", "keys": d.get("keys") or []})
+        to = to_of(d)
+        tg.append({"ts": e["ts"], "channel": d.get("channel"), "text": d.get("text") or "", "keys": d.get("keys") or [],
+                   **({"to": to} if to is not None else {})})
     for e in a.state.events(since, kind="finding", limit=2000):
         try:
             fs.append({"ts": e["ts"], **json.loads(e.get("detail") or "{}")})
@@ -437,10 +462,12 @@ def story_index(items: list, now: float) -> dict:
     for x in items:
         if x["type"] == "new_device" and (x.get("story") or now - x["ts"] < 3 * 86400):
             # keyed by MAC: Now and Devices find a new device's verdict and message by it
+            to = to_all(x.get("told") or [])         # where they went; left out for old records
             dev[str(x.get("mac") or "").lower()] = {
                 "id": x["id"], "name": x.get("name") or x.get("ip"), "ip": x.get("ip"), "ts": x["ts"],
                 "n": len(x.get("story") or []), "owl": x.get("owl") or {},
-                "told": [t["ts"] for t in x.get("told") or []]}
+                "told": [t["ts"] for t in x.get("told") or []],
+                **({"to": to} if to is not None else {})}
         if x["type"] == "config" and x.get("part_of"):
             for k in (x.get("sid"), x["id"]):
                 if k:

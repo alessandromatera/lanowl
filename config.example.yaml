@@ -45,6 +45,19 @@ telegram:
     answer_max_wall_s: 600
     max_iters: 16
 
+# --- Webhook: alerts to an HTTP address of your own ----------------------------------------
+webhook:
+  enabled: false                    # also send alerts to an HTTP address (works without Telegram)
+                                    # the address: secrets.yaml `tokens.webhook_url`, or LANOWL_WEBHOOK_URL
+                                    # a bearer token, if it wants one: `tokens.webhook`, or LANOWL_WEBHOOK_TOKEN
+  format: "generic"                 # generic, apprise, ntfy, or template
+  template: {}                      # format template: your JSON, with {title} {message} {severity} ... in it
+  events: [down, recovery, wan, security, new_device, logs, diagnosis, proposal]   # the kinds of message sent; also: digest, maintenance, other
+  min_severity: "info"              # at least this bad: info, warning, high or critical
+  headers: {}                       # extra headers that are not secret
+  verify_tls: true                  # false for a gateway with a self-signed certificate
+  queue_file: "webhook_queue.json"  # what could not be delivered yet, tried again
+
 # --- the dashboard ------------------------------------------------------------------------
 web:
   enabled: true

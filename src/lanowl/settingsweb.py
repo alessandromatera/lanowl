@@ -24,6 +24,10 @@ login is the guard, and nothing asks the password again.
                                   removed (config.yaml)
   POST /api/settings/site/nets    {router}: the networks a router is on, read over its login —
                                   what "Make it a site" proposes
+  GET  /api/settings/webhook      the webhook's status alone (webhook.py), for the Webhook
+                                  section's line while it is open
+  POST /api/settings/webhook/test one test message to the saved webhook address, now, whether
+                                  the webhook is on or not: {ok, status, said}
   GET  /api/settings/lanowl       lanowl itself: its version, the latest release GitHub named, the
                                   last check, whether the updater answers, the last update
   POST /api/settings/lanowl/check Check now: ask GitHub (not when self_update.check is off)
@@ -61,6 +65,7 @@ import logging
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 from . import access, schema
 from .login import COOKIE, MAX_LEN, MIN_LEN, SESSION_S, hash_password, verify
@@ -220,6 +225,7 @@ class SettingsRoutes:
         self._router_try = 0.0
         self._tried: dict = {}                     # ip -> when its login was last tried
         self._tg_busy = False
+        self._wh_try = 0.0                         # when the webhook was last tested
 
     @property
     def s(self):
@@ -238,6 +244,8 @@ class SettingsRoutes:
         r.add_post("/api/settings/migrate", self.migrate)
         r.add_post("/api/settings/mac", self.mac)
         r.add_post("/api/settings/secret", self.secret)
+        r.add_get("/api/settings/webhook", self.webhook_status)
+        r.add_post("/api/settings/webhook/test", self.webhook_test)
         r.add_post("/api/settings/site", self.site)
         r.add_post("/api/settings/site/nets", self.site_nets)
         r.add_get("/api/settings/lanowl", self.lanowl)
@@ -276,6 +284,9 @@ class SettingsRoutes:
                          "source": self.d.login.source if self.d.login else ""},
                "sites": sites_view(load(s.files["config"].read()) or {},
                                    load(s.files["inventory"].read()) or {})}
+        wh = getattr(self.a, "webhook", None)
+        if wh is not None:
+            out["webhook"] = wh.status()           # what the Webhook section's line says
         return self._j(out)
 
     async def plan(self, request):
@@ -659,6 +670,16 @@ class SettingsRoutes:
                 return None, "paste the token"
             if name == "telegram" and not _TG_TOKEN.match(value.strip()):
                 return None, "a bot's token looks like 123456:ABC-DEF…: a number, a colon, then letters"
+            if name == "webhook_url":
+                try:
+                    u = urlsplit(value.strip())
+                    good = u.scheme in ("http", "https") and bool(u.hostname) and not re.search(r"\s", value.strip())
+                except ValueError:
+                    good = False
+                if not good:
+                    return None, "an address looks like https://host/path: http or https, a host, no spaces"
+            if name == "webhook" and re.search(r"[\x00-\x20\x7f]", value.strip()):
+                return None, "a bearer token has no spaces or line breaks"
             return [{"op": "set", "path": ["tokens", name], "value": value.strip()}], ""
         if not _LOGIN.match(name):
             return None, "a login's name is letters, digits, - . and _"
@@ -687,6 +708,30 @@ class SettingsRoutes:
         r = self.s.save("secrets", ops, str(body.get("base") or ""), request.remote or "")
         r.pop("text", None)
         return self._j(r, 200 if r["ok"] else 409)
+
+    async def webhook_status(self, request):
+        """What the Webhook section's line says, polled while it is open: a delivery or a failure
+        shows without a reload. Never the address."""
+        wh = getattr(self.a, "webhook", None)
+        if wh is None:
+            return self._j({"ok": False, "error": "lanowl is still starting"}, 503)
+        return self._j({"ok": True, "webhook": wh.status()})
+
+    async def webhook_test(self, request):
+        """Settings → Webhook → Send test notification: one message to the address as saved,
+        straight away and not through the queue. The address comes from secrets.yaml or the
+        environment, never from the request. One a 3 seconds: each is a message on someone's
+        phone."""
+        wh = getattr(self.a, "webhook", None)
+        if wh is None:
+            return self._j({"ok": False, "status": None, "said": "lanowl is still starting"}, 503)
+        now = time.time()
+        if now - self._wh_try < 3:
+            return self._j({"ok": False, "status": None, "said": "a moment: the last test was just now"}, 429)
+        self._wh_try = now
+        r = await wh.test()
+        log.info("settings: the webhook tested: %s", "delivered" if r["ok"] else "not delivered")
+        return self._j(r)
 
     # --- the first-run setup ------------------------------------------------------------
     def _needed(self) -> str:
@@ -1258,7 +1303,8 @@ class SettingsRoutes:
             rec = getattr(self.a, "_on_event", None)        # in the Timeline with every other line it sent
             if callable(rec):
                 import json
-                rec("telegram", None, json.dumps({"channel": "digest", "text": line[:1500]}, ensure_ascii=False))
+                rec("telegram", None, json.dumps({"channel": "digest", "text": line[:1500], "to": ["telegram"]},
+                                                 ensure_ascii=False))
         else:
             log.warning("setup: the Telegram line was not sent (%s): %s", str(j.get("description") or "?")[:120], line)
 
@@ -1733,7 +1779,9 @@ def secrets_view(cfg: dict, inv) -> dict:
     missing = [{"name": n, "set": False, "used_by": u} for n, u in sorted(used.items()) if n not in d["logins"]]
     tokens = []
     for name, need in (("telegram", (cfg.get("telegram") or {}).get("chat_id")),
-                       ("homeassistant", (cfg.get("access") or {}).get("ha_url"))):
+                       ("homeassistant", (cfg.get("access") or {}).get("ha_url")),
+                       ("webhook_url", (cfg.get("webhook") or {}).get("enabled")),
+                       ("webhook", False)):         # a bearer token: optional, most receivers want none
         _, where = access.token_from(cfg, name)
         tokens.append({"name": name, "set": bool(where), "where": where, "needed": bool(need)})
     key = access.ssh_key(cfg)

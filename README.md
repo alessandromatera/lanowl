@@ -133,6 +133,8 @@ device, and nothing that changes a device runs without your button.
 
 - Telegram: alerts, Approve buttons, and `/status`, `/security`, `/updates`, `/backups`,
   `/reboot`, `/pause`, `/week`.
+- A webhook: every alert also as a JSON POST to an address of your own (Apprise, ntfy, n8n, a
+  gateway), with or without Telegram.
 - Its own dashboard, served by lanowl itself, so it works when the internet
   does not. Settings change every file from there.
 - Remote sites over WireGuard: their DHCP, their devices, checks from their routers.
@@ -319,10 +321,11 @@ A feature's options sit under its name: `restart: {units: [mosquitto]}`,
 what reads or changes the system.
 
 **Every secret** is in `secrets.yaml`, read again when it changes: the device logins, the
-Telegram and Home Assistant tokens (`tokens:`), the logins lanowl reads the router and the
+Telegram, Home Assistant and webhook tokens (`tokens:`), the logins lanowl reads the router and the
 MQTT broker with (named by `mikrotik.credentials` and `mqtt.credentials`), and lanowl's ssh key
 (`ssh_key:`). A deployment may give lanowl's own secrets in the environment instead
-(`LANOWL_TG_TOKEN`, `LANOWL_HA_TOKEN`, `LANOWL_MIKROTIK_USER`/`_PASS`, `LANOWL_MQTT_USER`/`_PASS`,
+(`LANOWL_TG_TOKEN`, `LANOWL_HA_TOKEN`, `LANOWL_WEBHOOK_URL`, `LANOWL_WEBHOOK_TOKEN`,
+`LANOWL_MIKROTIK_USER`/`_PASS`, `LANOWL_MQTT_USER`/`_PASS`,
 `LANOWL_SSH_KEY`), or as Docker secrets through `<name>_FILE`. `lanowl --check` says where
 each one comes from, never its value.
 

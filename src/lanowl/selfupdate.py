@@ -421,6 +421,6 @@ class SelfUpdate:
 
     def _tell(self, text: str):
         try:
-            self.a._emit_telegram("digest", text)
+            self.a._emit_telegram("digest", text, event={"category": "maintenance"})
         except Exception:
             log.warning("selfupdate: the Telegram line was not sent", exc_info=True)

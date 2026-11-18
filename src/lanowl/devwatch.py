@@ -981,7 +981,7 @@ class DevWatch:
         self.a._emit_telegram("digest", (f"🔕 <b>{_html(port)}</b> on {_html(who)}: its speed changes are no "
                                          f"longer told (muted from {_html(by)})." if on else
                                          f"🔔 <b>{_html(port)}</b> on {_html(who)}: its speed changes are "
-                                         f"told again (from {_html(by)})."))
+                                         f"told again (from {_html(by)})."), event={"category": "maintenance"})
         return {"ok": True, "muted": bool(on)}
 
     # --- logs: what is new, what is routine, what the owl reads -------------------------------

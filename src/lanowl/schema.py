@@ -34,6 +34,8 @@ CHOICES = {
     ("actions", "mode"): ["shadow", "live"],
     ("logging", "level"): ["DEBUG", "INFO", "WARNING", "ERROR"],
     ("weekly", "day"): ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+    ("webhook", "format"): ["generic", "apprise", "ntfy", "template"],
+    ("webhook", "min_severity"): ["info", "warning", "high", "critical"],
 }
 UNITS = (("_ms", "ms"), ("_s", "seconds"), ("_min", "minutes"), ("_h", "hours"),
          ("_days", "days"), ("_pct", "%"))
@@ -63,12 +65,14 @@ DEFAULTS = {
     ("backups", "enabled"): False, ("shell", "enabled"): False, ("shell", "audit", "enabled"): False,
     ("devwatch", "enabled"): True, ("devwatch", "ports"): True, ("devwatch", "logs"): True,
     ("self_update", "check"): True, ("self_update", "auto"): False,
+    ("webhook", "enabled"): False, ("webhook", "verify_tls"): True,
 }
 # paths inside the container and other plumbing: under "Advanced" in their section
 ADVANCED = {("telegram", "outbox_file"), ("state", "db_path"), ("logging", "file"),
             ("access", "known_hosts"), ("hostlog", "ssh"), ("shell", "socket"),
             ("shell", "audit", "socket"), ("telegram", "chat", "poll_timeout_s"),
-            ("probes", "concurrency"), ("mikrotik", "lanowl_group"), ("mikrotik", "lanowl_policy")}
+            ("probes", "concurrency"), ("mikrotik", "lanowl_group"), ("mikrotik", "lanowl_policy"),
+            ("webhook", "queue_file")}
 TITLES = {"network": "Your network", "timezone": "Time zone", "model": "The model", "telegram": "Telegram",
           "web": "The dashboard", "cadence": "Cadence", "alerts": "Alerts", "probes": "Probes",
           "wan": "The internet", "mikrotik": "The router", "discovery": "New devices",
@@ -78,7 +82,7 @@ TITLES = {"network": "Your network", "timezone": "Time zone", "model": "The mode
           "cves": "Vulnerabilities", "exposure": "Exposure", "drift": "Drift",
           "configwatch": "Config watch", "fixes": "Fixes", "scorecard": "Scorecard",
           "backups": "Backups", "shell": "The model's shell", "devwatch": "Device ports and logs",
-          "self_update": "lanowl's updates"}
+          "self_update": "lanowl's updates", "webhook": "Webhook"}
 
 
 def env(var: str) -> str:

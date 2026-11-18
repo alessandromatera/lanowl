@@ -334,9 +334,11 @@ class Shell:
         if breach and not self._breach:
             log.error("%s: %s — the tool is off", who, why)
             self.a._emit_telegram("critical", f"🚨 <b>{cap(who)} NOT isolated</b>\n"
-                                  f"{why}.\nThe shell is off until the check passes again.")
+                                  f"{why}.\nThe shell is off until the check passes again.",
+                                  event={"category": "security"})
         elif self._breach and not breach and ok:
-            self.a._emit_telegram("digest", f"✅ {cap(who)} is isolated again — back on.")
+            self.a._emit_telegram("digest", f"✅ {cap(who)} is isolated again — back on.",
+                                  event={"category": "security"})
         self._breach = breach
         return self.state
 

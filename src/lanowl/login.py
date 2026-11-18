@@ -216,7 +216,8 @@ class Login:
                 f"🔒 <b>Dashboard login locked until {_hm(self._locked_until)}</b>\n"
                 f"{MAX_FAILS} wrong {what}s in a row"
                 + (f", the last from {ip}" if ip else "") + "."
-                + (" /password sets a new one and lifts the lock." if chat and not self.cfg_raw else "")))
+                + (" /password sets a new one and lifts the lock." if chat and not self.cfg_raw else "")),
+                event={"category": "security", "severity": "warning"})
             return {"ok": False, "why": "locked", "until": self._locked_until}
         self._save()
         return {"ok": False, "why": "wrong", "left": MAX_FAILS - len(self._fails)}

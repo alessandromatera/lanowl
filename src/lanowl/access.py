@@ -15,6 +15,8 @@ again whenever it changes, so an updated password or token needs no restart.
     tokens:
       telegram: "..."
       homeassistant: "..."
+      webhook_url: "https://..."  # where the webhook channel posts (an address is a secret too:
+      webhook: "..."              # it often carries a key); a bearer token for it, if it wants one
     ssh_key: /config/id_ed25519   # lanowl's own key, for every `key: true` login
 
 A device in the inventory may name its login itself (`credentials: routers`); that wins over
@@ -190,7 +192,8 @@ def shared(cfg: dict) -> SecretsFile:
 
 # --- lanowl's own secrets -----------------------------------------------------------------
 # a token's name in secrets.yaml -> its environment variable
-TOKENS = {"telegram": "LANOWL_TG_TOKEN", "homeassistant": "LANOWL_HA_TOKEN"}
+TOKENS = {"telegram": "LANOWL_TG_TOKEN", "homeassistant": "LANOWL_HA_TOKEN",
+          "webhook_url": "LANOWL_WEBHOOK_URL", "webhook": "LANOWL_WEBHOOK_TOKEN"}
 # a config.yaml section that logs in -> (user variable, password variable, login name when the
 # section names none in `credentials:`)
 SERVICES = {"mikrotik": ("LANOWL_MIKROTIK_USER", "LANOWL_MIKROTIK_PASS", "router-read"),
@@ -435,6 +438,20 @@ def report(cfg: dict, inv=None) -> tuple:
                            f"secrets.yaml, or {TOKENS[name]}")
         else:
             row("○", what, f"not used: no {why}")
+
+    # The webhook's address is a secret like a token (it often carries a key). Needed only
+    # while the channel is on; its bearer token is optional, most receivers want none.
+    _, where = token_from(cfg, "webhook_url")
+    if where:
+        row("✓", "webhook address", f"from {where}")
+    elif (cfg.get("webhook") or {}).get("enabled"):
+        row("✗", "webhook address", f"webhook.enabled is on and there is no address: "
+                                    f"`tokens: {{webhook_url: ...}}` in secrets.yaml, or {TOKENS['webhook_url']}")
+    else:
+        row("○", "webhook address", "not used: webhook.enabled is off")
+    _, where = token_from(cfg, "webhook")
+    row("✓" if where else "○", "webhook token",
+        f"from {where}" if where else "none: the webhook sends no Authorization header")
 
     lg, where = service_login_from(cfg, "mikrotik")
     name, host = service_login_name(cfg, "mikrotik"), router_host(cfg)

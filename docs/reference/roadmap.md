@@ -5,7 +5,6 @@ and nothing here is promised by a date.
 
 - **Cloud models**, besides Ollama: OpenAI-compatible APIs and Anthropic's, with a check of what
   would leave the network (never a login; addresses and names only as you allow).
-- **ntfy** as a second alert channel beside Telegram.
 - **Home Assistant**: every watched device and the internet's state as entities through MQTT
   discovery, without a custom integration, and an add-on for Home Assistant OS users.
 - **Profiles that can install and restart**: `upgrade` and `restart` operations for device

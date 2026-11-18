@@ -38,6 +38,9 @@ password**; it is never shown, and a new one logs every browser out, yours too.
 
 **Secrets** lists `secrets.yaml` by name, and sets what goes in it ([Secrets](#secrets)).
 
+The **Webhook** section (under Every setting) also has a line saying what the last delivery did and
+a **Send test notification** button ([Webhook](../reference/webhook.md)).
+
 ## Saving
 
 Change what you want; a bar at the bottom counts the changes. Until you save or discard them, this
@@ -74,8 +77,8 @@ when the environment sets the value, when the file is read-only for lanowl (see
 ## Secrets
 
 **Settings → Secrets** lists every login by name, with its user, how lanowl logs in (a
-password or its ssh key) and what uses it; the tokens (Telegram's, Home Assistant's); and
-lanowl's ssh key. A name the inventory or `config.yaml` uses that the file lacks is marked
+password or its ssh key) and what uses it; the tokens (Telegram's, Home Assistant's, and the
+webhook's address and bearer token); and lanowl's ssh key. A name the inventory or `config.yaml` uses that the file lacks is marked
 missing.
 
 - **Set** and **Replace** open a sheet: the user, a password or lanowl's key, and for a

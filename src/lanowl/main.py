@@ -74,6 +74,7 @@ from .login import Login
 from .settings import Settings
 from .wanwatch import WanWatcher
 from .web import Dashboard
+from .webhook import Webhook, gate_event
 
 log = logging.getLogger("lanowl")
 
@@ -202,6 +203,10 @@ class Auditor:
         self._wants_ifaces = any(c.get("type") == "link"
                                  for d in inv.devices for c in d.checks)
         self.outbox = TelegramOutbox(cfg.get("telegram", {}).get("outbox_file", "tg_outbox.json"))
+        # The webhook (webhook.py): the same messages as one POST to an address of the owner's.
+        # Its own queue and its own task, and not parked when the internet is down: unlike
+        # Telegram, its receiver is often on the LAN.
+        self.webhook = Webhook(cfg, episode_of=self._episode_start, mac_of=self._mac_of)
         # Direct sends go out one at a time. A send can spend up to ~50s retrying across a
         # route flip, and two in flight at once could deliver a recovery before the
         # alert it recovers from.
@@ -924,9 +929,10 @@ class Auditor:
         for msg in format_alerts(raised, snap):
             self._emit_telegram("critical", msg,
                                 key=raised_keys[0] if len(raised_keys) == 1 else "",
-                                keys=raised_keys)
-        for msg in format_alerts([e for e in crit if e.kind == RECOVERED], snap):
-            self._emit_telegram("critical", msg)
+                                keys=raised_keys, event=gate_event(raised))
+        back = [e for e in crit if e.kind == RECOVERED]
+        for msg in format_alerts(back, snap):
+            self._emit_telegram("critical", msg, event=gate_event(back))
         # what the next incident triage is asked to explain (see run_llm_audit)
         self._incident_issues = {e.episode.key: e.issue for e in raised
                                  if e.issue.get("kind") not in NO_LLM_KINDS}
@@ -960,7 +966,8 @@ class Auditor:
         # Sent on the digest channel, never the critical one: a device coming back is good
         # news, and good news must not use the door reserved for things that page.
         for msg in format_alerts(healed, snap):
-            self._emit_telegram("digest", msg)
+            # it closes what a digest told: the webhook says it only if it got that digest
+            self._emit_telegram("digest", msg, event={**gate_event(healed), "follows": "digest"})
         self._save_alert_record()
 
         # incident LLM candidate: a critical was actually announced this cycle — except
@@ -1044,9 +1051,17 @@ class Auditor:
         return set(self.gate.open_keys()) | set(self.wanwatch.open_keys())
 
     def _emit_telegram(self, channel: str, text: str, key: str = "",
-                       wan_ok: Optional[bool] = None, keys=None):
+                       wan_ok: Optional[bool] = None, keys=None, event: Optional[dict] = None,
+                       webhook: Optional[bool] = None):
         """channel: 'critical' or 'digest'. Always published to MQTT, so the dashboard's
         event log sees what was said; then delivered to Telegram.
+
+        `event` says what the message is, for the webhook (webhook.py): {"category", "type",
+        "severity"} and, for a gate message, its title and incidents (webhook.gate_event). Left
+        out, the category is "other" and the rest is read from the text. `webhook`: None, hand it
+        over here; True or False, the caller already did (`_wan_alert` does, before it may wait on
+        the outbox) and that is what `_webhook_say` told it. The records say where each message
+        went ("to": telegram, webhook), for the dashboard's lines.
 
         This process sends, with retries, and anything that cannot be delivered goes to the
         outbox — including a digest. Nothing else on the network is in the path, which is
@@ -1061,15 +1076,24 @@ class Auditor:
             log.info("telegram suppressed (--no-telegram) [%s]: %.100s", channel, text)
             return
         keys = list(keys or ([key] if key else []))
+        # Before Telegram's own turns, and before the records, which say where the message went:
+        # the webhook works with Telegram not set up, and what the outbox holds for a blackout
+        # must not be handed over again when it is flushed.
+        if webhook is None:
+            webhook = self._webhook_say(channel, text, key, event)
+        tg_set_up = bool(str((self.cfg.get("telegram") or {}).get("chat_id") or ""))
+        # where it went: held in the outbox still counts for Telegram, it will be delivered
+        to = (["telegram"] if tg_set_up else []) + (["webhook"] if webhook else [])
         # with its text, for "what did you send me on Sunday?" (records.py); with the issue
         # keys it announced, so outages one message announced are one incident on the
         # dashboard's Timeline (timeline.py)
         self._on_event("telegram", None, json.dumps({"channel": channel, "text": text[:1500],
-                                                     **({"keys": keys} if keys else {})},
+                                                     **({"keys": keys} if keys else {}),
+                                                     "to": to},
                                                     ensure_ascii=False))
         self._sent_log = (self._sent_log + [{"ts": time.time(), "channel": channel,
-                                             "text": text[:1500]}])[-80:]
-        if not str((self.cfg.get("telegram") or {}).get("chat_id") or ""):
+                                             "text": text[:1500], "to": to}])[-80:]
+        if not tg_set_up:
             # Telegram not set up (yet: a new install's setup adds it). Nothing waits in the
             # outbox, which is for a path that failed: it would hand the new chat, once there
             # is one, everything said before it existed. (A chat with no token is a mistake
@@ -1085,6 +1109,26 @@ class Auditor:
             return
         self.mqtt.publish(channel, {"text": text, "ts": time.time()}, retain=False)
         asyncio.create_task(self._direct_or_queue(text, key, keys))
+
+    def _webhook_say(self, channel: str, text: str, key: str = "",
+                     event: Optional[dict] = None) -> bool:
+        """Hand a message to the webhook's queue. Instant, and whatever goes wrong in it is
+        the webhook's trouble: the sweep and Telegram must never wait on, or fail for, it.
+        True when it was queued (the webhook is on, has an address and wants this kind)."""
+        try:
+            return self.webhook.say(channel, text, key=key, event=event) is not None
+        except Exception:
+            log.warning("webhook: a message could not be queued", exc_info=True)
+            return False
+
+    def _episode_start(self, key: str) -> float:
+        """When the incident for `key` began, in either gate; 0.0 when none is open."""
+        wg = getattr(self.wanwatch, "_gate", None)
+        return self.gate.episode_start(key) or (wg.episode_start(key) if wg is not None else 0.0)
+
+    def _mac_of(self, ip: str) -> str:
+        d = self.inv.get(ip)
+        return str(d.attrs.get("mac") or "").upper() if d is not None else ""
 
     async def _direct_or_queue(self, text: str, key: str = "", keys=None):
         """Send from this process; if the path fails, park the message in the outbox.
@@ -1122,6 +1166,13 @@ class Auditor:
         if not issues or not llm or self.no_telegram:
             return
         owl = bool(call_block(self.agent.persona, CALL_AUDIT))   # the owl's voice: its call
+        # The webhook cannot edit a message it sent: the diagnosis follows as an event of its
+        # own that names it. Before the Telegram half, which has nothing to edit when Telegram
+        # is not set up (webhook.diagnose).
+        try:
+            self.webhook.diagnose(issues, lambda its: format_diagnosis_note(its, llm, ran=ran, owl=owl))
+        except Exception:
+            log.warning("webhook: a diagnosis could not be queued", exc_info=True)
         by_msg: dict = {}
         for key, issue in issues.items():
             rec = self._alert_msgs.get(key)
@@ -1159,20 +1210,31 @@ class Auditor:
             log.info("WAN message held (the router is restarting): %s",
                      text.splitlines()[0][:120] if text else "")
             return
-        self._wan_alert(text, key)
+        self._wan_alert(text, key, event={"category": "wan"})
 
-    def _wan_alert(self, text: str, key: str = ""):
+    def _wan_alert(self, text: str, key: str = "", event: Optional[dict] = None):
         """Sink for the WAN watcher task (called from its loop, same thread).
 
         Identical routing to a sweep critical with one correction: the freshest answer to
         "can anything leave the network right now" is the watcher's own 15s probe, not
         `_wan_raw_ok` from a sweep that may be up to a minute stale — or stuck behind an
-        LLM audit. During a real blackout the message is parked and flushed on recovery."""
+        LLM audit. During a real blackout the message is parked and flushed on recovery.
+
+        The host-log and device watchers send through here too, with no `event`: their messages
+        are the webhook's "logs". The WAN watcher's own come as {"category": "wan"}."""
+        event = event or {"category": "logs"}
         if self.no_telegram:
-            self._emit_telegram("critical", text, key=key, wan_ok=True)   # logs, sends nothing
+            self._emit_telegram("critical", text, key=key, wan_ok=True, event=event)   # logs, sends nothing
             return
+        # The webhook is not held back by the outbox, which waits for Telegram's route: it
+        # takes the message now, and `_emit_telegram` is told what it answered (webhook=hooked)
+        # for the paths below that reach it later, so the record says where the message went.
+        hooked = self._webhook_say("critical", text, key, event)
         if self.wanwatch.blackout:
-            self.outbox.add(text, key)
+            # Held like a sweep's message with no route out: recorded now, so the dashboard shows
+            # it (to a webhook-only owner too, who got it at once), and into the outbox only when
+            # Telegram is set up: never queued for a chat that does not exist yet.
+            self._emit_telegram("critical", text, key=key, wan_ok=False, event=event, webhook=hooked)
             return
         if self.outbox.pending:
             # Drain first, then speak. The queue is full of messages from the outage that
@@ -1180,18 +1242,19 @@ class Auditor:
             # and this one is very often "the internet is back". Publishing to MQTT is
             # instant while the flush is an await, so sending in the natural order puts the
             # recovery on the phone BEFORE the outage it recovers from.
-            asyncio.create_task(self._flush_then_send(text, key))
+            asyncio.create_task(self._flush_then_send(text, key, event, hooked))
             return
         # wan_ok=True: the watcher got an answer from the internet less than `interval_s`
         # ago. The sweep's own view stays False for a sweep or two after the line is back,
         # and parking "the internet is back" in the outbox for a minute — to be delivered
         # with a "this was delayed" banner — is precisely the lateness being fixed here.
-        self._emit_telegram("critical", text, key=key, wan_ok=True)
+        self._emit_telegram("critical", text, key=key, wan_ok=True, event=event, webhook=hooked)
 
-    async def _flush_then_send(self, text: str, key: str = ""):
+    async def _flush_then_send(self, text: str, key: str = "", event: Optional[dict] = None,
+                               hooked: bool = False):
         await self.outbox.flush(self.cfg, self._open_incident_keys(),
                                 on_sent=self._remember_alert)
-        self._emit_telegram("critical", text, key=key, wan_ok=True)
+        self._emit_telegram("critical", text, key=key, wan_ok=True, event=event, webhook=hooked)
 
     def _publish_logbook(self, now: float):
         """lanowl/logbook (retained): every device down and up, for the dashboard's Logbook.
@@ -1485,7 +1548,8 @@ class Auditor:
                 + (f"🦉 {_html(note)}" if note else
                    (f"<i>{_html(str(i.get('root_cause') or ''))}</i>\n" if i.get("root_cause") else "")
                    + (f"<i>{_html(str(i.get('recommendation') or ''))}</i>" if i.get("recommendation") else ""))
-            ).rstrip())
+            ).rstrip(), event={"category": "new_device", "severity": sev if sev in _SEV_RANK else "info",
+                               "device": {"name": what, "ip": str(x.get("ip") or ""), "mac": mac}})
         if told_any:
             # a device is new for a day: a week of record is plenty to never repeat one
             self._newdev_told = {m: t for m, t in self._newdev_told.items() if now - t < 7 * 86400}
@@ -1721,7 +1785,7 @@ class Auditor:
         self._told |= {self._key(i) for i in report.get("issues", [])
                        if i.get("severity") != "critical"}
         log.info("sending digest (%s)", why)
-        self._emit_telegram("digest", format_digest(report, now))
+        self._emit_telegram("digest", format_digest(report, now), event={"category": "digest"})
         self._save_alert_record()
 
     # --- the weekly review ------------------------------------------------
@@ -1762,7 +1826,7 @@ class Auditor:
                 log.info("weekly review (%s): model %s in %.1fs", reason,
                          "answered" if narrative else "did not answer", time.time() - t0)
         text = weekly.format_weekly(facts, narrative)
-        self._emit_telegram("digest", text)
+        self._emit_telegram("digest", text, event={"category": "digest", "type": "weekly"})
         if reason == "scheduled" and self._persist_alerts:
             self.state.save_record("weekly", {"last": now, "since": self._weekly_since})
         return text
@@ -1863,7 +1927,11 @@ class Auditor:
                 lines = "\n".join(f"• {d['ip']}  {d.get('host') or '(no name)'}  {d['mac']}"
                                   + (f" — {vendor(d['mac'])}" if vendor(d['mac']) else "")
                                   for d in new_devs[:8])
-                self._emit_telegram("digest", f"🆕 <b>New device(s) on the network</b>\n{lines}")
+                one = new_devs[0] if len(new_devs) == 1 else None
+                self._emit_telegram("digest", f"🆕 <b>New device(s) on the network</b>\n{lines}", event={
+                    "category": "new_device",
+                    **({"device": {"name": str(one.get("host") or ""), "ip": str(one["ip"]),
+                                   "mac": str(one.get("mac") or "")}} if one else {})})
         # Logged on CHANGE only. As a per-run line it was ~9,000 of the log's 11,655 INFO
         # entries — the same sentence every five minutes, drowning the events worth grepping
         # for. The number is on the dashboard continuously; the log wants the transitions.
@@ -1942,6 +2010,8 @@ class Auditor:
         hostlogs = asyncio.ensure_future(self.hostlog.run())
         devices = asyncio.ensure_future(self.devwatch.run())
         chat = asyncio.ensure_future(self.poller.run()) if not self.no_telegram else None
+        # the webhook's deliveries: a task of their own, none on a rehearsal (nothing is sent)
+        hook = asyncio.ensure_future(self.webhook.run()) if not self.no_telegram else None
         if self.dashboard.enabled and self.login.needed:
             # on by default: the page asks for the setup code and a password until there is one
             self.login.ensure_code()
@@ -1979,6 +2049,9 @@ class Auditor:
             self.poller.stop()
             if chat is not None:
                 chat.cancel()
+            if hook is not None:
+                self.webhook.stop()
+                hook.cancel()
             if self._audit_task is not None and not self._audit_task.done():
                 self._audit_task.cancel()
 
@@ -2204,7 +2277,9 @@ def check_report(cfg: dict, inv) -> tuple:
     from .login import report as login_report
     from .shell import report as shell_report
     from .backups import report as backups_report
+    from .webhook import report as webhook_report
     for rep in (lambda: checks_report(inv), lambda: secrets_report(cfg, inv), lambda: model_report(cfg),
+                lambda: webhook_report(cfg),
                 lambda: backups_report(cfg, inv, Access(cfg, inv)),
                 lambda: shell_report(cfg), lambda: actions_report(cfg), lambda: login_report(cfg)):
         text, n = rep()

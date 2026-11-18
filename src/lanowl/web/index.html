@@ -1112,7 +1112,7 @@ html.modal{overflow:hidden}
        in one stream, from /api/timeline (timeline.py) -->
   <section class="view" id="v-log" role="tabpanel" aria-label="Timeline">
     <h1 class="ttl">Timeline</h1>
-    <p class="sub">Seven days, everything lanowl saw, said and did. Each event carries what was said about it: the message Telegram got, the owl's words, the log checks and changes that name the same device.</p>
+    <p class="sub">Seven days, everything lanowl saw, said and did. Each event carries what was said about it: the message lanowl sent, the owl's words, the log checks and changes that name the same device.</p>
     <div class="chips sitechips" id="tl-sites" role="group" aria-label="Site"></div>
     <div id="tl-sitebar"></div>
     <div class="chips" id="tl-filters" role="group" aria-label="Show"></div>
@@ -1607,6 +1607,15 @@ const grank = g => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? 99 : i; };
 const TONE = {critical: "red", high: "orange", warning: "orange", info: "gray"};
 const plainTg = t => String(t || "").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 const siteName = (d, k) => ((d.sites || []).find(x => x.key === k) || {}).name || k || "";
+// Where a message went, from its record's `to` (main._emit_telegram): "Telegram", "Webhook", both,
+// or "Not sent" (neither is set up). A record from before lanowl wrote `to` has no such field, and
+// it went to Telegram: that was the only place.
+function sentTo(m) {
+  const to = m && Array.isArray(m.to) ? m.to : null;
+  if (!to) return "Telegram";
+  const tg = to.includes("telegram"), wh = to.includes("webhook");
+  return tg && wh ? "Telegram + webhook" : tg ? "Telegram" : wh ? "Webhook" : "Not sent";
+}
 // the model's prose with each device it names made tappable
 function linkify(d, text) {
   let h = esc(text);
@@ -1671,7 +1680,7 @@ function incHtml(d, i) {
   // older one that named the same device (an old warning under today's)
   const from = since ? since - 90 : NOW - 7200;
   (d.sent || []).filter(m => m.ts >= from && name && plainTg(m.text).includes(name)).sort((a, b) => a.ts - b.ts).slice(0, 3)
-    .forEach(m => steps.push([m.ts, "Telegram: " + plainTg(m.text).split("\n")[0].replace(/^\S+\s+/, "").slice(0, 140), "tg"]));
+    .forEach(m => steps.push([m.ts, sentTo(m) + ": " + plainTg(m.text).split("\n")[0].replace(/^\S+\s+/, "").slice(0, 140), "tg"]));
   if (i.diag) steps.push([Math.max((d.llm || {}).at || 0, since), `The owl: ${i.diag.cause}${i.diag.rec ? " → " + i.diag.rec : ""}`, "ai"]);
   ((d.actions || {}).pending || []).filter(p => p.ip === i.ip).forEach(p =>
     steps.push([p.ts, `${p.title} — ${p.status === "pending" ? "waiting for you, under Needs you" : (PST[p.status] || [p.status])[0].toLowerCase()}`, "act"]));
@@ -1908,7 +1917,7 @@ function renderModel(d) {
   // what it said before: each change of mind in the last day, one tap away
   const hist = (d.owl_history || []).filter(o => !l.at || Math.abs(o.ts - l.at) > 120);
   if (hist.length) h += `<details class="acc" data-how="owlh"${CH.how.has("owlh") ? " open" : ""}><summary>${ic("chev")}What it said before<span class="fine">${hist.length} change${hist.length > 1 ? "s" : ""} in 24 hours</span></summary>
-    <ul class="vlist">${hist.map(o => `<li><span class="w">${esc(hmd(o.ts, NOW))}</span><span><span class="tagx c-${(HEALTH[o.health] || HEALTH.unknown)[2]}">${esc(o.health || "?")}</span> ${esc(owlFirst(o.summary))}${o.told.length ? ` <span class="fine">→ Telegram</span>` : ""}</span></li>`).join("")}
+    <ul class="vlist">${hist.map(o => `<li><span class="w">${esc(hmd(o.ts, NOW))}</span><span><span class="tagx c-${(HEALTH[o.health] || HEALTH.unknown)[2]}">${esc(o.health || "?")}</span> ${esc(owlFirst(o.summary))}${o.told.length ? ` <span class="fine">→ ${esc(sentTo(o))}</span>` : ""}</span></li>`).join("")}
     <li><span class="w"></span><button class="flnk" type="button" data-act="tlowl">Every verdict, on the Timeline${ic("chev")}</button></li></ul></details>`;
   put("model-top", h);
   // "More" only when the text is cut: at a wide screen four lines often hold it all (10-08)
@@ -2009,7 +2018,7 @@ function newDevHtml(d) {
     return `<div class="row row2"><span class="sd c-blue"></span><span class="rt"><span class="rn">${esc(title)}</span>
       <span class="rs wrap mono">${esc(r.site.name)} · ${esc(r.ip)} · ${esc(r.mac)}</span>
       <span class="rs wrap">${esc([r.name && r.vendor && !priv(r) ? r.vendor : "", "first seen " + hmd(r.first_seen, NOW), r.here ? "here now" : r.heard ? "last heard " + hmd(r.heard, NOW) : "", r.guest ? "guest Wi-Fi" : ""].filter(Boolean).join(" · "))}</span>
-      ${o.said ? `<span class="rs wrap" style="color:var(--ink)">${ic("owl")} ${linkify(d, noCall(o.said))}${(st.told || []).length ? ` <span class="fine">· told on Telegram ${esc(st.told.map(t => hmd(t, NOW)).join(", "))}</span>` : ""}</span>` : ""}
+      ${o.said ? `<span class="rs wrap" style="color:var(--ink)">${ic("owl")} ${linkify(d, noCall(o.said))}${(st.told || []).length ? ` <span class="fine">· ${sentTo(st) === "Not sent" ? "not sent" : "told on " + esc(sentTo(st))} ${esc(st.told.map(t => hmd(t, NOW)).join(", "))}</span>` : ""}</span>` : ""}
       ${like ? `<span class="rs wrap" style="color:var(--orange-t)">${ic("warn")} Its name looks like <span class="ent" data-ip="${esc(like.ip)}">${esc(like.name)}</span> (${esc(like.ip)}), a device you watch. Only the name: whether they are one device is for you, or the owl, to say</span>` : ""}
       </span><span class="rbtns">${r.routed === false ? "" : `<button class="rowbtn" type="button" data-act="watch" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}" data-nm="${esc(r.name || "")}">Watch</button><button class="rowbtn" type="button" data-act="known" data-sk="${esc(r.site.key)}" data-mac="${esc(r.mac)}">Known</button>`}${st.id ? `<button class="rowbtn ghost" type="button" data-act="tlgo" data-id="${esc(st.id)}">Story</button>` : ""}</span></div>`;
   }).join("") + `</div>`;
@@ -2094,11 +2103,11 @@ async function loadTimeline() {
 // an old "chk" filter, saved before Security and Log checks became one (10-08)
 if (S.tlf === "chk") S.tlf = "sec";
 const TLF = [["all", "Everything"], ["out", "Outages"], ["wan", "Internet"], ["sec", "Security & logs"], ["owl", "The owl"],
-             ["new", "New devices"], ["act", "Actions"], ["tg", "Telegram"]];
+             ["new", "New devices"], ["act", "Actions"], ["tg", "Messages"]];
 const tlType = x => ({incident: "out", wan: "wan", security: "sec", check: "sec", config: "sec", owl: "owl", action: "act",
                       refused: "act", rename: "act", telegram: "tg", new_device: "new"})[x.type];
 // Everything is everything (the owner, 10-08): routine rows are drawn quiet, never left out.
-// Only a Telegram copy that sits under its own event is not drawn twice; the Telegram filter has them all.
+// Only a message that sits under its own event is not drawn twice; the Messages filter has them all.
 const quietIt = x => (x.type === "incident" && x.cat !== "down") || (x.type === "check" && !x.problem)
   || (x.type === "config" && ["low", "none"].includes(x.risk)) || (x.type === "owl" && x.health === "ok")
   || x.type === "telegram" || x.type === "refused";
@@ -2118,7 +2127,7 @@ const causeText = c => `after #${c.id} ${c.title}${c.label ? " on " + c.label.sp
 // a time beside another: the day only when it differs
 const hmd = (ts, ref) => sameDay(ts, ref) ? hm(ts) : `${wd(ts)} ${hm(ts)}`;
 const RISKW = {critical: "critical", high: "high", low: "low", none: "no real change"};
-const tgLine = (m, ref) => `<div class="tlt">${ic("send")}<span>${esc(hmd(m.ts, ref))} Telegram: ${esc(m.text)}</span></div>` +
+const tgLine = (m, ref) => `<div class="tlt">${ic("send")}<span>${esc(hmd(m.ts, ref))} ${esc(sentTo(m))}: ${esc(m.text)}</span></div>` +
   (m.full ? `<details class="pkl" data-how="${esc("tgm:" + m.ts)}"${CH.how.has("tgm:" + m.ts) ? " open" : ""}><summary>The whole message${ic("chev")}</summary><div class="bub" style="margin-top:6px"><div class="t">${tg(m.full)}</div></div></details>` : "");
 const partOf = (x) => x.part_of ? `<button class="tlp" type="button" data-act="tlgo" data-id="${esc(x.part_of.id)}">${ic("link")}part of the story of ${esc(x.part_of.name)}, ${esc(hmd(x.part_of.ts, x.ts))} · ${esc(x.part_of.why)}</button>` : "";
 const STORYIC = {check: "check", config: "cfg"};
@@ -2145,7 +2154,7 @@ function tlRow(d, x, inSheet) {
     }
     if (n > 1) more = `<div class="tlm">${ms.map(v => `<button class="ent" type="button" data-ip="${esc(v.ip)}">${esc(nm(v))}</button> <span class="fine">${v.open ? "still down" : esc(dur(v.b - v.a))}</span>`).join(" · ")}</div>`;
     else attr = ` data-ip="${esc(ms[0].ip)}"`;
-    for (const msg of x.told || []) more += `<div class="tlt">${ic("send")}<span>${esc(hmd(msg.ts, x.ts))} Telegram: ${esc(msg.text)}</span></div>`;
+    for (const msg of x.told || []) more += tgLine(msg, x.ts);
   } else if (x.type === "wan") {
     ico = x.kind === "blip" ? "yellow" : "orange"; i = "globe";
     t = `${wanw(x.kind)} — ${wanLen(x)}`;
@@ -2153,7 +2162,7 @@ function tlRow(d, x, inSheet) {
       x.cause && x.where === "unknown" ? "" : x.why || "");
     attr = ` data-wan="${esc(x.ts)}"`;
   } else if (x.type === "telegram") {
-    ico = "blue"; i = "send"; t = x.text; m.push("Telegram", x.attached ? "also under the event it is about" : "");
+    ico = "blue"; i = "send"; t = x.text; m.push(sentTo(x), x.attached ? "also under the event it is about" : "");
     const id = "tg:" + x.ts;
     more = `<details class="pkl" data-how="${esc(id)}"${CH.how.has(id) ? " open" : ""}><summary>The whole message${ic("chev")}</summary><div class="bub" style="margin-top:6px"><div class="t">${tg(x.full)}</div></div></details>`;
   } else if (x.type === "security") {
@@ -2161,7 +2170,7 @@ function tlRow(d, x, inSheet) {
     t = x.title + (x.count > 1 ? ` (${x.count} times)` : "");
     m.push(x.source || "", x.handled ? `handled ${clock(x.handled.ts)}` : "to decide, on Security");
     if (x.ip) attr = ` data-ip="${esc(x.ip)}"`;
-    for (const msg of x.told || []) more += `<div class="tlt">${ic("send")}<span>${esc(hmd(msg.ts, x.ts))} Telegram: ${esc(msg.text)}</span></div>`;
+    for (const msg of x.told || []) more += tgLine(msg, x.ts);
   } else if (x.type === "config") {
     ico = x.handled ? "gray" : x.risk === "critical" ? "red" : x.risk === "high" ? "orange" : "gray"; i = "cfg";
     t = `${x.name}: ${x.what}`;
@@ -2320,7 +2329,7 @@ const tlId = x => x.type === "owl" ? "owl:" + x.ts : x.type === "telegram" ? "tg
   : x.type === "incident" ? "inc:" + x.ts : x.type === "wan" ? "wan:" + x.ts : x.type === "rename" ? "ren:" + x.ts
   : x.type === "refused" ? null : x.id != null ? String(x.id) : null;
 // "Open the story", a story's own lines, a search result: to that row on the Timeline, lit for a
-// moment — under Everything, or under the filter that shows it (a message under its event: Telegram)
+// moment — under Everything, or under the filter that shows it (a message under its event: Messages)
 function tlGo(id, f = "all") {
   S.tlGo = id;
   if (S.tlf !== f) { S.tlf = f; save("tlf", f); }
@@ -2867,7 +2876,7 @@ function palOptions(q) {
       telegram: ["send", x => x.text, x => x.full], action: ["bolt", x => `${x.title} — ${x.label || ""}`, x => [x.title, x.label, x.words].join(" ")]};
     if (TL.d) TL.d.items.filter(x => TI[x.type] && String(TI[x.type][2](x) || "").toLowerCase().includes(n)).slice(0, 10)
       .forEach(x => out.push({g: "On the Timeline", i: TI[x.type][0], t: String(TI[x.type][1](x) || "").slice(0, 120),
-        v: `${hmd(x.ts, NOW)}${x.type === "telegram" ? " · Telegram" : ""}`, tl: tlId(x), tlf: x.type === "telegram" && x.attached ? "tg" : "all"}));
+        v: `${hmd(x.ts, NOW)}${x.type === "telegram" ? " · " + sentTo(x) : ""}`, tl: tlId(x), tlf: x.type === "telegram" && x.attached ? "tg" : "all"}));
   }
   views.filter(v => !n || v[1].toLowerCase().includes(n)).forEach(v => out.push({g: "Go to", i: v[2], t: v[1], v: "", view: v[0]}));
   cmds.filter(c => !n || c[1].toLowerCase().includes(n)).forEach(c => out.push({g: "Do", i: c[2], t: c[1], v: "", act: c[0]}));
@@ -4659,6 +4668,7 @@ async function setSection(key) {
     if (sec.fields.some(f => f.path && ST.edits[pkey(f.path)])) h += `<p class="fine kept" id="kept">Unsaved changes, kept from before.</p>`;
   }
   if (key === "sites") h += sitesListHtml(D);
+  if (key === "webhook") h += webhookBox(D);
   let body = "";
   for (const f of fields) body += f.type === "group" ? `<div class="fsub">${esc(f.group)}${f.help ? `<div class="fhelp" style="text-transform:none;letter-spacing:0;font-weight:400">${esc(f.help)}</div>` : ""}</div>` : fieldHtml(f);
   h += `<div class="list">${body}</div>`;
@@ -4672,6 +4682,35 @@ async function setSection(key) {
   }
   h += barHtml(editCount(), "review");
   put("set", `<div class="setw">${h}</div>`);
+}
+// The Webhook section's line (GET /api/settings → webhook, from webhook.py status): what the
+// last delivery did, and what waits. Never the address.
+function webhookLine(W) {
+  if (!W) return "";
+  if (!W.url_set) return "Not set: no address in secrets.yaml";
+  if (!W.enabled) return "Switched off: nothing is sent";
+  const wait = `${W.pending} waiting`;
+  if (W.failing_since) return `Failing since ${clock(W.failing_since)}: ${W.last_error} · ${wait}` + (W.next_try_ts ? ` · next try ${clock(W.next_try_ts)}` : "");
+  const bits = [W.last_ok_ts ? `Delivered ${clock(W.last_ok_ts)}` : "No alert sent yet", wait];
+  if (W.last_error_ts > (W.last_ok_ts || 0)) bits.push(`the last one was refused at ${clock(W.last_error_ts)}: ${W.last_error}`);
+  return bits.join(" · ");
+}
+const whRes = R => !R ? "" : R.wait ? `<div class="twait"><span class="spin"></span><span>Sending…</span></div>`
+  : R.ok ? `<div class="chkok">${ic("check")}<span>Delivered${R.status ? " · HTTP " + R.status : ""}${R.said ? " · " + esc(R.said) : ""}</span></div>`
+  : `<div class="chkno">${ic("warn")}<span>${esc(R.said || "not delivered")}</span></div>`;
+function webhookBox(D) {
+  return `<div class="box2"><div class="fhelp" id="whline" style="margin:0 0 10px">${esc(webhookLine(D.webhook))}</div>
+    <div class="lgf"><span class="wide"><button class="sbtn pri" type="button" data-sact="whtest">Send test notification</button></span><span class="wide" id="whres">${whRes(ST.whRes)}</span></div>
+    <div class="fhelp">It uses the settings as saved, not the changes below, and works while the webhook is off.</div></div>`;
+}
+// ...and kept current while the section is open: a delivery, a retry or a refusal shows without
+// a reload. Only the line is redrawn, never the form under it (unsaved edits stay as they are).
+async function whPoll() {
+  if (document.hidden || S.tab !== "set" || S.setp !== "set/s/webhook" || !$("whline")) return;
+  const r = await getJ("/api/settings/webhook");
+  if (!r.ok || !r.webhook) return;
+  if (ST.data) ST.data.webhook = r.webhook;
+  const el = $("whline"); if (el) el.textContent = webhookLine(r.webhook);
 }
 function parseField(t, raw, f) {
   if (t === "bool") return raw;
@@ -4975,6 +5014,17 @@ async function undoSheet(id) {
 // -- Secrets: set, replaced, never shown --
 // secrets.yaml, write-only: a login or a token goes in from here and never comes back. Each save
 // asks the dashboard password, however recently it was typed, and tells Telegram its name.
+// each token of secrets.yaml: what it is, what makes it needed, and what its sheet says
+const TOKEN_INFO = {
+  telegram: {what: "the bot lanowl writes with", need: "telegram.chat_id is set", label: "Token",
+    help: "The bot lanowl writes with, from @BotFather. A new bot keeps the chat (telegram.chat_id); send it /start once, so it may write to you."},
+  homeassistant: {what: "Home Assistant's, for access.ha_url", need: "access.ha_url is set", label: "Token",
+    help: "Home Assistant's long-lived access token: your profile in Home Assistant → Security."},
+  webhook_url: {what: "where the webhook posts: its address", need: "webhook.enabled is on", label: "Address",
+    help: "The address the webhook posts to, https://host/path. It is a secret like a token: it often carries a key. A new one is used from the next message."},
+  webhook: {what: "a bearer token for the webhook, if its receiver wants one", need: "", label: "Token",
+    help: "Sent as Authorization: Bearer … with every message. Leave it unset if the receiver wants none."},
+};
 async function setSecrets() {
   const D = await setData(true), X = D.secrets || {}, F = X.file || {}, W = !!F.writable;
   let h = back("set", "Settings") + setHead("Secrets", W ? "Set or replace them here. A value is never shown again. Each save tells Telegram which one changed."
@@ -4988,8 +5038,8 @@ async function setSecrets() {
       <span class="seccol">${chip(x.set, !x.set)}${btn("login", x.name, x.set)}</span></div>`).join("") || `<div class="empty">No logins yet.</div>`) + `</div>`;
   h += `<div class="sh">Tokens</div><div class="list">` + (X.tokens || []).map(t => {
     const env = t.where && t.where !== "secrets.yaml";
-    const what = t.name === "telegram" ? "the bot lanowl writes with" : "Home Assistant's, for access.ha_url";
-    const sub = env ? `from ${t.where}: change it there` : !t.set && t.needed ? "needed: " + (t.name === "telegram" ? "telegram.chat_id is set" : "access.ha_url is set") : what;
+    const ti = TOKEN_INFO[t.name] || {what: "", need: ""};
+    const sub = env ? `from ${t.where}: change it there` : !t.set && t.needed ? "needed: " + ti.need : ti.what;
     return `<div class="row"><span class="rt"><span class="rn">${esc(t.name)}</span><span class="rs" style="white-space:normal">${esc(sub)}</span></span>
       <span class="seccol">${chip(t.set, t.needed && !t.set)}${env ? "" : btn("token", t.name, t.set)}</span></div>`;
   }).join("") + `</div>`;
@@ -5022,13 +5072,14 @@ function secretSheet(kind, name) {
   const hasKey = !!((X.ssh_key || {}).public);
   if (kind === "token") {
     const t = (X.tokens || []).find(x => x.name === name) || {name};
-    openSet((t.set ? "Replace the " : "Set the ") + name + " token", `<p class="fine" style="margin:0 4px 8px">${name === "telegram" ? "The bot lanowl writes with, from @BotFather. A new bot keeps the chat (telegram.chat_id); send it /start once, so it may write to you." : "Home Assistant's long-lived access token: your profile in Home Assistant → Security."}</p>
-      <div class="dlab">${t.set ? "New token" : "Token"}</div><div class="pwrow"><input class="sfield" id="scval" type="password" autocomplete="off" spellcheck="false" aria-label="Token"><button class="sbtn" type="button" data-sact="eye" data-for="scval">Show</button></div>`,
+    const ti = TOKEN_INFO[name] || {label: "Token", help: ""}, addr = name === "webhook_url";
+    openSet((t.set ? "Replace the " : "Set the ") + name + (addr ? "" : " token"), `<p class="fine" style="margin:0 4px 8px">${esc(ti.help)}</p>
+      <div class="dlab">${t.set ? "New " + ti.label.toLowerCase() : ti.label}</div><div class="pwrow"><input class="sfield" id="scval" type="password" autocomplete="off" spellcheck="false" aria-label="${ti.label}"><button class="sbtn" type="button" data-sact="eye" data-for="scval">Show</button></div>`,
       async () => {
         const v = $("scval").value.trim();
-        if (!v) return {ok: false, error: "Paste the token."};
+        if (!v) return {ok: false, error: addr ? "Paste the address." : "Paste the token."};
         const r = await saveCall("/api/settings/secret", {op: "token", name, value: v, base: X.base});
-        if (r.ok) { await setData(true); setSecrets(); toast(`${name} token saved: in use now.`); }
+        if (r.ok) { ST.whRes = null; await setData(true); setSecrets(); toast(`${name}${addr ? "" : " token"} saved: in use now.`); }
         return r;
       }, {note: "Telegram gets one line naming it. Never the value."});
     return;
@@ -5784,7 +5835,7 @@ async function setupTelegram() {
     h += `</div>`;
   }
   h += `<button class="btn" type="button" data-sgo="setup/write"${T.chat ? "" : " disabled"}>Next</button>`;
-  h += `<p class="fine" style="text-align:center;margin:12px 4px 18px"><button class="flnk" type="button" data-sact="tgskip">Skip: no Telegram for now</button><br>Settings → Secrets sets it later.</p>`;
+  h += `<p class="fine" style="text-align:center;margin:12px 4px 18px"><button class="flnk" type="button" data-sact="tgskip">Skip: no Telegram for now</button><br>Settings → Secrets sets it later. Or the alerts to an address of your own (ntfy, Apprise, a gateway): Settings → Webhook.</p>`;
   put("set", `<div class="setw">${h}</div>`);
   if ($("tgtok") && T.token) $("tgtok").value = T.token;
 }
@@ -5905,6 +5956,14 @@ document.addEventListener("click", async e => {
   if (a === "discard") { dropEdits(); renderSet(); return; }
   if (a === "restart") { withSpin(t, "One moment…", async () => { await setData(true); restartSheet(); }); return; }
   if (a === "password") { await setData(); passwordSheet(); return; }
+  if (a === "whtest") {
+    withSpin(t, "Sending…", async () => {
+      ST.whRes = await post("/api/settings/webhook/test", {}).catch(() => ({ok: false, said: "lanowl did not answer"}));
+      const el = $("whres"); if (el) el.innerHTML = whRes(ST.whRes);
+      whPoll();
+    });
+    return;
+  }
   if (a === "lcheck") { withSpin(t, "Asking GitHub…", lanowlCheck); return; }
   if (a === "lsave") { withSpin(t, "Checking…", lanowlSave); return; }
   if (a === "lupdate") { withSpin(t, "One moment…", async () => { ST.lanowl = await getJ("/api/settings/lanowl"); lanowlUpdateSheet(); }); return; }
@@ -6027,6 +6086,7 @@ chatRefresh();
 setInterval(() => { if (!document.hidden && !liveOk()) refresh(); }, 5000);
 startLive();
 setInterval(tickAgo, 1000);
+setInterval(whPoll, 5000);
 </script>
 </body>
 </html>

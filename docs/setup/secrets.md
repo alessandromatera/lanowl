@@ -43,6 +43,8 @@ devices:                         # address -> login, for devices that do not nam
 tokens:
   telegram: "123456:ABC..."      # from @BotFather
   homeassistant: "eyJ..."        # a long-lived access token (your HA profile → Security)
+  webhook_url: "https://hooks.example.org/lanowl/..."   # where the webhook posts (it often carries a key)
+  webhook: "..."                 # a bearer token for it, only if its receiver wants one
 
 ssh_key: /config/id_ed25519      # lanowl's own key, for every `key: true` login
 ```
@@ -102,6 +104,8 @@ twin names (which is how Docker secrets arrive, in `/run/secrets/`), then `secre
 |---|---|
 | `LANOWL_TG_TOKEN` | `tokens.telegram` |
 | `LANOWL_HA_TOKEN` | `tokens.homeassistant` |
+| `LANOWL_WEBHOOK_URL` | `tokens.webhook_url` (the [webhook](../reference/webhook.md)'s address) |
+| `LANOWL_WEBHOOK_TOKEN` | `tokens.webhook` (its bearer token) |
 | `LANOWL_MIKROTIK_USER`, `LANOWL_MIKROTIK_PASS` | The router's read-only login |
 | `LANOWL_MQTT_USER`, `LANOWL_MQTT_PASS` | The broker's login |
 | `LANOWL_SSH_KEY` | `ssh_key` (a path; no `_FILE` twin) |

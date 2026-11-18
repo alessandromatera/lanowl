@@ -37,7 +37,7 @@ The second line keeps it across reboots.
 
 | What | What it adds | Without it |
 |---|---|---|
-| A Telegram bot | Alerts, digests, the weekly review, questions, Approve buttons | The dashboard only; nothing reaches your phone |
+| A Telegram bot | Alerts, digests, the weekly review, questions, Approve buttons | The dashboard; the alerts can still reach you through a [webhook](../reference/webhook.md) (ntfy, Apprise, your own gateway) |
 | A model on [Ollama](https://ollama.com) | The owl: diagnoses, answers, the security review, proposed fixes | Detection, alerts, digests and the dashboard all work |
 | A MikroTik as the main router | DHCP leases, new devices, which internet link is in use, the router's log | Every device is still watched by ping, TCP, HTTP, SNMP |
 | Logins to your machines | Updates, backups, reboots, config changes, the security review | They are watched, not managed |

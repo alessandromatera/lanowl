@@ -1333,7 +1333,7 @@ class Actions:
         if p.get("decided_by") == "dashboard":
             # anything approved on the page that ran is said on Telegram, with which browser:
             # a login can be shared, a phone left logged in
-            self.a._emit_telegram("digest", self._announce(p))
+            self.a._emit_telegram("digest", self._announce(p), event={"category": "maintenance"})
         if rb is not None:
             # the reboot's card comes after the update's own message, never before it
             self._spawn(self._send_own([rb], f"{PROPOSAL_MARK} <b>A reboot finishes the update</b>", notify=True))
@@ -1714,10 +1714,27 @@ class Actions:
         body, markup = self._compose({**m, "key": ""})
         return body, markup
 
-    async def _send_own(self, pids: list, head: str, notify: bool):
+    def _webhook_proposals(self, pids: list, head: str) -> bool:
+        """The webhook's copy of a proposal message (webhook.py). A POST carries no buttons, so it
+        says where to answer: without it, an owner on the webhook alone would never hear that a
+        proposal waits. Its own kind, `proposal`, on by default: it is waiting for the owner,
+        which is news now, unlike the `maintenance` an approved action's line is.
+        True when the webhook queued it, for the record of where the message went."""
+        say = getattr(self.a, "_webhook_say", None)
+        if say is None or not pids:
+            return False
+        text, _ = self._compose({"key": "", "head": head, "base": "", "pids": list(pids)})
+        return bool(say("digest", text + "\n<i>Approve or reject on the dashboard.</i>",
+                        event={"category": "proposal", "type": "proposal"}))
+
+    async def _send_own(self, pids: list, head: str, notify: bool, webhook: Optional[bool] = None):
+        """`webhook`: None, hand the message to the webhook here; True or False, the caller already
+        did (flush_audit does, for the whole audit) and that is what it got back."""
         if self.a.no_telegram:
             log.info("telegram suppressed (--no-telegram) [action]: proposals %s", pids)
             return
+        if webhook is None:          # before Telegram's turn: it works with Telegram not set up
+            webhook = self._webhook_proposals(pids, head)
         m = {"key": "", "head": head, "base": "", "pids": list(pids)}
         text, markup = self._compose(m)
         ids: list = []
@@ -1737,8 +1754,10 @@ class Actions:
             p = self._get(pid)
             if p is not None:
                 p["tg"] = ids[0]
+        # it got here because Telegram delivered it; the webhook too when it queued its copy
         self.a._sent_log = (self.a._sent_log + [{"ts": time.time(), "channel": "action",
-                                                 "text": text[:1500]}])[-80:]
+                                                 "text": text[:1500],
+                                                 "to": ["telegram"] + (["webhook"] if webhook else [])}])[-80:]
         self._save()
 
     async def flush_audit(self):
@@ -1751,6 +1770,8 @@ class Actions:
             if pids:
                 log.info("telegram suppressed (--no-telegram) [action]: proposals %s", pids)
             return
+        # the webhook gets the whole audit's proposals once: it has no alert to edit them into
+        hooked = self._webhook_proposals(pids, f"{PROPOSAL_MARK} <b>The audit proposes</b>")
         open_keys = self.a._open_incident_keys()
         touched, loose = set(), []
         for pid in pids:
@@ -1769,7 +1790,8 @@ class Actions:
         for mid in touched:
             await self._edit(mid)
         if loose:
-            await self._send_own(loose, f"{PROPOSAL_MARK} <b>The audit proposes</b>", notify=False)
+            await self._send_own(loose, f"{PROPOSAL_MARK} <b>The audit proposes</b>", notify=False,
+                                 webhook=hooked)
         self._save()
 
     async def _refresh(self, p: dict):

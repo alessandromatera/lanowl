@@ -214,13 +214,19 @@ def owl_history(a, now: float) -> list:
         tg = []
         for e in a.state.events(now - 86400, kind="telegram", limit=200):
             x = json.loads(e.get("detail") or "{}")
-            tg.append({"ts": e["ts"], "channel": x.get("channel"), "text": x.get("text") or ""})
+            to = timeline.to_of(x)
+            tg.append({"ts": e["ts"], "channel": x.get("channel"), "text": x.get("text") or "",
+                       **({"to": to} if to is not None else {})})
         out = timeline.owl_items(aud, tg, now - 86400)
     except Exception:
         log.debug("owl history unavailable", exc_info=True)
         return []
-    return [{"ts": o["ts"], "health": o["health"], "summary": o["summary"], "changed": o["changed"],
-             "told": [t["text"] for t in o["told"]]} for o in reversed(out)][:8]
+    rows = []
+    for o in reversed(out):
+        to = timeline.to_all(o["told"])              # where the digest went; none: an old record
+        rows.append({"ts": o["ts"], "health": o["health"], "summary": o["summary"], "changed": o["changed"],
+                     "told": [t["text"] for t in o["told"]], **({"to": to} if to is not None else {})})
+    return rows[:8]
 
 
 def wan_moments(a, now: float) -> tuple:

@@ -702,7 +702,8 @@ class Updates:
             f"{len(new_ips)} device(s) with a known vulnerability that applies (CVSS ≥ {CVSS_PAGE:g})\n"
             + "\n".join(f"• {_html(x)}" for x in lines[:12])
             + "\n<i>Each one checked against the machine's own build or NVD, then read by the model. "
-              "Every match, with why, is on the dashboard: Security → Deep scan results.</i>"))
+              "Every match, with why, is on the dashboard: Security → Deep scan results.</i>"),
+            event={"category": "maintenance"})
 
     def unconfirmed(self, ip: str, v: dict) -> str:
         """Why a version match cannot be trusted, or "" when it can — the rule before the
@@ -737,7 +738,7 @@ class Updates:
             f"🛡 <b>Updates &amp; security</b> — {len(new)} new\n"
             + "\n".join(f"• {_html(f['text'])}" for f in new[:12])
             + (f"\n…and {len(new) - 12} more" if len(new) > 12 else "")
-            + "\n<i>Everything else is on the dashboard, under Security.</i>"))
+            + "\n<i>Everything else is on the dashboard, under Security.</i>"), event={"category": "maintenance"})
 
     # --- the monthly scan -----------------------------------------------------------------
     async def scan(self, reason: str = "scheduled") -> dict:

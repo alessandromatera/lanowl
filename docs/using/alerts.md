@@ -132,6 +132,12 @@ One event is one block in a digest: when a device's open issue and its log note 
 thing, the digest shows the owl's line once, under the issue, and the owl's opening summary does not
 retell what has a line of its own below it.
 
+## Beyond Telegram
+
+Every message above can also be sent as a JSON POST to an address of your own (Apprise, ntfy,
+n8n, a gateway), with or without Telegram: [Webhook](../reference/webhook.md). It gets what
+Telegram gets, and can only be narrowed down.
+
 ## What never reaches you
 
 - A single missed ping.

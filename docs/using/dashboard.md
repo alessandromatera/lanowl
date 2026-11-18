@@ -31,8 +31,8 @@ What needs you, first.
   all devices answer (asleep and paused said apart, the same count as the digest's), the
   internet, and each site.
 - **The incident card**, when there is one: the problem, its severity, since when, and its
-  trail: when it stopped answering, what Telegram was told about this incident (with the day,
-  when not today), the owl's diagnosis, a proposal waiting for you. A service that fails every
+  trail: when it stopped answering, what lanowl sent about this incident and where it went
+  (with the day, when not today), the owl's diagnosis, a proposal waiting for you. A service that fails every
   other minute stays on it, marked as coming and going, until its incident is over. **Open**
   shows the device; **Ask about it** starts a question with its facts.
 - **Dropped this week**: under the headline, one grey line, "3 devices dropped at least once
@@ -95,18 +95,19 @@ item, under **What happened**:
 
 Seven days, everything lanowl saw, said and did: outages grouped into incidents, the
 internet, security events and log checks, the configurations' changes, the owl's verdicts (each
-time they changed), actions, new devices and every Telegram message. **Everything** shows all
+time they changed), actions, new devices and every message lanowl sent. **Everything** shows all
 of it: the routine rows are drawn quiet, never left out. Today is open; every other day is one
 line with its count, and a tap opens it. Inside a day the routine log reads, where nothing
 needed you, are one line of their own that opens them all.
 
-Each event carries what was said about it: the Telegram message about it sits under it, not
-apart; a new device carries what the owl said and **the same story**, the log checks and
-configuration changes that name its address, MAC or name within a day, or a network those
-name, each saying why it is there. A log check opens to the lines it read. An approval says
+Each event carries what was said about it: the message about it sits under it, not apart,
+and says where it went: Telegram, Webhook, both, or Not sent. A new device
+carries what the owl said and **the same story**, the log checks and configuration changes that
+name its address, MAC or name within a day, or a network those name, each saying why it is
+there. A log check opens to the lines it read. An approval says
 which browser it came from.
 
-Filter by kind: Outages, Internet, Security & logs, The owl, New devices, Actions, Telegram.
+Filter by kind: Outages, Internet, Security & logs, The owl, New devices, Actions, Messages.
 Tapping an action opens it in a sheet (its steps, what it found, its buttons); tapping anything
 about a device opens that device's sheet at it.
 **Seven days at a glance** (a lane per device, moments when several went down together shaded)

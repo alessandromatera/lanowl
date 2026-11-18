@@ -26,6 +26,8 @@ arrive (`/run/secrets/<name>`). The first found wins: the variable, then its `_F
 |---|---|
 | `LANOWL_TG_TOKEN` | `tokens.telegram` |
 | `LANOWL_HA_TOKEN` | `tokens.homeassistant` |
+| `LANOWL_WEBHOOK_URL` | `tokens.webhook_url`: the [webhook](webhook.md)'s address |
+| `LANOWL_WEBHOOK_TOKEN` | `tokens.webhook`: its bearer token |
 | `LANOWL_MIKROTIK_USER`, `LANOWL_MIKROTIK_PASS` | The router's read-only login (`mikrotik.credentials`) |
 | `LANOWL_MQTT_USER`, `LANOWL_MQTT_PASS` | The broker's login (`mqtt.credentials`) |
 | `LANOWL_SSH_KEY` | `ssh_key` (a path; no `_FILE` twin) |

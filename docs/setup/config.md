@@ -65,6 +65,24 @@ telegram:
 `telegram.chat.allowed_user_ids` lists who may press Approve and Reject; needed only when the
 chat is a group. See [Telegram](../getting-started/telegram.md).
 
+## webhook
+
+```yaml
+webhook:
+  enabled: false                  # also send alerts to an HTTP address (works without Telegram)
+  format: "generic"               # generic, apprise, ntfy, or template
+  template: {}                    # format template: your JSON, with {title} {message} ... in it
+  events: [down, recovery, wan, security, new_device, logs, diagnosis, proposal]   # also: digest, maintenance, other
+  min_severity: "info"
+  headers: {}                     # extra headers that are not secret
+  verify_tls: true                # false for a gateway with a self-signed certificate
+  queue_file: "webhook_queue.json"   # what could not be delivered yet, tried again
+```
+
+Every alert also as a JSON POST to an address of your own. The address goes in `secrets.yaml`
+(`tokens.webhook_url`, or `LANOWL_WEBHOOK_URL`), a bearer token beside it if the receiver wants
+one. See [Webhook](../reference/webhook.md).
+
 ## web
 
 ```yaml

@@ -734,7 +734,8 @@ class Backups:
             self._save()
             if was and not bad:
                 self.a._emit_telegram("digest", "💾 The daily backup of "
-                                      + ", ".join(_html(self.name(m)) for m, _ in results) + " works again.")
+                                      + ", ".join(_html(self.name(m)) for m, _ in results) + " works again.",
+                                      event={"category": "maintenance"})
             if was or not bad:
                 return
         if kind in ("monthly", "daily") and bad:
@@ -743,7 +744,7 @@ class Backups:
                 f"💾 <b>{'Monthly' if kind == 'monthly' else 'Daily'} backup</b> — {len(bad)} of {len(results)} failed\n"
                 + "\n".join(f"• {_html(label(self.name(m), m['ip'] if m['ip'] != 'shellies' else ''))}: "
                             f"{_html(r.get('error') or '?')}" for m, r in bad)
-                + "\n<i>The rest are on the store. Security tab → Backups.</i>"))
+                + "\n<i>The rest are on the store. Security tab → Backups.</i>"), event={"category": "maintenance"})
 
     async def _daily(self):
         with contextlib.suppress(Exception):
@@ -764,7 +765,7 @@ class Backups:
                 + "\n".join(f"• {_html(self.name(m))}: last good backup "
                             f"{time.strftime('%d/%m/%Y', time.localtime(self.rec['machines'][m['ip']]['last_ok']))}"
                             for m in new)
-                + "\n<i>Security tab → Backups → Back up now.</i>"))
+                + "\n<i>Security tab → Backups → Back up now.</i>"), event={"category": "maintenance"})
 
     # --- what others read -------------------------------------------------------------------
     def next_run(self, now: Optional[float] = None) -> float:

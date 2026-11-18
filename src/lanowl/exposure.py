@@ -719,7 +719,7 @@ class Exposure:
             lines.append(f"• <b>{_html(label(f['name'], f['ip']))}</b>: {_html(f['title'])}"
                          + (f"\n  <i>{_html(f['fix'])}</i>" if f.get("fix") else ""))
         lines.append("<i>The owl's review of this morning's facts — the Security tab has the evidence.</i>")
-        self.a._emit_telegram("critical", "\n".join(lines))
+        self.a._emit_telegram("critical", "\n".join(lines), event={"category": "security"})
         self.rec["announced"] += [f["key"] for f in new]
 
     # --- reading ------------------------------------------------------------------------------
