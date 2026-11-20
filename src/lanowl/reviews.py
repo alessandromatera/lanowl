@@ -26,7 +26,7 @@ import re
 import time
 from typing import Optional
 
-from .report import _html, label
+from .report import MODEL_MAX, _html, blabel, label  # noqa: F401 (MODEL_MAX: imported from here too)
 
 log = logging.getLogger("lanowl.reviews")
 
@@ -44,12 +44,6 @@ def today_at(hhmm: str, now: float) -> float:
 def words(text, n: int) -> str:
     """One line, at most n characters."""
     return " ".join(str(text or "").split())[:n]
-
-
-def clip(text, n: int) -> str:
-    """One line, cut at a word with "…" when longer than n."""
-    t = " ".join(str(text or "").split())
-    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
 class Review:
@@ -201,10 +195,10 @@ class FindingsReview(Review):
             if not anchor:
                 continue
             e = {"anchor": anchor, "check": chk, "severity": sev,
-                 "title": words(f.get("title") or self.CHECKS[chk], 160),
-                 "evidence": words(f.get("evidence"), 400),
-                 "why": words(f.get("why"), 300),
-                 "suggestion": words(f.get("suggestion"), 240)}
+                 "title": words(f.get("title") or self.CHECKS[chk], MODEL_MAX),
+                 "evidence": words(f.get("evidence"), MODEL_MAX),
+                 "why": words(f.get("why"), MODEL_MAX),
+                 "suggestion": words(f.get("suggestion"), MODEL_MAX)}
             e.update(self.extra(f, facts, e))
             e["key"] = self.key(e)
             old = by.get(e["key"])
@@ -273,9 +267,11 @@ class FindingsReview(Review):
                 if f["severity"] in self.DIGEST and f["key"] not in told]
 
     def digest_line(self, f: dict) -> str:
-        who = label(f.get("name"), f.get("ip")) if f.get("ip") else ""
-        return (f"• {_html(who + ': ' if who else '')}{_html(f['title'])}"
-                + (f"\n   <i>{_html(clip(f['evidence'], 200))}</i>" if f.get("evidence") else ""))
+        """The device and how bad, then the title, then the evidence in a quote (owner, 2026-11-20).
+        A finding about no device (the internet) starts with its title."""
+        who = f"{blabel(f.get('name'), f.get('ip'))} · <b>{_html(f['severity'])}</b>\n" if f.get("ip") else ""
+        return (f"{who}{_html(f['title'])}"
+                + (f"\n<blockquote>{_html(f['evidence'])}</blockquote>" if f.get("evidence") else ""))
 
     def view(self) -> dict:
         d = self.rec["dismissed"]
@@ -292,9 +288,11 @@ class FindingsReview(Review):
         fs = self.open_findings()
         if not fs:
             return [f"{self.ICON} {self.TITLE}: nothing the owl found worth a look."]
+        # a count line, then the worst one as a "• " line (weekly.format_weekly bolds its name)
         w = fs[0]
-        who = label(w.get("name"), w.get("ip")) + " — " if w.get("ip") else ""
-        return [f"{self.ICON} {self.TITLE}: {len(fs)} open, the worst {w['severity']}: {who}{w['title']}"]
+        who = label(w.get("name"), w.get("ip")) + ": " if w.get("ip") else ""
+        return [f"{self.ICON} {self.TITLE}: {len(fs)} open, the worst {w['severity']}:",
+                f"• {who}{w['title']}"]
 
 
 def actions_done(a, since: float, ips=None) -> list:

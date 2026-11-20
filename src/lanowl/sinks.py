@@ -243,7 +243,7 @@ class TelegramOutbox:
                 banner = (f"<i>⏳ delayed delivery — queued at {queued} "
                           f"while Telegram could not be reached</i>")
             ids: list = []
-            text = f"{it['text']}\n{banner}"
+            text = f"{it['text']}\n\n{banner}"
             try:
                 ok = await telegram_direct(cfg, text, ids=ids)
             except TelegramRejected as e:

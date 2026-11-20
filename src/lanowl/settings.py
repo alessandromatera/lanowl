@@ -165,7 +165,9 @@ def _fmt(v, key: str = "") -> str:
         s = ", ".join(f"{k} {_fmt(x)}" for k, x in v.items()) or "{}"
     else:
         s = str(v) if str(v) != "" else '""'
-    return s if len(s) <= 40 else s[:39] + "…"
+    from .records import scrub      # a token in a URL or a path stays out of Telegram and the history
+    s = scrub(s)
+    return s if len(s) <= 300 else s[:299] + "…"
 
 
 def _leaves(d, p=()):
@@ -594,19 +596,24 @@ class Settings:
             log.warning("settings: record not saved: %s", e)
 
     def _tell(self, e: dict):
-        """One Telegram line: which file, how, from where, what. It goes to the chat lanowl
+        """One Telegram message: which file, how, from where, what. It goes to the chat lanowl
         runs with now — so a save that moves the alerts to another chat is still heard here."""
         fname = NAMES[e["file"]]
         ch = e["changes"]
-        shown = "; ".join(html.escape(c) for c in ch[:SHOWN])
-        more = f"; and {len(ch) - SHOWN} more, in Settings → History" if len(ch) > SHOWN else ""
+        # the header, a blank line, then the changes: one a line (owner, 2026-11-20: readability)
+        rows = [html.escape(c) for c in ch[:SHOWN]]
+        if len(rows) > 1:
+            rows = [f"• {r}" for r in rows]
+        if len(ch) > SHOWN:
+            rows.append(f"…and {len(ch) - SHOWN} more, in Settings → History")
+        shown = "\n".join(rows)
         where = f" ({html.escape(e['from'])})" if e.get("from") else ""
         head = {"save": f"{'🔑' if e['file'] == 'secrets' else '⚙️'} <b>{fname} changed</b> from the dashboard{where}",
                 "restore": f"⚙️ <b>{fname} put back</b> {html.escape(e.get('note') or '')}, from the dashboard{where}",
                 "setup": f"{'🔑' if e['file'] == 'secrets' else '⚙️'} <b>{fname} written</b> by the first-run setup{where}",
                 "watch": f"⚙️ <b>{fname} changed</b> by Watch on the dashboard{where}"}.get(e["how"], fname)
         try:
-            self.a._emit_telegram("digest", head + (": " + shown + more if shown else ""))
+            self.a._emit_telegram("digest", head + ("\n\n" + shown if shown else ""))
         except Exception:
             log.warning("settings: the Telegram line was not sent", exc_info=True)
 

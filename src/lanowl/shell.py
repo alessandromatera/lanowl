@@ -333,7 +333,7 @@ class Shell:
             (log.info if ok else log.warning)("shell%s: %s", " (audit)" if self.audit else "", why)
         if breach and not self._breach:
             log.error("%s: %s — the tool is off", who, why)
-            self.a._emit_telegram("critical", f"🚨 <b>{cap(who)} NOT isolated</b>\n"
+            self.a._emit_telegram("critical", f"🚨 <b>{cap(who)} NOT isolated</b>\n\n"
                                   f"{why}.\nThe shell is off until the check passes again.",
                                   event={"category": "security"})
         elif self._breach and not breach and ok:

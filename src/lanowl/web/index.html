@@ -577,7 +577,7 @@ div.row[data-ip]>.chev{margin-left:6px}
 .acct .fine{margin-bottom:2px}
 .pbtn .ic{width:17px;height:17px}
 .pbtn:disabled{opacity:.5}
-.pres{margin-top:10px;font-size:15px;font-weight:600;color:var(--green-t);overflow-wrap:anywhere}
+.pres{margin-top:10px;font-size:15px;font-weight:600;color:var(--green-t);overflow-wrap:anywhere;white-space:pre-line}
 .pres.bad{color:var(--red-t)}
 .pout{margin:8px 0 0;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;line-height:1.45;background:var(--fill2);border-radius:8px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto}
 .aprops{margin-top:8px;border-radius:var(--r);background:var(--card);box-shadow:var(--shadow);overflow:hidden}
@@ -664,6 +664,8 @@ div.row[data-ip]>.chev{margin-left:6px}
 .row.dim .rn{color:var(--ink2);font-weight:400}
 .bub{background:var(--card);border-radius:20px 20px 20px 6px;padding:10px 13px 7px;margin:0 0 9px;max-width:94%;box-shadow:var(--shadow);font-size:15px}
 .bub .t{white-space:pre-wrap;overflow-wrap:anywhere}
+/* a quoted reason (Telegram's blockquote): a bar on the left and a slight tint */
+.bub .t blockquote{margin:3px 0;padding:3px 10px;border-left:3px solid var(--blue);border-radius:0 8px 8px 0;background:var(--fill2)}
 .bub .meta{display:flex;gap:6px;align-items:center;justify-content:flex-end;font-size:11.5px;color:var(--ink2);margin-top:5px}
 .bub .meta .tagx{margin-right:auto}
 .day{font-size:12.5px;font-weight:600;color:var(--ink2);text-align:center;margin:14px 0 9px}
@@ -1234,11 +1236,19 @@ window.fetch = async (...a) => {
 };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // Telegram text is our own HTML, but it can carry names the network chose (a DHCP host name),
-// so it is escaped whole and only <b>/<i>/<code> are let back in. What the owl ran carries its
+// so it is escaped whole and only <b>/<i>/<code>/<blockquote> are let back in, as bare tags with
+// no attributes. Telegram's <blockquote expandable> is a plain blockquote here (the whole message
+// is shown anyway); a newline right after </blockquote> is dropped, because the quote is a block
+// and Telegram starts the next line under it, while this bubble keeps every newline.
+// What the owl ran carries its
 // 🪶 and a fix it proposes its 📜 (owner 10-11: "it's an owl character!"); a message sent before
 // then had a 🔧 or a 🛠: shown with the new marks too, the record keeps the old.
 const tg = s => esc(String(s ?? "").replace(/🔧/gu, "🪶").replace(/🛠\uFE0F?/gu, "📜"))
+  .replace(/&lt;blockquote( expandable)?&gt;/g, "<blockquote>")
+  .replace(/&lt;\/blockquote&gt;\n?/g, "</blockquote>")
   .replace(/&lt;(\/?)(b|i|code)&gt;/g, "<$1$2>");
+// a multi-line result (what ran, what was kept safe, what comes next) on one line, for a row
+const oneLine = s => String(s ?? "").replace(/\s*\n\s*/g, " · ");
 
 // ---------------------------------------------------------------- icons (drawn, not fetched)
 const P = {
@@ -3411,8 +3421,8 @@ function machineState(d, x) {
   const res = queued ? `<span class="rs wrap">Queued ${esc(p.queue)}</span>`
     : p && p.status === "running" ? `<span class="rs wrap" style="color:var(--indigo)">${esc(stepLine(p))}</span>`
     : cancelled ? `<span class="rs wrap">Cancelled before its turn — nothing was done</span>`
-    : needRb ? `<span class="rs warn wrap">✓ ${esc(o.updated || o.result || "done")} · a reboot finishes them${o.reboot_by_hand ? " — reboot it yourself" : ""}</span>`
-    : okDone ? `<span class="rs ok wrap">✓ ${esc(rbRan && o.updated ? o.updated : o.result || "done")}</span>`
+    : needRb ? `<span class="rs warn wrap">✓ ${esc(oneLine(o.updated || o.result || "done"))} · a reboot finishes them${o.reboot_by_hand ? " — reboot it yourself" : ""}</span>`
+    : okDone ? `<span class="rs ok wrap">✓ ${esc(oneLine(rbRan && o.updated ? o.updated : o.result || "done"))}</span>`
     : bad ? `<span class="rs bad wrap">✗ ${esc(o.error || o.check || "it did not work")}</span>`
     : refusedNow ? `<span class="rs bad wrap">✗ Not now: ${esc(p.refused || "refused")}</span>` : "";
   return {bits, btn, res, dot: x.error ? "orange" : x.security || x.reboot_since ? "yellow" : "green"};
@@ -3430,7 +3440,7 @@ function rebootState(d, ip, x) {
   let cls = pend ? " warn" : "", res = "";
   if (last) {
     const lo = last.outcome || {};
-    sub = (last.status === "done" ? "✓ " : "✗ ") + (lo.result || lo.error || lo.check || last.status);
+    sub = (last.status === "done" ? "✓ " : "✗ ") + oneLine(lo.result || lo.error || lo.check || last.status);
     cls = last.status === "done" ? " ok" : " bad";
     res = `<span class="rs wrap${cls}">${esc(sub)}</span>`;
   }

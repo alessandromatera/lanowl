@@ -438,10 +438,10 @@ def merge_llm(report: dict, llm: Optional[dict]) -> dict:
             i["device"] = label(i.get("device"), i.get("ip"), idx)
             for field_ in ("root_cause", "evidence", "recommendation", "note"):
                 if isinstance(i.get(field_), str):
-                    i[field_] = name_addresses(i[field_], idx)
+                    i[field_] = name_addresses(i[field_], idx)[:MODEL_MAX]     # whole, under the cap
         # ...and the prose, which is what the dashboard's assessment box actually shows
         if isinstance(llm.get("summary"), str):
-            llm["summary"] = name_addresses(llm["summary"], idx)
+            llm["summary"] = name_addresses(llm["summary"], idx)[:MODEL_MAX]
         llm["issues"] = issues
         if dropped:
             llm["muted_issues_dropped"] = dropped
@@ -607,10 +607,27 @@ def label(device: str = "", ip: str = "", idx=None) -> str:
     return dev or ip or "?"
 
 
+def blabel(device: str = "", ip: str = "", idx=None) -> str:
+    """label() for a Telegram line, already HTML: the name in bold, the address not, so the eye
+    finds the device on the phone (owner, 2026-11-20: readability). Never pass it to _html() again."""
+    s = label(device, ip, idx)
+    m = re.fullmatch(r"(.+) \((\d{1,3}(?:\.\d{1,3}){3})\)", s)
+    if m:
+        return f"<b>{_html(m.group(1))}</b> ({m.group(2)})"
+    return f"<b>{_html(s)}</b>"
+
+
+def plural(n, word: str, many: str = "") -> str:
+    """'1 drop', '4 drops', '2 batches': Telegram text without '(s)' (owner, 2026-11-20)."""
+    if n == 1:
+        return f"{n} {word}"
+    return f"{n} {many or (word + 'es' if word.endswith(('s', 'x', 'ch', 'sh')) else word + 's')}"
+
+
 def format_critical(device_name: str, ip: str, detail: str, snapshot: Snapshot) -> str:
     when = time.strftime("%H:%M:%S", time.localtime(snapshot.ts))
-    who = label(device_name, ip, _label_index(snapshot))
-    return f"{_EMOJI['critical']} <b>CRITICAL</b> {when}\n{who}\n{detail}"
+    who = blabel(device_name, ip, _label_index(snapshot))
+    return f"{_EMOJI['critical']} <b>CRITICAL</b> {when}\n{who}\n{_html(detail)}"     # names inside: escaped
 
 
 def format_recovery(device_name: str, ip: str, kind: str = "down", idx=None, detail: str = "") -> str:
@@ -618,12 +635,12 @@ def format_recovery(device_name: str, ip: str, kind: str = "down", idx=None, det
         return f"{_EMOJI['ok']} RECOVERED\nInternet is back on the MAIN link"
     if kind == "degraded":
         # the device answered all along; only a service check failed — it never went offline
-        who = label(device_name, ip, idx)
-        svc = detail[len(_DEGRADED_PREFIX):].strip() if detail.startswith(_DEGRADED_PREFIX) else ""
+        who = blabel(device_name, ip, idx)
+        svc = _html(detail[len(_DEGRADED_PREFIX):].strip()) if detail.startswith(_DEGRADED_PREFIX) else ""
         what = f"{svc} is answering again" if svc and "," not in svc else \
             f"{svc} are answering again" if svc else "its service is answering again"
         return f"{_EMOJI['ok']} RECOVERED\n{who}: {what}"
-    return f"{_EMOJI['ok']} RECOVERED\n{label(device_name, ip, idx)} is back online"
+    return f"{_EMOJI['ok']} RECOVERED\n{blabel(device_name, ip, idx)} is back online"
 
 
 def human_duration(seconds: float) -> str:
@@ -697,7 +714,7 @@ def _blackout_note(issue: dict) -> str:
     total = float(issue.get("blackout_s") or 0)
     dur = f", {human_duration(total)} in total" if total else ""
     return (f"\n<i>🔴 no internet at all for part of it: "
-            f"{n} blackout(s){dur}</i>")
+            f"{plural(n, 'blackout')}{dur}</i>")
 
 
 def format_alerts(events: list, snapshot: Snapshot) -> list:
@@ -725,14 +742,14 @@ def format_alerts(events: list, snapshot: Snapshot) -> list:
             age = f"\n<i>{_span(e.duration_s, e.flaps, 'down for')}</i>" \
                 if e.kind == STILL else ""
             out.append(f"{_EMOJI['critical']} <b>{head}</b> {when}\n"
-                       f"{label(i.get('device'), i.get('ip'), idx)}\n{i['detail']}{age}")
+                       f"{blabel(i.get('device'), i.get('ip'), idx)}\n{_html(i['detail'])}{age}")
         else:
             lines = [f"{_EMOJI['critical']} <b>CRITICAL</b> {when} — {len(raised)} issues",
                      "<i>one event, probably one cause</i>"]
             for e in raised:
                 i = e.issue
-                lines.append(f"• <b>{label(i.get('device'), i.get('ip'), idx)}</b>: "
-                             f"{i['detail']}")
+                lines.append(f"• {blabel(i.get('device'), i.get('ip'), idx)}: "
+                             f"{_html(i['detail'])}")
             out.append("\n".join(lines))
 
     healed = [e for e in events if e.kind == RECOVERED]
@@ -749,7 +766,7 @@ def format_alerts(events: list, snapshot: Snapshot) -> list:
             lines = [f"{_EMOJI['ok']} <b>RECOVERED</b> {when} — {len(healed)} issues"]
             for e in healed:
                 i = e.issue
-                lines.append(f"• {label(i.get('device'), i.get('ip'), idx)}: "
+                lines.append(f"• {blabel(i.get('device'), i.get('ip'), idx)}: "
                              f"{_recovery_span(e, 'back after')}")
             out.append("\n".join(lines))
 
@@ -809,9 +826,17 @@ def _html(s) -> str:
     return html.escape(str(s or ""), quote=False)
 
 
-def _short(s, n: int = 170) -> str:
-    s = " ".join(str(s or "").split())
-    return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+# What a model-written field is kept at, whole: a safety cap against a runaway model, not a
+# length the owl is held to. The fixed 160..400 cuts used to stop its sentences mid-thought
+# (owner, 2026-11-20).
+MODEL_MAX = 2000
+
+
+def _line(s) -> str:
+    """The owl's text on one line, whole. It used to be cut at a fixed length with "…" and the
+    owner got sentences that stopped mid-thought (owner, 2026-11-20: "the messages I received on
+    telegram are cut"). Telegram's 4096 is handled by sinks._split, not by cutting the owl."""
+    return " ".join(str(s or "").split())
 
 
 def match_diagnosis(issue: dict, llm_issues: list) -> Optional[dict]:
@@ -834,11 +859,10 @@ def match_diagnosis(issue: dict, llm_issues: list) -> Optional[dict]:
 
 
 def _diag_line(d: dict) -> str:
-    cause, rec = _short(d.get("root_cause")), _short(d.get("recommendation"), 120)
-    if not cause and not rec:
-        return ""
-    return ("   ↳ " + (f"<i>{_html(cause)}</i>" if cause else "")
-            + (f" → {_html(rec)}" if rec else ""))
+    """Under an issue in the digest: the owl's cause in a quote, its advice on its own line."""
+    cause, rec = _line(d.get("root_cause")), _line(d.get("recommendation"))
+    return "\n".join(x for x in (f"<blockquote>{_html(cause)}</blockquote>" if cause else "",
+                                 f"→ {_html(rec)}" if rec else "") if x)
 
 
 def ran_lines(ran: list, limit: int = 12) -> list:
@@ -881,31 +905,53 @@ def _diagnosis(issues: list, llm: Optional[dict], at: Optional[float] = None,
     hoo = "Hoo. " if owl else ""
     rows = [(i, d) for i in issues for d in [match_diagnosis(i, llm.get("issues") or [])] if d]
     if not rows:
-        s = _short(llm.get("summary"), 300)
+        s = _line(llm.get("summary"))
         return f"\n\n🦉 <i>the owl, {when}:</i> {_html(s)}" if s else ""
     if len(rows) == 1:
         _, d = rows[0]
-        out = f"\n\n🦉 {hoo}<b>Likely cause</b> <i>(the owl, {when})</i>: {_html(_short(d.get('root_cause')))}"
+        out = f"\n\n🦉 {hoo}<b>Likely cause</b> <i>(the owl, {when})</i>: {_html(_line(d.get('root_cause')))}"
         if d.get("recommendation"):
-            out += f"\n→ {_html(_short(d['recommendation'], 140))}"
+            out += f"\n→ {_html(_line(d['recommendation']))}"
         return out
     lines = ["", "", f"🦉 {hoo}<b>Likely causes</b> <i>(the owl, {when})</i>"]
     for i, d in rows[:6]:
-        lines.append(f"• {label(i.get('device'), i.get('ip'))}: {_html(_short(d.get('root_cause'), 120))}")
+        lines.append(f"• {blabel(i.get('device'), i.get('ip'))}: {_html(_line(d.get('root_cause')))}")
     return "\n".join(lines)
 
 
-def _log_line(g: dict, prefix: str, idx=None, section: bool = False) -> str:
-    """A device-log note (devwatch.digest_news) as one line: a row of "Device logs", or, under the
-    open issue about the same event, the owl's line (no device name: the issue line has it)."""
-    s = _HOO.sub("", str(g.get("summary") or ""))
+def _without_device(s: str, name: str, ip: str) -> str:
+    """The owl's note under a line that already names its device, without "Name (ip)" again (owner,
+    2026-11-20: "do not repeat the name and ip of the device"). A note that opens with the device
+    ("NAS (192.168.88.20) rebooted at 02:00…") starts at what happened ("Rebooted at 02:00…"); one
+    that names it further in keeps its words and loses only the address — cutting a name out of
+    the middle of a sentence would leave half a sentence."""
+    if not ip or ip == "-":
+        return s
+    addr = rf"\({re.escape(ip)}(?:,[^)]*)?\)"
+    m = re.match(rf"([^.;:()]{{1,60}}?)\s*{addr}\s*[,:—–-]?\s*", s)
+    if m and m.end() < len(s):
+        said = m.group(1).split()
+        own = str(name or "").casefold().split()
+        # it is the device's name when it opens like the name does, in a few words ("Office router"
+        # for "Office mikrotik router"), not "The uplink on the office hAP"
+        if own and said and said[0].casefold() == own[0] and len(said) <= 5:
+            rest = s[m.end():]
+            return rest[:1].upper() + rest[1:]
+    return re.sub(rf"\s*{addr}", "", s)
+
+
+def _log_line(g: dict, idx=None, section: bool = False) -> str:
+    """A device-log note (devwatch.digest_news): a block of "Device logs" (the device bold, the note
+    under it), or, under the open issue about the same event, the owl's words in a quote (no device
+    name: the issue line has it). Either way the note does not name its device again."""
+    s = _without_device(_line(_HOO.sub("", str(g.get("summary") or ""))), g.get("name"), str(g.get("ip") or ""))
     tail = f" <i>({g['n']} times since the last digest)</i>" if g.get("n", 1) > 1 else ""
     if section:
-        # the owl names the device itself most of the time: then not twice
-        who = "" if g.get("ip") and f"({g['ip']})" in s else _html(label(g.get("name"), g.get("ip"), idx)) + ": "
-        return f"{prefix}{who}{_html(_short(s, 320))}{tail}"
-    s = _short(s, 320)
-    return f"{prefix}<i>{_html(s)}</i>{tail}" if s else ""
+        # the device in bold on its own line, the owl's note under it: on the phone the bold line is
+        # what tells one device from the next (owner, 2026-11-20: "device logs should be separated
+        # better for devices")
+        return f"{blabel(g.get('name'), g.get('ip'), idx)}\n{_html(s)}{tail}"
+    return f"<blockquote>{_html(s)}{tail}</blockquote>" if s else ""
 
 
 # an address anywhere in a sentence: the owl writes "(192.168.88.20)" and "(192.168.88.20, private MAC)"
@@ -951,10 +997,11 @@ def format_digest(report: dict, now: Optional[float] = None,
     wan = {"ok": "OK", "down": "DOWN — no internet at all",
            "backup": f"on the BACKUP link '{wp.get('link') or 'backup'}'"}.get(state, "OK")
     idx = _label_index(report)
-    lines = [f"{e} <b>{title}</b> — {report['overall_health'].upper()}",
-             f"{c['up']}/{c['total']} up{asleep} · WAN {wan}"]
-    # The summary line goes in here once what has an owl line of its own below is known (_untold).
-    sum_at = len(lines)
+    # A digest is blocks with a blank line between them (owner, 2026-11-20: readability): the
+    # header, the owl's summary, then each section. The lines inside one block touch.
+    blocks = [f"{e} <b>{title}</b> — {report['overall_health'].upper()}\n"
+              f"{c['up']}/{c['total']} up{asleep} · WAN {wan}"]
+    # The owl's summary goes in at 1 once what has an owl line of its own below is known (_untold).
     # Every open issue is listed, info included — the ⚪ lines are how "the vacuum is off"
     # reaches you. The gate upstream guarantees a given issue only reaches a digest once,
     # so listing them here cannot become a repeating message.
@@ -968,16 +1015,17 @@ def format_digest(report: dict, now: Optional[float] = None,
     logs = report.get("log_news") or []
     owl_ips = set()                 # the devices that get an owl line below: the summary does not retell them
     tied = set()                    # the device-log notes that are the same event as an open issue
+    lines = []
     for i in shown:
         lines.append(f"{_EMOJI.get(i['severity'], '•')} "
-                     f"{label(i.get('device'), i.get('ip'), idx)}: {i['detail']}"
+                     f"{blabel(i.get('device'), i.get('ip'), idx)}: {_html(i['detail'])}"
                      f"{_since_note(i, now)}")
         # One event, one block: a device-log note about this issue (same device, its event no earlier
-        # than 15 minutes before the issue began) is the owl's line under it, not a second section.
+        # than 15 minutes before the issue began) is the owl's quote under it, not a second section.
         since, ip = float(i.get("since") or 0), str(i.get("ip") or "")
         g = next((g for g in logs if id(g) not in tied and since and ip and g.get("ip") == ip
                   and g.get("at") is not None and float(g["at"]) >= since - 900), None)
-        ol = _log_line(g, "   ↳ ") if g is not None else ""
+        ol = _log_line(g) if g is not None else ""
         if ol:                      # a note with no words ties nothing: the model's cause line stands
             tied.add(id(g))
             owl_ips.add(ip)
@@ -996,32 +1044,41 @@ def format_digest(report: dict, now: Optional[float] = None,
                     owl_ips.add(ip)
     if rest:
         lines.append(f"…and {len(rest)} more (see dashboard)")
+    if lines:
+        blocks.append("\n".join(lines))
 
     # What the model found that no rule raised. Only what it rated warning or worse, and
     # only a few: merge_llm has already dropped anything about muted (asleep / low) gear.
-    extra = [d for d in llm_issues if id(d) not in used
-             and d.get("severity") in ("critical", "high", "warning")][:3]
-    if extra:
-        lines.append("🦉 <b>The owl also noticed</b>")
-        for d in extra:
+    noticed = [d for d in llm_issues if id(d) not in used
+               and d.get("severity") in ("critical", "high", "warning")]
+    if noticed:
+        items = []
+        for d in noticed[:3]:
             m = re.search(r"\((\d{1,3}(?:\.\d{1,3}){3})\)", str(d.get("device") or ""))
             owl_ips.update(x for x in (str(d.get("ip") or ""), m.group(1) if m else "") if x and x != "-")
-            lines.append(f"• {label(d.get('device'), d.get('ip'), idx)}: "
-                         f"{_html(_short(d.get('root_cause'), 140))}"
-                         + (f" → {_html(_short(d.get('recommendation'), 100))}"
-                            if d.get("recommendation") else ""))
+            item = [blabel(d.get("device"), d.get("ip"), idx)]
+            if _line(d.get("root_cause")):
+                item.append(_html(_line(d.get("root_cause"))))
+            if _line(d.get("recommendation")):
+                item.append(f"→ {_html(_line(d.get('recommendation')))}")
+            items.append("\n".join(item))
+        if len(noticed) > 3:
+            items.append(f"…and {len(noticed) - 3} more on the dashboard")
+        blocks.append("🦉 <b>The owl also noticed</b>\n" + "\n\n".join(items))
 
     # What a device's own log showed that was not normal, from a device that does not page
     # (devwatch.py): one line a device, its newest note, and how many since the last digest.
     logs = [g for g in logs if id(g) not in tied]
     if logs:
         worst = "warning" if any(g.get("severity") in ("critical", "warning") for g in logs) else "info"
-        lines.append(f"{_EMOJI[worst]} <b>Device logs</b> <i>(the owl's read — the dashboard has the lines)</i>")
+        items = []
         for g in logs[:6]:
             owl_ips.add(str(g.get("ip") or ""))
-            lines.append(_log_line(g, "• ", idx, True))
+            items.append(_log_line(g, idx, True))
         if len(logs) > 6:
-            lines.append(f"…and {len(logs) - 6} more on the dashboard")
+            items.append(f"…and {len(logs) - 6} more on the dashboard")
+        # one device a block, a blank line between them, like The owl also noticed
+        blocks.append(f"{_EMOJI[worst]} <b>Device logs</b>\n" + "\n\n".join(items))
 
     # Brief internet drops under the paging floor. Not "covered by the backup": a short drop
     # may never reach the failover at all, with the router's own pings never failing
@@ -1030,54 +1087,59 @@ def format_digest(report: dict, now: Optional[float] = None,
     ww = report.get("wan_watch") or {}
     if ww.get("blips_24h"):
         longest = ww.get("longest_blip_s")
-        lines.append(f"🔵 Internet: {ww['blips_24h']} brief drop(s) in 24h"
-                     + (f", longest {human_duration(longest)}" if longest else "")
-                     + " — under the paging floor, not alerted; the dashboard's Internet "
-                       "card says where each one broke")
+        blocks.append(f"🔵 Internet: {plural(ww['blips_24h'], 'brief drop')} in 24h"
+                      + (f", longest {human_duration(longest)}" if longest else "")
+                      + "\nUnder the paging floor, not alerted."
+                        "\nThe dashboard's Internet card says where each one broke.")
 
     # Things that still work but are getting worse. This is the only part of the digest
     # that looks BACKWARDS rather than at the current sweep, and it is the part that would
     # have caught a failing device before it started crying wolf.
     trends = report.get("trends") or []
     if trends:
-        lines.append("📉 <b>Quietly getting worse</b>")
+        rows = ["📉 <b>Quietly getting worse</b>"]
         for t in trends[:5]:
-            lines.append(f"• {label(t.get('device'), t.get('ip'), idx)}: {t['why']}")
+            facts = str(t["why"]).split("; ")            # one fact a line
+            rows.append(f"• {blabel(t.get('device'), t.get('ip'), idx)}: {_html(facts[0])}")
+            rows += [f"   {_html(x)}" for x in facts[1:]]
+        blocks.append("\n".join(rows))
 
     # What the model's own scheduled looks found since the last digest (reviews.py):
     # slowly changing, what changed in the configurations. Each
-    # item rides ONE digest; the lines are already HTML, escaped where they were written.
+    # item rides ONE digest; the lines are already HTML, escaped where they were written, and
+    # each is several lines of its own: the items are kept apart by a blank line.
     for sec in report.get("review_news") or []:
-        lines.append(f"{sec.get('icon') or '•'} <b>{_html(sec.get('title') or '')}</b> "
-                     "<i>(the owl's look — the dashboard has the rest)</i>")
-        lines += list(sec.get("lines") or [])[:5]
-        if len(sec.get("lines") or []) > 5:
-            lines.append(f"…and {len(sec['lines']) - 5} more on the dashboard")
+        items = list(sec.get("lines") or [])
+        out = f"{sec.get('icon') or '•'} <b>{_html(sec.get('title') or '')}</b>"
+        if items:
+            out += "\n" + "\n\n".join(items[:5])
+        if len(items) > 5:
+            out += f"\n\n…and {len(items) - 5} more on the dashboard"
+        blocks.append(out)
 
     # A newer lanowl release (selfupdate.py): one line, once a version; already HTML.
-    lines += list(report.get("lanowl_news") or [])[:1]
+    blocks += list(report.get("lanowl_news") or [])[:1]
 
     # Every digest names what is paused, because a pause is silence by design and the one
     # way it goes wrong is being forgotten (pause.py).
     paused = report.get("paused") or []
     if paused:
-        lines.append(format_paused(paused, now))
+        blocks.append(format_paused(paused, now))
     # the same for the local model switched off (Auditor.set_model): silence by choice
     if report.get("model_off"):
-        lines.append(format_model_off(report["model_off"], now))
+        blocks.append(format_model_off(report["model_off"], now))
     # what the audit looked at by itself (passive checks, its offline shell),
     # listed like the checks under a Telegram answer
     ran = report.get("checks_ran") or []
     if ran:
-        lines.append("<i>The audit looked for itself:</i>")
-        lines += ran_lines(ran, 8)
+        blocks.append("\n".join(["<i>The audit looked for itself:</i>"] + ran_lines(ran, 8)))
     if report.get("summary"):
         # the model's summary carries the owl's mark; the monitor's own does not (and is never cut)
         by_model = bool(report.get("summary_by_model"))
         text = _untold(report["summary"], owl_ips) if by_model else str(report["summary"])
         if text:
-            lines.insert(sum_at, ("🦉 " if by_model else "") + _html(text))
-    return "\n".join(lines)
+            blocks.insert(1, ("🦉 " if by_model else "") + _html(text))
+    return "\n\n".join(b for b in blocks if b)
 
 
 def format_model_off(m: dict, now: Optional[float] = None) -> str:
@@ -1088,10 +1150,11 @@ def format_model_off(m: dict, now: Optional[float] = None) -> str:
 
 
 def format_paused(paused: list, now: Optional[float] = None) -> str:
-    """'⏸ Paused, no alerts: TV (192.168.10.36) since 20/09 14:02, off; …'"""
+    """'⏸ Paused, no alerts' and a line a device: 'TV (192.168.10.36) since 20/09 14:02, off'."""
     now = time.time() if now is None else now
-    bits = [f"{_html(label(p.get('name'), p.get('ip')))} since {_clock(p['ts'], now)}"
+    bits = [f"• {blabel(p.get('name'), p.get('ip'))} since {_clock(p['ts'], now)}"
             + ("" if p.get("up") is None else (", answering" if p["up"] else ", off"))
             for p in paused[:8]]
-    more = f" …and {len(paused) - 8} more" if len(paused) > 8 else ""
-    return "⏸ <b>Paused, no alerts</b>: " + "; ".join(bits) + more
+    if len(paused) > 8:
+        bits.append(f"…and {len(paused) - 8} more")
+    return "\n".join(["⏸ <b>Paused, no alerts</b>"] + bits)

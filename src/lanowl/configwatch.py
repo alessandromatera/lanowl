@@ -41,8 +41,8 @@ def change_id(c: dict) -> str:
     import zlib
     return f"cfg:{c.get('ip')}:{float(c.get('ts') or 0):.0f}:{zlib.crc32(str(c.get('what') or '').encode()):08x}"
 from .reboot import routeros_field
-from .report import _html, label
-from .reviews import Review, actions_done, clip, today_at, words
+from .report import _html, blabel, label, plural
+from .reviews import MODEL_MAX, Review, actions_done, today_at, words
 
 log = logging.getLogger("lanowl.configwatch")
 
@@ -345,7 +345,7 @@ class ConfigWatch(Review):
                 v = None
         out, covered = [], set()          # (ip, section) the model explained
         if v is not None:
-            self.rec["summary"] = words(v.get("summary"), 400)
+            self.rec["summary"] = words(v.get("summary"), MODEL_MAX)
             for c in v["changes"]:
                 if not isinstance(c, dict):
                     continue
@@ -369,8 +369,8 @@ class ConfigWatch(Review):
                 if risk == "none" and any(risky(s, kind) for s in secs):
                     risk = "low"           # a change where who-gets-in lives is never "nothing"
                 covered |= {(ip, s) for s in secs}
-                out.append(self._item(ip, changed[ip], words(c.get("what"), 200), risk,
-                                      words(c.get("why"), 300), lines[:8], sorted(secs), "model"))
+                out.append(self._item(ip, changed[ip], words(c.get("what"), MODEL_MAX), risk,
+                                      words(c.get("why"), MODEL_MAX), lines[:8], sorted(secs), "model"))
         for ip, ch in changed.items():
             kind = ch["kind"]
             secs = sorted({s for _, _, s in ch["diff"]} - {s for i, s in covered if i == ip})
@@ -380,7 +380,7 @@ class ConfigWatch(Review):
                 continue
             n = sum(1 for _, _, s in ch["diff"] if s in secs)
             hot = [s for s in secs if risky(s, kind)]
-            what = (f"{n} line(s) changed in {', '.join(secs[:4])}" + (" …" if len(secs) > 4 else "")
+            what = (f"{plural(n, 'line')} changed in {', '.join(secs[:4])}" + (" …" if len(secs) > 4 else "")
                     + (" — not explained by the model" if v is not None else ""))
             lines = [f"{sg}{x}"[:300] for sg, x, s in ch["diff"] if s in secs][:8]
             out.append(self._item(ip, ch, what, "high" if hot else "low",
@@ -478,8 +478,9 @@ class ConfigWatch(Review):
         return bool(it and it.get("handled"))
 
     def digest_line(self, c: dict) -> str:
-        return (f"• {_html(label(c['name'], c['ip']))}: {_html(c['what'])} — <b>{_html(c['risk'])}</b>"
-                + (f"\n   <i>{_html(clip(c['why'], 180))}</i>" if c.get("why") else ""))
+        """The device and its risk, what changed, and the owl's why in a quote (owner, 2026-11-20)."""
+        return (f"{blabel(c['name'], c['ip'])} · <b>{_html(c['risk'])}</b>\n{_html(c['what'])}"
+                + (f"\n<blockquote>{_html(c['why'])}</blockquote>" if c.get("why") else ""))
 
     def start_now(self) -> bool:
         return self.start("dashboard")
@@ -503,6 +504,10 @@ class ConfigWatch(Review):
         if not week:
             return [f"{self.ICON} Configurations: nothing changed this week."]
         hot = [c for c in week if c["risk"] in ("high", "critical")]
-        return [f"{self.ICON} Configurations: {len(week)} change(s) this week"
-                + (f", {len(hot)} that change who can get in — the worst: {label(hot[0]['name'], hot[0]['ip'])}: "
-                   f"{hot[0]['what']}" if hot else ", none that change who can get in")]
+        if not hot:
+            return [f"{self.ICON} Configurations: {plural(len(week), 'change')} this week, "
+                    "none that change who can get in"]
+        # a count line, then the worst one as a "• " line (weekly.format_weekly bolds its name)
+        return [f"{self.ICON} Configurations: {plural(len(week), 'change')} this week, {len(hot)} that "
+                f"{'changes' if len(hot) == 1 else 'change'} who can get in — the worst:",
+                f"• {label(hot[0]['name'], hot[0]['ip'])}: {hot[0]['what']}"]

@@ -55,7 +55,7 @@ from .oui import vendor
 from .pause import Pauses, event_detail, intervals, overlaps
 from .prompts import (CALL_AUDIT, CALL_WEEKLY, WEEKLY_SYSTEM, build_user_context, call_block,
                       build_weekly_context, system_prompt, with_actions, with_shell_offline)
-from .report import (_SEV_RANK, check_summary, _html, build_report, digest_fingerprint, format_alerts,
+from .report import (_SEV_RANK, check_summary, _html, blabel, build_report, digest_fingerprint, format_alerts,
                      format_diagnosis_note, format_digest, label, merge_llm, missed_checks,
                      wan_words)
 from .exposure import Exposure
@@ -598,7 +598,7 @@ class Auditor:
         if dev is None:
             return {"ok": False, "changed": False,
                     "text": f"{ip} is not a device lanowl watches."}
-        who = _html(label(dev.name, ip))
+        who = blabel(dev.name, ip)
         now = time.time() if now is None else now
         if paused:
             if ip == self._self_ip:
@@ -616,7 +616,7 @@ class Auditor:
             src = " — from the dashboard" if by == "dashboard" else ""
             still = ("\n<i>It is still unreachable, so from now on it is reported as down.</i>"
                      if self.tracker.status(ip) is False else "")
-            text = f"▶️ <b>Alerts back on</b>{src}\n{who}{still}"
+            text = f"▶️ <b>Alerts back on</b>{src}\n\n{who}{still}"
         self._on_event("pause" if paused else "resume", None, event_detail(ip, dev.name, by), now)
         self._save_pauses()
         log.info("%s %s (%s) — by %s", "PAUSED" if paused else "RESUMED", dev.name, ip, by)
@@ -713,7 +713,7 @@ class Auditor:
         if on:
             self._model_off = None
             self.agent.off = False
-            text = (f"🦉 <b>The owl is awake</b> — local model on{src}\n<i>Audits, diagnoses, answers and reviews are "
+            text = (f"🦉 <b>The owl is awake</b> — local model on{src}\n\n<i>Audits, diagnoses, answers and reviews are "
                     f"back. The first one loads the model, so it takes longer.</i>")
         else:
             self._model_off = {"since": now, "by": by}
@@ -724,7 +724,7 @@ class Auditor:
             self._forget(lambda i: i.get("device") == "Ollama" and i.get("group") == "services",
                          "Ollama")
             self._unload_task = asyncio.ensure_future(self._unload_model())
-            text = (f"🦉 <b>The owl is asleep</b> — local model off{src}\n<i>No audits, diagnoses, answers or reviews "
+            text = (f"🦉 <b>The owl is asleep</b> — local model off{src}\n\n<i>No audits, diagnoses, answers or reviews "
                     f"until you switch it back on (/model on, or on the dashboard). Alerts and "
                     f"digests go on without it.</i>" + ("\nWhat it was doing has been stopped." if n else ""))
         self._on_event("model", 1 if on else 0, by, now)
@@ -755,13 +755,13 @@ class Auditor:
             log.warning("model switch not saved: %s", e)
 
     def _pause_text(self, dev, by: str) -> str:
-        who = _html(label(dev.name, dev.ip))
+        who = blabel(dev.name, dev.ip)
         src = " — from the dashboard" if by == "dashboard" else ""
         how = ("Still pinged and graphed, but nothing about it alerts you until you /resume it "
                "(or switch its alerts back on in the dashboard). The digest reminds you it is paused.")
         crit = ("\n⚠️ A critical device: nothing about it will page you while it is paused."
                 if dev.criticality == "critical" else "")
-        return f"⏸ <b>Paused: no alerts</b>{src}\n{who}\n<i>{how}</i>{crit}"
+        return f"⏸ <b>Paused: no alerts</b>{src}\n\n{who}\n<i>{how}</i>{crit}"
 
     def _forget_incidents(self, ip: str):
         """A device just paused, or about to reboot: close its open incidents without a word
@@ -1087,12 +1087,13 @@ class Auditor:
         # with its text, for "what did you send me on Sunday?" (records.py); with the issue
         # keys it announced, so outages one message announced are one incident on the
         # dashboard's Timeline (timeline.py)
-        self._on_event("telegram", None, json.dumps({"channel": channel, "text": text[:1500],
+        # the whole message: the Timeline shows it under "The whole message" (20000 is only a safety cap)
+        self._on_event("telegram", None, json.dumps({"channel": channel, "text": text[:20000],
                                                      **({"keys": keys} if keys else {}),
                                                      "to": to},
                                                     ensure_ascii=False))
         self._sent_log = (self._sent_log + [{"ts": time.time(), "channel": channel,
-                                             "text": text[:1500], "to": to}])[-80:]
+                                             "text": text[:20000], "to": to}])[-80:]
         if not tg_set_up:
             # Telegram not set up (yet: a new install's setup adds it). Nothing waits in the
             # outbox, which is for a path that failed: it would hand the new chat, once there
@@ -1535,21 +1536,35 @@ class Auditor:
             # the owl's one text about it (its `note`); a model that wrote none still has its
             # cause and advice, as two plain lines
             note = str(i.get("note") or "").strip()
+            # blocks with a blank line between: the header; the device (its name in bold, the
+            # severity beside it) and what is known of it, a fact a line; the owl's words
+            item = [f"<b>{_html(what)}</b> ({_html(x.get('ip') or '')})"
+                    + (f" · <b>{_html(sev)}</b>" if sev not in ("info", "") else ""),
+                    f"MAC {_html(mac)}"]
+            if x.get("site") not in (None, HOUSE):
+                item.append(f"At <b>{_html(x.get('site_name'))}</b>")
+            if x.get("guest"):
+                item.append("Guest Wi-Fi")
+            if x.get("stale"):
+                item.append("Stale ARP entry, no DHCP lease")
+            elif x.get("how") in ("arp", "scan"):
+                item.append("Fixed address, no DHCP")
+            if x.get("host") and maker:
+                item.append(f"<i>{_html(maker)}</i>")
+            item.append(f"First on the network at {when} — never seen here before.")
+            if note:
+                said = f"🦉 {_html(note)}"
+            else:                  # no note: its cause quoted, its advice on its own line
+                said = "\n".join(
+                    ([f"<blockquote>{_html(str(i.get('root_cause') or ''))}</blockquote>"]
+                     if i.get("root_cause") else [])
+                    + ([f"→ {_html(str(i.get('recommendation') or ''))}"]
+                       if i.get("recommendation") else []))
             self._emit_telegram("digest", (
-                f"🆕 <b>NEW DEVICE</b> {time.strftime('%H:%M:%S')}"
-                + (" — <b>" + _html(sev) + "</b>" if sev not in ("info", "") else "") + "\n"
-                f"<b>{_html(what)}</b> ({_html(x.get('ip') or '')}) · {_html(mac)}"
-                + (f" · at <b>{_html(x.get('site_name'))}</b>" if x.get("site") not in (None, HOUSE) else "")
-                + (" · guest Wi-Fi" if x.get("guest") else "")
-                + (" · stale ARP entry, no DHCP lease" if x.get("stale")
-                   else " · fixed address, no DHCP" if x.get("how") in ("arp", "scan") else "") + "\n"
-                + (f"<i>{_html(maker)}</i>\n" if x.get("host") and maker else "")
-                + f"First on the network at {when} — never seen here before.\n"
-                + (f"🦉 {_html(note)}" if note else
-                   (f"<i>{_html(str(i.get('root_cause') or ''))}</i>\n" if i.get("root_cause") else "")
-                   + (f"<i>{_html(str(i.get('recommendation') or ''))}</i>" if i.get("recommendation") else ""))
-            ).rstrip(), event={"category": "new_device", "severity": sev if sev in _SEV_RANK else "info",
-                               "device": {"name": what, "ip": str(x.get("ip") or ""), "mac": mac}})
+                f"🆕 <b>NEW DEVICE</b> {time.strftime('%H:%M:%S')}\n\n" + "\n".join(item)
+                + ("\n\n" + said if said else "")
+            ), event={"category": "new_device", "severity": sev if sev in _SEV_RANK else "info",
+                      "device": {"name": what, "ip": str(x.get("ip") or ""), "mac": mac}})
         if told_any:
             # a device is new for a day: a week of record is plenty to never repeat one
             self._newdev_told = {m: t for m, t in self._newdev_told.items() if now - t < 7 * 86400}
@@ -1808,9 +1823,10 @@ class Auditor:
                                      paused=self._pause_intervals(now),
                                      paused_now=self._last_report.get("paused")
                                      if self._last_report else None)
-        facts["updates"] = (self.updates.weekly_lines() + self.exposure.weekly_lines()
-                            + [ln for r in self.reviews for ln in r.weekly_lines()]
-                            + self.scorecard.weekly_lines())
+        # a list of plain lines per section; the review puts a blank line between sections
+        sections = [self.updates.weekly_lines(), self.exposure.weekly_lines(),
+                    *(r.weekly_lines() for r in self.reviews), self.scorecard.weekly_lines()]
+        facts["updates"] = [sec for sec in sections if sec]
         facts["model_diagnoses_checked"] = self.scorecard.weekly(now)
         facts["by_hand"] = self.actions.by_hand(now)
         facts["security_events"] = self.seclog.weekly(now)
@@ -1857,8 +1873,8 @@ class Auditor:
             self._save_pauses()
         disc_cfg = self.cfg.get("discovery", {})
         if moves and disc_cfg.get("notify_address_changes", True):
-            lines = "\n".join(f"• {m['name']}: {m['old_ip']} → {m['new_ip']}" for m in moves)
-            self._emit_telegram("digest", f"🔁 <b>DHCP address change</b>\n{lines}")
+            lines = "\n".join(f"• <b>{_html(m['name'])}</b>: {m['old_ip']} → {m['new_ip']}" for m in moves)
+            self._emit_telegram("digest", f"🔁 <b>DHCP address change</b>\n\n{lines}")
 
         # The devices with a FIXED address, which no DHCP lists: on one of the main site's
         # networks in the router's ARP table, holding no
@@ -1924,11 +1940,12 @@ class Auditor:
             # Still recorded in history and shown on the dashboard's Discovered panel;
             # only the Telegram ping is opt-in (phones/guests join constantly = noise).
             if disc_cfg.get("notify_new_devices", False):
-                lines = "\n".join(f"• {d['ip']}  {d.get('host') or '(no name)'}  {d['mac']}"
-                                  + (f" — {vendor(d['mac'])}" if vendor(d['mac']) else "")
+                lines = "\n".join(f"• <b>{_html(d.get('host') or '(no name)')}</b> ({d['ip']}) · {d['mac']}"
+                                  + (f" — {_html(vendor(d['mac']))}" if vendor(d['mac']) else "")
                                   for d in new_devs[:8])
                 one = new_devs[0] if len(new_devs) == 1 else None
-                self._emit_telegram("digest", f"🆕 <b>New device(s) on the network</b>\n{lines}", event={
+                self._emit_telegram("digest", f"🆕 <b>New device{'' if len(new_devs) == 1 else 's'} on the network</b>"
+                                              f"\n\n{lines}", event={
                     "category": "new_device",
                     **({"device": {"name": str(one.get("host") or ""), "ip": str(one["ip"]),
                                    "mac": str(one.get("mac") or "")}} if one else {})})

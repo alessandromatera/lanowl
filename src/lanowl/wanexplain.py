@@ -29,7 +29,7 @@ import time
 from typing import Optional
 
 from .model import on_main_lan, wan_links
-from .report import human_duration
+from .report import human_duration, plural
 
 WAN_KINDS = ("main-outage", "blackout", "blip")
 RANK = {"blackout": 0, "main-outage": 1, "blip": 2}
@@ -396,7 +396,7 @@ def verdict(event: dict, ev: Optional[dict], netwatch: Optional[dict] = None,
     elif nw is not None and nw["tests"] > 0 and nw["failed"] == 0:
         where = "lanowl-path"
         lines.append(f"The network kept its internet: the router's own pings to {_hosts(nw['hosts'])} "
-                     f"ran {nw['tests']} test(s) in that time and none failed.")
+                     f"ran {plural(nw['tests'], 'test')} in that time and none failed.")
         if any(r.get("router") is True for r in r_known):
             lines.append("The router answered lanowl all along, so it is not lanowl's "
                          "cable either: only lanowl's own traffic out through the router was "
@@ -414,7 +414,7 @@ def verdict(event: dict, ev: Optional[dict], netwatch: Optional[dict] = None,
         else:
             where = "home"
             lines.append("The router lost the internet too.")
-        lines.append(f"The router's own pings failed {nw['failed']} of {nw['tests']} time(s) in "
+        lines.append(f"The router's own pings failed {nw['failed']} of {plural(nw['tests'], 'time')} in "
                      "that span" + (f", not long enough for its failover to switch to the {backup}."
                                     if L["failover"] else "."))
     elif isp_fail:
@@ -435,7 +435,7 @@ def verdict(event: dict, ev: Optional[dict], netwatch: Optional[dict] = None,
         lines.append("The router's own pings did not run while it lasted (they run every 20 s), "
                      "so they cannot say whether the network had internet.")
     if router_fail and nw is not None and nw["tests"] > 0:
-        lines.append(f"Meanwhile the router's own pings ran {nw['tests']} test(s) and "
+        lines.append(f"Meanwhile the router's own pings ran {plural(nw['tests'], 'test')} and "
                      + ("none failed: the network had internet all along."
                         if nw["failed"] == 0 else f"{nw['failed']} failed: the network lost it too."))
     if slow > tmo + 2:

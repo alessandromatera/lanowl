@@ -63,7 +63,7 @@ from .alerts import NEW, RECOVERED, STILL, AlertGate
 from .discovery import fetch_wan_path, resolve_mikrotik
 from .model import router_host, wan_links
 from .prompts import CALL_SUMMARY
-from .report import _html, human_duration
+from .report import _html, human_duration, plural
 
 log = logging.getLogger("lanowl.wanwatch")
 
@@ -1163,8 +1163,8 @@ class WanWatcher:
         # The owl's one text: its summary, under its mark. The evidence (`detail`) stays on
         # the dashboard: on the phone it repeated the line above it (owner, 2026-10-10).
         said = str(verdict.get("summary", "")).strip()
-        self.on_alert(f"{emoji} <b>ROUTER LOG</b> {when}\n" + (f"🦉 {summary}" if said else summary)
-                      + f"\n<i>from {n} new log line(s)</i>")
+        self.on_alert(f"{emoji} <b>ROUTER LOG</b> {when}\n\n" + (f"🦉 {_html(summary)}" if said else _html(summary))
+                      + f"\n<i>from {plural(n, 'new log line')}</i>")
 
     def _note_finding(self, verdict: dict, n: int, lines: str = ""):
         from .records import kept_lines
@@ -1437,11 +1437,11 @@ class WanWatcher:
             why = self._standby_trouble()
             L = wan_links(self.cfg)
             self.on_alert(
-                f"🔴 <b>NO INTERNET AT ALL</b> {_clock(since)}\n"
+                f"🔴 <b>NO INTERNET AT ALL</b> {_clock(since)}\n\n"
                 + (f"Nothing answers — not the {L['main']}, not the {L['backup']}.\n"
                    if L["failover"] else "Nothing answers.\n")
                 + (f"{_html(why)}\n" if why else "") +
-                f"<i>no reply from {', '.join(self._targets())} since {_clock(since)}"
+                f"\n<i>no reply from {', '.join(self._targets())} since {_clock(since)}"
                 f" ({human_duration(now - since)} ago)</i>", WAN_KEY)
             return
 
@@ -1474,15 +1474,15 @@ class WanWatcher:
                 # ...unless the route already answered AFTER the recovery and said main.
                 # Then there is no second edge coming and this is also that message.
                 self._ep_main_told = True
-                where = f"\n<i>back on the main link '{p['link']}'</i>"
+                where = f"\n\n<i>back on the main link '{p['link']}'</i>"
             elif L["failover"]:
-                where = f"\n<i>you will be told when the {L['main']} is carrying it again</i>"
+                where = f"\n\n<i>you will be told when the {L['main']} is carrying it again</i>"
             else:
                 where = ""
             # what the standby link did meanwhile, while the main one was down
             st = self.standby_now(now)
             self.on_alert(
-                f"🟢 <b>INTERNET IS BACK</b> {_clock(back)}\n"
+                f"🟢 <b>INTERNET IS BACK</b> {_clock(back)}\n\n"
                 f"Back at {_clock(back)}, after {down_for} with no internet at all"
                 + (f" (since {_clock(self._last_down_at)})." if self._last_down_at else ".")
                 + (f"\n{_html(st['line'])}" if st else "")
@@ -1510,7 +1510,7 @@ class WanWatcher:
             on_backup_for = (f", after {human_duration(at - self._backup_since)} on the backup"
                              if self._backup_since and at > self._backup_since else "")
             self.on_alert(
-                f"🟢 <b>BACK ON THE MAIN LINK</b> {_clock(at)}\n"
+                f"🟢 <b>BACK ON THE MAIN LINK</b> {_clock(at)}\n\n"
                 f"'{link}' is carrying the network again as of {_clock(at)}{on_backup_for}.",
                 WAN_KEY)
 
@@ -1569,7 +1569,7 @@ class WanWatcher:
             sevs.append(str(w.get("flap_severity", "critical")))
             parts.append(f"main link dropped to the backup for {f.seconds:.0f}s "
                          f"at {f.start.strftime('%H:%M:%S')} "
-                         f"({self.flap_count_24h()} time(s) in the last 24h)")
+                         f"({plural(self.flap_count_24h(), 'time')} in the last 24h)")
 
         issue = {
             "device": "Internet / WAN", "ip": "-", "group": "wan",

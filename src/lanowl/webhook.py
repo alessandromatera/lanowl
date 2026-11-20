@@ -89,6 +89,8 @@ _TYPES = {"down": "device_down", "recovery": "device_up", "logs": "log_alert",
           "proposal": "proposal", "digest": "digest", "maintenance": "maintenance"}
 
 _TAG = re.compile(r"</?[A-Za-z][^<>]*>")
+_QUOTE_OPEN = re.compile(r"(?<!\n)(?=<blockquote[ >])")       # a quote, with or without `expandable`
+_QUOTE_CLOSE = re.compile(r"</blockquote>(?!\n|$)")
 _TIME = re.compile(r"\s*(?<![\w:])\d{1,2}:\d{2}(?::\d{2})?(?![\w:])")
 _HOLDER = re.compile(r"\{(\w+)\}")
 # the host-log watcher's heads that are about who got in, not about what a log said (hostlog.py)
@@ -100,7 +102,11 @@ def plain(text) -> str:
     """Telegram's HTML as plain text: tags gone, entities decoded, lines kept, runs of blank
     lines folded into one. Tags first, entities after: a model's `&lt;b&gt;` is the text
     "<b>", not a tag."""
-    t = _html.unescape(_TAG.sub("", str(text or ""))).replace("\r", "")
+    # a quote is a block in Telegram: it starts and ends on a line of its own, so its tags
+    # become line breaks (only where there is not one already) before they are dropped
+    t = _QUOTE_OPEN.sub("\n", str(text or ""))
+    t = _QUOTE_CLOSE.sub("\n", t)
+    t = _html.unescape(_TAG.sub("", t)).replace("\r", "")
     out, blank = [], False
     for ln in t.split("\n"):
         ln = ln.rstrip()

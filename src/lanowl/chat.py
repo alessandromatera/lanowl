@@ -52,8 +52,9 @@ from .pause import find_devices
 from .prompts import (CALL_ANSWER, QA_SYSTEM, QA_SYSTEM_CHAT, QA_SYSTEM_TELEGRAM, build_qa_context,
                       investigation_brief, owl_question, with_actions, with_device_commands,
                       with_device_reads, with_memory_tools, with_shell)
-from .report import OWL_MARK, _clock, _html, format_digest, label
+from .report import OWL_MARK, _clock, _html, blabel, format_digest, label, plural
 from .sinks import telegram_call, telegram_direct
+from .updates import tg_item
 
 log = logging.getLogger("lanowl.chat")
 
@@ -304,6 +305,18 @@ class LiveReply:
                 return
 
 
+def _stack(items: list) -> str:
+    """Items as one Telegram section: one-line items on consecutive lines, an item of several
+    lines on its own with a blank line around it."""
+    out: list = []
+    for it in items:
+        if out and "\n" not in it and "\n" not in out[-1]:
+            out[-1] += "\n" + it
+        else:
+            out.append(it)
+    return "\n\n".join(out)
+
+
 class Chat:
     def __init__(self, auditor):
         self.a = auditor
@@ -437,10 +450,10 @@ class Chat:
             elif not found:
                 out.append(f"❓ No device matches <i>{_html(q)}</i>.")
             else:
-                names = "\n".join(f"• {_html(label(d.name, d.ip))}" for d in found[:8])
+                names = "\n".join(f"• {blabel(d.name, d.ip)}" for d in found[:8])
                 more = f"\n…and {len(found) - 8} more" if len(found) > 8 else ""
                 out.append(f"❓ <i>{_html(q)}</i> matches {len(found)} devices — say which "
-                           f"(more of the name, or the address):\n{names}{more}")
+                           f"(more of the name, or the address):\n\n{names}{more}")
         return "\n\n".join(out)
 
     # --- the dashboard's password (login.py) -------------------------------------------------
@@ -490,11 +503,11 @@ class Chat:
             return f"🦉 The owl is off: {NO_MODEL}."
         if v["on"]:
             return (f"🦉 The owl is awake: the local model is <b>on</b>{' (' + _html(v['name']) + ')' if v['name'] else ''}."
-                    "\n<i>/model off</i> switches it off: no diagnoses, answers or reviews; alerts "
+                    "\n\n<i>/model off</i> switches it off: no diagnoses, answers or reviews; alerts "
                     "and digests go on.")
         return (f"🦉 The owl is asleep: the local model is <b>off</b> since {_clock(v['since'] or time.time(), time.time())}"
                 + (" (from the dashboard)" if v["by"] == "dashboard" else "")
-                + ".\n<i>/model on</i> switches it back on.")
+                + ".\n\n<i>/model on</i> switches it back on.")
 
     # --- rebooting ------------------------------------------------------------
     async def reboot_command(self, arg: str) -> str:
@@ -507,23 +520,23 @@ class Chat:
         if not devs:
             return "Rebooting is switched off (actions.enabled)."
         if not arg.strip():
-            return ("Say which: <i>/reboot ap porch</i>, or an address. I can reboot:\n"
-                    + "\n".join(f"• {_html(label(d.name, d.ip))}" for d in devs))
+            return ("Say which: <i>/reboot ap porch</i>, or an address. I can reboot:\n\n"
+                    + "\n".join(f"• {blabel(d.name, d.ip)}" for d in devs))
         found = find_devices(devs, arg) or find_devices(a.inv.devices, arg)
         if not found:
             return f"❓ No device matches <i>{_html(arg)}</i>."
         if len(found) > 1:
-            names = "\n".join(f"• {_html(label(d.name, d.ip))}" for d in found[:8])
+            names = "\n".join(f"• {blabel(d.name, d.ip)}" for d in found[:8])
             return (f"❓ <i>{_html(arg)}</i> matches {len(found)} devices — say which (more of "
-                    f"the name, or the address):\n{names}")
+                    f"the name, or the address):\n\n{names}")
         d = found[0]
         if d.ip not in ips:
-            return f"✋ {_html(label(d.name, d.ip))} is not a device I can reboot."
+            return f"✋ {blabel(d.name, d.ip)} is not a device I can reboot."
         r = await a.actions.ask("reboot", d.ip, "telegram")
         if r.get("refused"):
-            return f"✋ Not rebooting {_html(label(d.name, d.ip))}: {_html(r['refused'])}"
+            return f"✋ Not rebooting {blabel(d.name, d.ip)}: {_html(r['refused'])}"
         if r.get("already"):
-            return (f"⏳ A reboot of {_html(label(d.name, d.ip))} is already waiting for you "
+            return (f"⏳ A reboot of {blabel(d.name, d.ip)} is already waiting for you "
                     f"(#{r['proposal']}) — use its buttons.")
         return ""
 
@@ -537,13 +550,13 @@ class Chat:
             return "Updating from here is switched off (actions.catalog.apt_upgrade)."
         found = find_devices(devs, arg) if arg.strip() else []
         if len(found) != 1:
-            return ("Say which (part of the name, or the address):\n"
-                    + "\n".join(f"• {_html(label(d.name, d.ip))}" for d in devs))
+            return ("Say which (part of the name, or the address):\n\n"
+                    + "\n".join(f"• {blabel(d.name, d.ip)}" for d in devs))
         d = found[0]
         r = await a.actions.ask("routeros_upgrade" if d.ip in ros else "apt_upgrade", d.ip,
                                 "telegram")
         if r.get("refused"):
-            return f"✋ Not updating {_html(label(d.name, d.ip))}: {_html(r['refused'])}"
+            return f"✋ Not updating {blabel(d.name, d.ip)}: {_html(r['refused'])}"
         if r.get("already"):
             return f"⏳ Already waiting for you (#{r['proposal']}) — use its buttons."
         return ""
@@ -556,35 +569,42 @@ class Chat:
         dis = sum(1 for i in items if i["dismissed"])
         handled = len(self.a.seclog.view()["handled"])
         dot = {"critical": "🔴", "high": "🟠", "warning": "🟡"}
-        lines = [f"🛡 <b>Security</b> — {len(top)} thing(s) that matter"]
-        lines += [f"{dot.get(i['sev'], '⚪')} {_html(i['text'])} <i>— {_html(i['from'])}</i>" for i in top[:10]]
-        if not top:
-            lines.append("Nothing that matters right now.")
+        n = len(top)
+        # blocks with a blank line between: the head, the items (a device's name in bold), the notes
+        blocks = [f"🛡 <b>Security</b> — {plural(n, 'thing')} that {'matters' if n == 1 else 'matter'}"]
+        if top:
+            blocks.append("\n".join(f"{dot.get(i['sev'], '⚪')} {tg_item(i)} <i>— {_html(i['from'])}</i>"
+                                    for i in top[:10]))
+        else:
+            blocks.append("Nothing that matters right now.")
+        notes = []
         if later:
-            lines.append(f"\n<i>Worth fixing, not urgent: {len(later)}"
+            notes.append(f"<i>Worth fixing, not urgent: {len(later)}"
                          + (f" · accepted by you: {dis}" if dis else "") + " — the Security tab has them.</i>")
         if any(i.get("id") for i in top):
-            lines.append("<i>A log event stays here until you mark it handled on the Security tab.</i>")
+            notes.append("<i>A log event stays here until you mark it handled on the Security tab.</i>")
         if handled:
-            lines.append(f"<i>Handled by you this week: {handled}.</i>")
+            notes.append(f"<i>Handled by you this week: {handled}.</i>")
         x = self.a.exposure.view()
         if x.get("reviewed"):
-            lines.append(f"<i>The owl's review {_clock(x['reviewed'])}: {_html(x.get('summary') or '')}</i>")
-        return "\n".join(lines)
+            notes.append(f"<i>The owl's review {_clock(x['reviewed'])}: {_html(x.get('summary') or '')}</i>")
+        if notes:
+            blocks.append("\n".join(notes))
+        return "\n\n".join(blocks)
 
     def sites_text(self) -> str:
         """/sites: each site's devices up, the down ones named, what its DHCP holds unknown."""
-        lines = ["🗺 <b>Sites</b>"]
+        rows = []
         for s in self.a.sites.view(self.a._last_report)["sites"]:
             dot = "🔴" if s["down"] else "🟢"
             bit = f"{dot} <b>{_html(s['name'])}</b> {s['up']}/{s['total']} up"
             if s["down"]:
-                bit += " — down: " + _html(", ".join(s["down"][:4]))
+                bit += "\nDown: " + _html(", ".join(s["down"][:4]))
             n = (s.get("dhcp") or {}).get("unknown")
             if n:
-                bit += f" · {n} unknown on its network"
-            lines.append(bit)
-        return "\n".join(lines)
+                bit += f"\n{n} unknown on its network"
+            rows.append(bit)
+        return "🗺 <b>Sites</b>\n\n" + _stack(rows)
 
     def updates_text(self) -> str:
         """/updates: the last daily check, what matters first. Instant — the check itself runs
@@ -598,14 +618,15 @@ class Chat:
         fs = v["findings"]
         head = f"🛡 <b>Updates &amp; security</b> · checked {_clock(v['last'], time.time())}"
         if not fs:
-            return head + "\nNothing waiting."
+            return head + "\n\nNothing waiting."
         def line(f):
+            f = {k: x for k, x in f.items() if k != "why"}       # one line each, its reason inline
             d = f.get("dismissed")
             if d:
-                return (f"☑️ {_html(f['text'])} — <i>dismissed{': ' + _html(d['note']) if d['note'] else ''}"
+                return (f"☑️ {tg_item(f)} — <i>dismissed{': ' + _html(d['note']) if d['note'] else ''}"
                         "</i>")
-            return ("❗ " if f["page"] else "• ") + _html(f["text"])
-        return head + "\n" + "\n".join(line(f) for f in fs[:25])
+            return ("❗ " if f["page"] else "• ") + tg_item(f)
+        return head + "\n\n" + "\n".join(line(f) for f in fs[:25])
 
     def paused_list(self) -> str:
         es = self.a.pauses.entries()
@@ -616,9 +637,9 @@ class Chat:
         lines = [f"⏸ <b>Paused</b> ({len(es)})"]
         for e in es:
             st = {True: "answering", False: "off"}.get(up.get(e["ip"]), "")
-            lines.append(f"• {_html(label(self.a._name(e['ip'], e['name']), e['ip']))} — since "
+            lines.append(f"• {blabel(self.a._name(e['ip'], e['name']), e['ip'])} — since "
                          f"{_clock(e['ts'], time.time())}" + (f", {st}" if st else ""))
-        return "\n".join(lines)
+        return "\n".join(lines[:1] + [""] + lines[1:])
 
     # --- memory, by hand ----------------------------------------------------------
     def memory_command(self, cmd: str, arg: str) -> str:

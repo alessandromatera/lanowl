@@ -51,6 +51,7 @@ from typing import Awaitable, Callable, Optional
 from . import access
 from .prompts import CALL_SUMMARY
 from .records import kept_lines
+from .report import _html, blabel, plural
 from .seclog import rank
 from .wanwatch import verdict_kind
 
@@ -621,18 +622,22 @@ class HostLogWatcher:
             log.warning("host-log: %s LOGIN from %s %s (%s, %s)", h.ip,
                         "untrusted" if not guarded else "the tunnel, past Cloudflare Access,",
                         src, user, method)
+            who = f"{blabel(h.name, h.ip)}: <b>{_html(user)}</b> logged in with a <b>{_html(method)}</b>"
+            # the facts, one a line; the line of the log quoted as it is (a device's own words);
+            # the advice after a blank line (owner, 2026-11-20: readability)
             if tunnel and guarded:
                 head = (f"🟡 <b>LOGIN THROUGH CLOUDFLARE ACCESS</b> {time.strftime('%H:%M:%S')}\n"
-                        f"{h.name} ({h.ip}): <b>{user}</b> logged in with a <b>{method}</b> through "
-                        f"<b>{names}</b> — past the Cloudflare Access login (checked just now).\n")
+                        f"{who} through <b>{_html(names)}</b>\n"
+                        f"Past the Cloudflare Access login (checked just now).\n")
             else:
                 head = (f"🔴 <b>LOGIN FROM AN UNKNOWN ADDRESS</b> {time.strftime('%H:%M:%S')}\n"
-                        f"{h.name} ({h.ip}): <b>{user}</b> logged in with a <b>{method}</b> "
-                        + (f"through the <b>Cloudflare Tunnel</b> (seen as {src}) — from the INTERNET"
+                        + (f"{who} through the <b>Cloudflare Tunnel</b> (seen as {_html(src)})\n"
+                           "From the INTERNET"
                            + (", and Cloudflare Access is NOT in front of it (checked just now)"
                               if guarded is False and h.tunnel_names else "") + ".\n"
-                           if tunnel else f"from <b>{src}</b> — not the network's own address, not a VPN peer.\n"))
-            self.on_alert(head + f"<i>{self._trim(msg)}</i>\n<i>{advice}</i>", key)
+                           if tunnel else f"{who} from <b>{_html(src)}</b>\n"
+                                          "Not the network's own address, not a VPN peer.\n"))
+            self.on_alert(head + f"<i>{_html(self._trim(msg))}</i>\n\n<i>{_html(advice)}</i>", key)
 
     async def _access(self, h: _Host) -> Optional[bool]:
         """Is Cloudflare Access in front of every name routed to this sshd — right now?
@@ -750,9 +755,9 @@ class HostLogWatcher:
                 h.covered[x] = (now, item, "critical")
             self.on_alert(
                 f"🔴 <b>FAILED LOGINS</b> {time.strftime('%H:%M:%S')}\n"
-                f"{h.name} ({h.ip}): {len(msgs)} failed login(s) from <b>{src}</b> "
-                f"in the last {mins} min{who}\n"
-                f"<i>{self._trim(msgs[-1])}</i>", key)
+                f"{blabel(h.name, h.ip)}: {plural(len(msgs), 'failed login')} from <b>{_html(src)}</b> "
+                f"in the last {mins} min{_html(who)}\n"
+                f"<i>{_html(self._trim(msgs[-1]))}</i>", key)
 
     @staticmethod
     def _msg(ln: str) -> str:
@@ -768,7 +773,7 @@ class HostLogWatcher:
         return "" if u in ("password", "publickey", "keyboard-interactive") else u
 
     @staticmethod
-    def _trim(msg: str, n: int = 140) -> str:
+    def _trim(msg: str, n: int = 300) -> str:
         msg = msg.strip()
         return msg if len(msg) <= n else msg[: n - 1] + "…"
 
@@ -798,14 +803,15 @@ class HostLogWatcher:
         if self.seclog is not None:
             self.seclog.add(source=f"host log {h.name}", ip=h.ip, sev="warning", by="rule",
                             key=f"hostlog-conns:{h.ip}",
-                            title=f"{h.conns} established connections from {h.peers} address(es) "
+                            title=f"{h.conns} established connections from {plural(h.peers, 'address')} "
                                   f"— normally well under {ceiling}",
                             detail="Check with: ss -Htn state established | awk '{print $4}' "
                                    "| sort | uniq -c | sort -rn | head")
         self.on_alert(
             f"🟡 <b>CONNECTION FLOOD?</b> {time.strftime('%H:%M:%S')}\n"
-            f"{h.name} ({h.ip}) is holding {h.conns} established TCP connections "
-            f"from {h.peers} address(es) — normally well under {ceiling}.\n"
+            f"{blabel(h.name, h.ip)} is holding {h.conns} established TCP connections "
+            f"from {plural(h.peers, 'address')}\n"
+            f"Normally well under {ceiling}.\n\n"
             f"<i>Check with: ss -Htn state established | awk '{{print $4}}' "
             f"| sort | uniq -c | sort -rn | head</i>",
             f"hostlog-conns:{h.ip}")
@@ -956,9 +962,9 @@ class HostLogWatcher:
         emoji = {"critical": "🔴", "warning": "🟡"}.get(sev, "⚪")
         # the owl's one text under its mark; the evidence stays on the dashboard (wanwatch.py)
         said = str(verdict.get("summary", "")).strip()
-        self.on_alert(f"{emoji} <b>HOST LOG</b> {time.strftime('%H:%M:%S')} — {h.name}\n"
-                      + (f"🦉 {summary}" if said else summary)
-                      + f"\n<i>from {len(batch)} new log line(s) on {h.ip}</i>",
+        self.on_alert(f"{emoji} <b>HOST LOG</b> {time.strftime('%H:%M:%S')} — {blabel(h.name, h.ip)}\n\n"
+                      + (f"🦉 {_html(summary)}" if said else _html(summary))
+                      + f"\n<i>from {plural(len(batch), 'new log line')}</i>",
                       f"hostlog-triage:{h.ip}")
 
     # --- dashboard ---------------------------------------------------------

@@ -44,7 +44,8 @@ try:
 except Exception:  # pragma: no cover
     aiohttp = None
 from .records import scrub
-from .report import _html, label
+from .report import _html, blabel, label, plural
+from .reviews import MODEL_MAX
 
 log = logging.getLogger("lanowl.exposure")
 
@@ -653,17 +654,18 @@ class Exposure:
             sev = sev if sev in SEVERITIES else "warning"
             e = {"key": f"exp:{ip}:{chk}", "ip": ip, "check": chk, "severity": sev,
                  "name": self._name(ip, facts.get(ip)),
-                 "title": " ".join(str(f.get("title") or CHECKS[chk]).split())[:160],
+                 # the title and the fix are told on the phone (_announce): whole, under the safety cap
+                 "title": " ".join(str(f.get("title") or CHECKS[chk]).split())[:MODEL_MAX],
                  "evidence": " ".join(str(f.get("evidence") or "").split())[:300],
-                 "fix": " ".join(str(f.get("fix") or "").split())[:240]}
+                 "fix": " ".join(str(f.get("fix") or "").split())[:MODEL_MAX]}
             old = by.get(e["key"])
             if old is None:
                 by[e["key"]] = e
             elif SEVERITIES.index(sev) < SEVERITIES.index(old["severity"]):
-                e["title"] = f"{e['title']}; {old['title']}"[:240]
+                e["title"] = f"{e['title']}; {old['title']}"[:MODEL_MAX]
                 by[e["key"]] = e
             else:
-                old["title"] = f"{old['title']}; {e['title']}"[:240]
+                old["title"] = f"{old['title']}; {e['title']}"[:MODEL_MAX]
         return sorted(by.values(), key=lambda x: (SEVERITIES.index(x["severity"]), x["key"]))
 
     # --- the owner's side -------------------------------------------------------------------------
@@ -714,12 +716,18 @@ class Exposure:
         self.rec["announced"] = [k for k in self.rec["announced"] if k in keys]
         if not new or not self.paging():
             return
-        lines = ["🔴 <b>Security review</b> " + time.strftime("%H:%M") + " — new and critical:"]
+        # a finding with the owl's fix is a block of its own (name line, the fact, "→ fix");
+        # one without stays a one-line "• " item
+        blocks = ["🔴 <b>Security review</b> " + time.strftime("%H:%M") + " — new and critical:"]
         for f in new[:5]:
-            lines.append(f"• <b>{_html(label(f['name'], f['ip']))}</b>: {_html(f['title'])}"
-                         + (f"\n  <i>{_html(f['fix'])}</i>" if f.get("fix") else ""))
-        lines.append("<i>The owl's review of this morning's facts — the Security tab has the evidence.</i>")
-        self.a._emit_telegram("critical", "\n".join(lines), event={"category": "security"})
+            if f.get("fix"):
+                blocks.append(f"{blabel(f['name'], f['ip'])}\n{_html(f['title'])}\n→ {_html(f['fix'])}")
+            elif blocks[-1].startswith("• "):
+                blocks[-1] += f"\n• {blabel(f['name'], f['ip'])}: {_html(f['title'])}"
+            else:
+                blocks.append(f"• {blabel(f['name'], f['ip'])}: {_html(f['title'])}")
+        blocks.append("<i>The owl's review of this morning's facts — the Security tab has the evidence.</i>")
+        self.a._emit_telegram("critical", "\n\n".join(blocks), event={"category": "security"})
         self.rec["announced"] += [f["key"] for f in new]
 
     # --- reading ------------------------------------------------------------------------------
@@ -742,5 +750,5 @@ class Exposure:
         if not fs:
             return ["🔎 Security review: nothing exposed that the owl could find."]
         worst = fs[0]      # plain text: the weekly review escapes its lines itself
-        return [f"🔎 Security review: {len(fs)} finding(s), the worst {worst['severity']}: "
-                f"{label(worst['name'], worst['ip'])} — {worst['title']}"]
+        return [f"🔎 Security review: {plural(len(fs), 'finding')}, the worst {worst['severity']}:",
+                f"• {label(worst['name'], worst['ip'])}: {worst['title']}"]

@@ -54,7 +54,7 @@ from typing import Optional
 from . import access
 from .checks import _exec
 from .reboot import routeros_field
-from .report import _html, label
+from .report import _html, blabel
 
 log = logging.getLogger("lanowl.backups")
 
@@ -741,10 +741,10 @@ class Backups:
         if kind in ("monthly", "daily") and bad:
             # rule 7: a scheduled run with a failure is one message; the good ones are not news
             self.a._emit_telegram("digest", (
-                f"💾 <b>{'Monthly' if kind == 'monthly' else 'Daily'} backup</b> — {len(bad)} of {len(results)} failed\n"
-                + "\n".join(f"• {_html(label(self.name(m), m['ip'] if m['ip'] != 'shellies' else ''))}: "
+                f"💾 <b>{'Monthly' if kind == 'monthly' else 'Daily'} backup</b> — {len(bad)} of {len(results)} failed\n\n"
+                + "\n".join(f"• {blabel(self.name(m), m['ip'] if m['ip'] != 'shellies' else '')}: "
                             f"{_html(r.get('error') or '?')}" for m, r in bad)
-                + "\n<i>The rest are on the store. Security tab → Backups.</i>"), event={"category": "maintenance"})
+                + "\n\n<i>The rest are on the store. Security tab → Backups.</i>"), event={"category": "maintenance"})
 
     async def _daily(self):
         with contextlib.suppress(Exception):
@@ -761,11 +761,11 @@ class Backups:
         self._save()
         if new:
             self.a._emit_telegram("digest", (
-                "💾 <b>Backups getting old</b>\n"
-                + "\n".join(f"• {_html(self.name(m))}: last good backup "
+                "💾 <b>Backups getting old</b>\n\n"
+                + "\n".join(f"• <b>{_html(self.name(m))}</b>: last good backup "
                             f"{time.strftime('%d/%m/%Y', time.localtime(self.rec['machines'][m['ip']]['last_ok']))}"
                             for m in new)
-                + "\n<i>Security tab → Backups → Back up now.</i>"), event={"category": "maintenance"})
+                + "\n\n<i>Security tab → Backups → Back up now.</i>"), event={"category": "maintenance"})
 
     # --- what others read -------------------------------------------------------------------
     def next_run(self, now: Optional[float] = None) -> float:
@@ -797,7 +797,7 @@ class Backups:
             return "Backups are off (backups.enabled)."
         v = self.view()
         lines = [f"💾 <b>Backups</b> → {_html(v['where'])}",
-                 f"<i>next monthly run {time.strftime('%d/%m %H:%M', time.localtime(v['next']))}</i>"]
+                 f"<i>next monthly run {time.strftime('%d/%m %H:%M', time.localtime(v['next']))}</i>", ""]
         for x in v["machines"]:
             if x["ok"] is False:
                 mark = f"❌ {_html(x['error'] or '')}"
@@ -806,5 +806,5 @@ class Backups:
                         f"{human_size(x['size'])}")
             else:
                 mark = "— never"
-            lines.append(f"• {_html(x['name'])}: {mark}")
+            lines.append(f"• <b>{_html(x['name'])}</b>: {mark}")
         return "\n".join(lines)

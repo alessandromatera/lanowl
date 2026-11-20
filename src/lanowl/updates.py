@@ -35,7 +35,7 @@ from . import kinds, probes
 from .checks import _exec
 from .model import on_own_network, scan_deny, scan_state
 from .reboot import fmt_s, proc_uptime, routeros_field
-from .report import _html, label
+from .report import _html, label, plural
 
 log = logging.getLogger("lanowl.updates")
 
@@ -508,7 +508,7 @@ class Updates:
                     oldest = min((self.rec["first_seen"].get(ip) or {}).get(p, now) for p in sec)
                     out.append({"key": f"secupd:{ip}", "ip": ip,
                                 "page": now - oldest > SECURITY_PAGE_S, "fp": sorted(set(sec)),
-                                "text": f"{who}: {len(sec)} security update(s) not installed "
+                                "text": f"{who}: {plural(len(sec), 'security update')} not installed "
                                         f"for {fmt_s(now - oldest)} — {', '.join(sec[:6])}"
                                         + ("…" if len(sec) > 6 else "")})
                 la = h.get("lists_ts")
@@ -523,13 +523,14 @@ class Updates:
                 held = [u for u in rest if u.get("phased")]
                 if rest:
                     out.append({"key": f"upd:{ip}", "ip": ip, "page": False,
-                                "text": f"{who}: {len(rest) - len(held)} update(s) waiting"
+                                "text": f"{who}: {plural(len(rest) - len(held), 'update')} waiting"
                                         + (f" + {len(held)} held back by Ubuntu's phased "
-                                           "rollout (they come by themselves)" if held else "")}
+                                           f"rollout ({_by_itself(len(held), 'comes', 'come')})" if held else "")}
                                if len(rest) > len(held) else
                                {"key": f"upd:{ip}", "ip": ip, "page": False,
-                                "text": f"{who}: {len(held)} update(s) held back by Ubuntu's "
-                                        "phased rollout — they install by themselves in a few days"})
+                                "text": f"{who}: {plural(len(held), 'update')} held back by Ubuntu's "
+                                        f"phased rollout — {_by_itself(len(held), 'installs', 'install')} "
+                                        "in a few days"})
             elif h.get("kind") == "routeros":
                 inst, lat = h.get("installed", ""), h.get("latest", "")
                 if lat and vkey(lat) > vkey(inst):
@@ -547,7 +548,7 @@ class Updates:
                 if ups:
                     names = ", ".join(u["pkg"] for u in ups[:6]) + ("…" if len(ups) > 6 else "")
                     out.append({"key": f"upd:{ip}", "ip": ip, "page": False,
-                                "text": f"{who}: {len(ups)} update(s) waiting — {names}"})
+                                "text": f"{who}: {plural(len(ups), 'update')} waiting — {names}"})
             elif h.get("kind") == "homeassistant":
                 for u in h.get("ha_updates") or []:
                     out.append({"key": f"ha:{u['entity']}", "ip": ip, "page": False,
@@ -563,15 +564,19 @@ class Updates:
             # (cves.py); only one that APPLIES pages
             app = self.applying(ip)
             who = label(self._name(ip), ip)
+            why = ""
             if app:
                 top = max(app, key=lambda x: x[0].get("cvss") or 0)
-                text = (f"{who}: {len(app)} known vulnerabilit{'y' if len(app) == 1 else 'ies'} "
+                why = str(top[1].get("why") or "")
+                text = (f"{who}: {plural(len(app), 'known vulnerability', 'known vulnerabilities')} "
                         f"≥ CVSS {CVSS_PAGE:g} appl{'ies' if len(app) == 1 else 'y'} — worst "
                         f"{top[0]['id']} ({top[0]['cvss']:g}) in "
-                        f"{top[0]['product'] or 'port ' + str(top[0]['port'])}: {top[1].get('why', '')}")
+                        f"{top[0]['product'] or 'port ' + str(top[0]['port'])}: {why}")
             else:
                 text = f"{who}: {self.cve_words(ip)}"
             out.append({"key": f"cve:{ip}", "ip": ip, "page": bool(app), "text": text,
+                        # kept apart too, so Telegram can quote the reason under the fact
+                        **({"why": why} if why else {}),
                         "fp": sorted({x["id"] for x, _ in app})})
         # the owner's dismissals: out of the list, paging nothing, while nothing new — a
         # non-urgent one as much as one that matters (the Security tab is one list, and its
@@ -696,12 +701,12 @@ class Updates:
         self._save()
         if not new_ips:
             return
-        lines = [f["text"] for f in self.findings() if f["key"].startswith("cve:") and f["ip"] in new_ips]
+        fs = [f for f in self.findings() if f["key"].startswith("cve:") and f["ip"] in new_ips]
         self.a._emit_telegram("digest", (
             f"🛡 <b>{'Monthly vulnerability scan' if 'scan' in reason else 'Known vulnerabilities'}</b> — "
-            f"{len(new_ips)} device(s) with a known vulnerability that applies (CVSS ≥ {CVSS_PAGE:g})\n"
-            + "\n".join(f"• {_html(x)}" for x in lines[:12])
-            + "\n<i>Each one checked against the machine's own build or NVD, then read by the model. "
+            f"{plural(len(new_ips), 'device')} with a known vulnerability that applies (CVSS ≥ {CVSS_PAGE:g})\n\n"
+            + tg_items(fs[:12])
+            + "\n\n<i>Each one checked against the machine's own build or NVD, then read by the model. "
               "Every match, with why, is on the dashboard: Security → Deep scan results.</i>"),
             event={"category": "maintenance"})
 
@@ -735,10 +740,10 @@ class Updates:
         if not new:
             return
         self.a._emit_telegram("digest", (
-            f"🛡 <b>Updates &amp; security</b> — {len(new)} new\n"
-            + "\n".join(f"• {_html(f['text'])}" for f in new[:12])
+            f"🛡 <b>Updates &amp; security</b> — {len(new)} new\n\n"
+            + tg_items(new[:12])
             + (f"\n…and {len(new) - 12} more" if len(new) > 12 else "")
-            + "\n<i>Everything else is on the dashboard, under Security.</i>"), event={"category": "maintenance"})
+            + "\n\n<i>Everything else is on the dashboard, under Security.</i>"), event={"category": "maintenance"})
 
     # --- the monthly scan -----------------------------------------------------------------
     async def scan(self, reason: str = "scheduled") -> dict:
@@ -821,8 +826,8 @@ class Updates:
                          + (f", {how}" if how else "") + ". The list is up to date now")
             return {"ok": False, "note": f"{name} has nothing to update{since}"
                                          + (f" — {held} held back by Ubuntu's phased rollout, "
-                                            "they install by themselves" if held else "")}
-        chk = {"ok": True, "note": f"{n} update(s) waiting ({sec} security)", "before": n,
+                                            f"{_by_itself(held, 'installs', 'install')}" if held else "")}
+        chk = {"ok": True, "note": f"{plural(n, 'update')} waiting ({sec} security)", "before": n,
                "risk": []}
         plan = await self.a.backups.snapshot_plan(ip)
         if plan is not None:
@@ -900,14 +905,14 @@ class Updates:
         done = max(0, int(chk.get("before") or 0) - left - held)
         # the runner proposes the reboot from this flag (actions._reboot_after); the words only say it
         pend = bool(f.get("reboot_since"))
-        tail = "; a reboot finishes them" if pend else ""
+        tail = f"; a reboot finishes {'it' if done == 1 else 'them'}" if pend else ""
         if m.group(1) != "0":
             return {"ok": False, "ran": True,
                     "error": f"apt-get failed (exit {m.group(1)}) — {done} installed, {left} left"
-                             + ("; a reboot is pending" if pend else "")}
+                             + ("\nA reboot is pending" if pend else "")}
         self.start("after an upgrade")          # the dashboard's list, at once
-        said = (f"{done} package(s) updated" + (f", {left} left" if left else "")
-                + (f", {held} held back by Ubuntu's phased rollout (they come by themselves)"
+        said = (f"{plural(done, 'package')} updated" + (f", {left} left" if left else "")
+                + (f", {held} held back by Ubuntu's phased rollout ({_by_itself(held, 'comes', 'come')})"
                    if held else ""))
         return {"ok": True, "ran": True, "result": said + tail, "updated": said,
                 "reboot_pending": pend}
@@ -1047,20 +1052,21 @@ class Updates:
             if not r2.get("ok"):
                 self.start("after an upgrade")
                 return {"ok": False, "ran": True,
-                        "error": "; ".join(parts + [f"firmware flashed, then: {r2.get('error')}"])}
+                        "error": "\n".join(_lines(parts + [f"firmware flashed, then: {r2.get('error')}"]))}
             rb2 = await self._routerboard(ip)
             if rb2["fw"] != rb2["fw_new"] or not rb2["fw"]:
                 self.start("after an upgrade")
                 return {"ok": False, "ran": True,
-                        "error": "; ".join(parts + [f"rebooted, but the firmware is still "
-                                                    f"{rb2['fw'] or '?'} (expected {rb['fw_new']})"])}
+                        "error": "\n".join(_lines(parts + [f"rebooted, but the firmware is still "
+                                                           f"{rb2['fw'] or '?'} (expected {rb['fw_new']})"]))}
             parts.append(f"firmware {rb['fw']} → {rb2['fw']}")
             last = r2
         self.start("after an upgrade")
         if last is None:
             return {"ok": False, "ran": False, "error": "nothing was left to update"}
-        return {"ok": True, "ran": True,
-                "result": "; ".join(parts) + "; " + last["result"].replace("rebooted — ", "")}
+        # one fact a line: the new version, the firmware, how the reboot went
+        steps = parts + [last["result"].replace("rebooted — ", "")]
+        return {"ok": True, "ran": True, "result": "\n".join(_lines(steps))}
 
     async def _ros_package(self, ip: str, name: str, chk: dict, hold: float) -> dict:
         """RouterOS itself: download, reboot, read the version back. {"ok", "step"|"error"}."""
@@ -1156,27 +1162,85 @@ class Updates:
                           for x, d in cves[:40]]}
 
     def weekly_lines(self) -> list:
-        """The weekly review's lines: what is waiting, in one or two lines."""
+        """The weekly review's lines: what is waiting, then what matters and what the owner
+        dismissed — a count line, and one "• " line per finding under it (weekly.format_weekly
+        puts the device's name in bold on those)."""
         if not self.enabled or not self.rec.get("hosts"):
             return []
         fs = self.findings()
         n = sum(1 for f in fs if f["key"].startswith(("upd:", "secupd:", "ros:", "ha:")))
         pages = [f for f in fs if f["page"]]
-        line = f"🛡 Updates: {n} thing(s) waiting to be updated"
+        lines = [f"🛡 Updates: {plural(n, 'thing')} waiting to be updated"]
         if pages:
-            line += f", {len(pages)} that matter: " + "; ".join(f["text"] for f in pages[:3])
+            lines.append(f"{len(pages)} that matter:")
+            lines += [f"• {f['text']}" for f in pages[:3]]
         dism = [f for f in fs if f.get("dismissed")]
         if dism:
             # known to the owner: not news, and the reason is theirs
-            line += (f"; {len(dism)} dismissed by the owner as known: "
-                     + "; ".join(f["text"] + (f" (owner: {f['dismissed']['note']})"
-                                              if f["dismissed"]["note"] else "")
-                                 for f in dism[:4]))
-        return [line]
+            lines.append(f"{len(dism)} dismissed by the owner as known:")
+            lines += [f"• {f['text']}" + (f" (owner: {f['dismissed']['note']})"
+                                          if f["dismissed"]["note"] else "")
+                      for f in dism[:4]]
+        return lines
 
 
 def _sq(text: str) -> str:
     return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+def _lines(steps: list) -> list:
+    """What a run did, each fact as a line of its own, each starting with a capital."""
+    return [s[:1].upper() + s[1:] for s in steps]
+
+
+def _by_itself(n: int, one: str, many: str) -> str:
+    """'it comes by itself' / 'they come by themselves': the verb and the pronoun follow the count."""
+    return f"it {one} by itself" if n == 1 else f"they {many} by themselves"
+
+
+def tg_item(f: dict) -> str:
+    """A finding as Telegram HTML: the device's name in bold, its address plain.
+
+    The finding's text is plain and starts with "Name (ip): ", the way the dashboard shows
+    it, so the name is found by its address; a Home Assistant entity (no address in its text)
+    leads with its title instead. One line, "Name (ip): what"; a finding that carries the
+    reason apart (`why`, the model's or the code's) is the name line, the fact, and the reason
+    quoted under it. Anything else is escaped as it is."""
+    text, ip = str(f.get("text") or ""), str(f.get("ip") or "")
+    why = str(f.get("why") or "")
+    if why and text.endswith(": " + why):
+        text = text[:-len(why) - 2]
+    else:
+        why = ""
+    tag = f"({ip}): "
+    i = text.find(tag) if ip else -1
+    if i > 0 and text[i - 1] == " ":
+        name, sep, fact = f"<b>{_html(text[:i - 1])}</b> ({_html(ip)})", ": ", text[i + len(tag):]
+    elif ip and text.startswith(f"{ip}: "):             # a device known only by its address
+        name, sep, fact = f"<b>{_html(ip)}</b>", ": ", text[len(ip) + 2:]
+    elif str(f.get("key") or "").startswith("ha:") and ": " in text:
+        head, _, fact = text.partition(": ")
+        name, sep = f"<b>{_html(head)}</b>", ": "
+    else:
+        name, sep, fact = "", "", text
+    if why:
+        return (f"{name}\n" if name else "") + f"{_html(fact)}\n<blockquote>{_html(why)}</blockquote>"
+    return f"{name}{sep}{_html(fact)}"
+
+
+def tg_items(fs: list) -> str:
+    """The findings as one Telegram section. A one-line item is a "• " line; one with the
+    reason quoted under it (several lines) stands as a block of its own, a blank line around."""
+    blocks: list = []                       # a run of "• " lines is one block, a quoted item its own
+    for f in fs:
+        item = tg_item(f)
+        if "\n" in item:
+            blocks.append(item)
+        elif blocks and blocks[-1].startswith("• "):
+            blocks[-1] += "\n• " + item
+        else:
+            blocks.append("• " + item)
+    return "\n\n".join(blocks)
 
 
 def _last(text: str) -> str:

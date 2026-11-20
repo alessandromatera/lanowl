@@ -213,7 +213,7 @@ class Login:
             self._save()
             chat = self._chat()
             self.a._emit_telegram("digest", (
-                f"🔒 <b>Dashboard login locked until {_hm(self._locked_until)}</b>\n"
+                f"🔒 <b>Dashboard login locked until {_hm(self._locked_until)}</b>\n\n"
                 f"{MAX_FAILS} wrong {what}s in a row"
                 + (f", the last from {ip}" if ip else "") + "."
                 + (" /password sets a new one and lifts the lock." if chat and not self.cfg_raw else "")),
@@ -295,7 +295,7 @@ class Login:
         elif chat:
             lines.append("Or send /password, then the password: I delete your message and keep "
                          "only its hash.")
-        return "\n".join(lines)
+        return lines[0] + "\n\n" + "\n".join(lines[1:])
 
     def ask_text(self) -> Optional[str]:
         """/password with nothing after it: the refusal, or None when it may ask."""

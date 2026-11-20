@@ -487,7 +487,7 @@ class Records:
             if not ok(text):
                 continue
             out.append({"at": _at(e["ts"]), "channel": d.get("channel") or e["detail"],
-                        "text": re.sub(r"</?[a-z]+>", "", text)[:1200]})
+                        "text": re.sub(r"</?[a-z]+(?: [^<>]*)?>", "", text)[:1200]})
             if len(out) >= limit:
                 break
         return {"messages": out, "record_starts": _at(self._first_event("telegram"))}

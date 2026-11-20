@@ -35,10 +35,18 @@ WAN_NEAR_S = 180.0    # an internet outage this close to an incident's start is 
 RAN = ("done", "failed", "running")       # approved and not run (skipped, cancelled) did nothing
 STORY_S = 86400.0     # a log check or config change that names a new device within a day is its story
 TOLD_S = 120.0        # a digest leaves within this of the audit that wrote it
+FULL_MAX = 20000      # a message is shown whole ("The whole message"); the cap is only a safety
 _CIDR = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3}/\d{1,2})(?![\d])")
 # a device's name too common to say that a line is about it ("MikroTik", "iPhone")
 _GENERIC = {"mikrotik", "iphone", "ipad", "android", "espressif", "raspberrypi", "unknown",
             "localhost", "router", "laptop", "desktop", "galaxy", "routerboard"}
+
+
+def _plain(text) -> str:
+    """A Telegram message's words without its tags (<b>Name</b> (ip) is "Name (ip)"), so a name
+    or a title is found in it however the message is dressed."""
+    t = re.sub(r"<[^>]+>", "", str(text or ""))
+    return t.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
 
 
 def _first_line(text: str) -> str:
@@ -274,7 +282,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                 if not (a - 60 <= m["ts"] <= b + 1500):
                     continue
                 keys = {_key_ip(k) for k in m.get("keys") or []} - {""}
-                if (keys & ips) or (not keys and any(n and n in m.get("text", "") for n in names)):
+                if (keys & ips) or (not keys and any(n and n in _plain(m.get("text", "")) for n in names)):
                     told.append({"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
                                  **_to(m)})
                     attached.add(id(m))
@@ -313,7 +321,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                       "status": p.get("status"), "via": p.get("via"), "owner": bool(p.get("owner")),
                       "words": p.get("words"), "decided_from": p.get("decided_from"),
                       "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
-                                "full": str(m.get("text") or "")[:1500], **_to(m)} for m in told]})
+                                "full": str(m.get("text") or "")[:FULL_MAX], **_to(m)} for m in told]})
     for day, ps in refused.items():
         items.append({"type": "refused", "ts": max(p["ts"] for p in ps), "n": len(ps),
                       "ids": [p.get("id") for p in ps]})
@@ -322,7 +330,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
     for x in (seclog.get("open") or []) + (seclog.get("handled") or []):
         if (x.get("ts") or 0) >= since and x.get("id") not in sids:
             told = [m for m in telegram if abs(m["ts"] - (x.get("ts") or 0)) <= 900 and x.get("title")
-                    and str(x["title"])[:40] in m.get("text", "")]
+                    and str(x["title"])[:40] in _plain(m.get("text", ""))]
             attached.update(id(m) for m in told)
             items.append({"type": "security", "ts": x["ts"], "id": x.get("id"), "title": x.get("title"),
                           "sev": x.get("sev"), "ip": x.get("ip"), "source": x.get("source"),
@@ -359,7 +367,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
                          # when the router or lanowl last HEARD from it — not when a table last listed it
                          "last": r.get("heard"), "here": bool(r.get("here")),
                          "told": [{"ts": m["ts"], "channel": m.get("channel"), "text": _first_line(m.get("text")),
-                                   "full": str(m.get("text") or "")[:1500], **_to(m)} for m in told]})
+                                   "full": str(m.get("text") or "")[:FULL_MAX], **_to(m)} for m in told]})
     st = stories(news, others, tuple(lan))
     for d in news:
         d["owl"] = owl_words(d, list(audits))
@@ -375,7 +383,7 @@ def assemble(rows: list, wan: list, telegram: list, actions: list, seclog: dict,
     for m in telegram:
         if m["ts"] >= since:
             items.append({"type": "telegram", "ts": m["ts"], "channel": m.get("channel"),
-                          "text": _first_line(m.get("text")), "full": str(m.get("text") or "")[:1500],
+                          "text": _first_line(m.get("text")), "full": str(m.get("text") or "")[:FULL_MAX],
                           **_to(m), **({"attached": True} if id(m) in attached else {})})
     for r in renames:                                # the owner's names (names.py)
         if (r.get("ts") or 0) >= since:

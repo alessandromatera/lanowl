@@ -40,6 +40,7 @@ import time
 from typing import Optional
 
 from . import probes
+from .report import plural
 
 log = logging.getLogger("lanowl.reboot")
 
@@ -150,7 +151,7 @@ class Rebooter:
         # what goes dark with it and is not on its Wi-Fi: the tunnels behind the VPS
         chk["clients"] = sorted(set(wifi) | {str(x) for x in d.get("also_hold") or []} - {ip})
         if chk.get("ok") and chk["clients"]:
-            chk["note"] += (f"; alerts held for {len(chk['clients'])} more device(s) "
+            chk["note"] += (f"; alerts held for {plural(len(chk['clients']), 'more device')} "
                             + ("on its Wi-Fi" if wifi else "behind it"))
         return chk
 

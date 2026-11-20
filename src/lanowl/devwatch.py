@@ -53,7 +53,8 @@ from typing import Callable, Optional
 from .model import router_host
 from .prompts import CALL_SUMMARY
 from .records import kept_lines
-from .report import _html, human_duration, label
+from .report import _html, blabel, human_duration, label, plural
+from .reviews import MODEL_MAX
 from .wanwatch import verdict_kind
 
 log = logging.getLogger("lanowl.devwatch")
@@ -944,8 +945,10 @@ class DevWatch:
                 return
             st["told"] = True
             offers = st.get("partner") or ""
-            self.on_alert(f"🟡 <b>LINK SLOWER</b> {stamp} — <b>{_html(who)}</b>\n"
-                          f"{_html(p.name)} is at <b>{_html(link_words(p.mbps, p.full))}</b>; it usually runs at "
+            # the header, then the device and what is wrong with it, a fact a line
+            self.on_alert(f"🟡 <b>LINK SLOWER</b> {stamp} — {blabel(t.name, t.ip)}\n\n"
+                          f"{_html(p.name)} is at <b>{_html(link_words(p.mbps, p.full))}</b>.\n"
+                          f"It usually runs at "
                           f"{_html(link_words(int(st['usual']), bool(st.get('usual_full', True))))}."
                           + (f"\n<i>The other end offers: {_html(offers)}</i>" if offers else ""),
                           f"link:{t.ip}:{p.name}")
@@ -958,11 +961,11 @@ class DevWatch:
             st["quiet"] = now
         if not told:
             return
-        self.on_alert(f"🟢 <b>LINK BACK</b> {stamp} — <b>{_html(who)}</b>\n"
+        self.on_alert(f"🟢 <b>LINK BACK</b> {stamp} — {blabel(t.name, t.ip)}\n\n"
                       f"{_html(p.name)} is at {_html(link_words(p.mbps, p.full))} again, after "
                       f"{_html(human_duration(st.get('back_after') or 0))} at "
                       f"{_html(speed_words(int(st.get('low_mbps') or 0)))}."
-                      + (f"\n<i>The {_nth(len(st['cycles']))} time this week: the device behind it "
+                      + (f"\n\n<i>The {_nth(len(st['cycles']))} time this week: the device behind it "
                          "changes the link by itself (one going to sleep does). Not told again; its "
                          "sheet still shows it.</i>" if by_itself else ""),
                       f"link:{t.ip}:{p.name}")
@@ -1358,7 +1361,7 @@ class DevWatch:
         if later:
             self.rec["digest"] = (list(self.rec.get("digest") or [])
                                   + [{"ts": now, "ip": t.ip, "name": t.name, "severity": sev,
-                                      "summary": summary[:500],
+                                      "summary": summary[:MODEL_MAX],
                                       "at": min((line_time(ln, now) for ln in batch if _line_tags(ln)), default=now)}])[-DIGEST_MAX:]
             self._save()
             log.info("devwatch: %s: %s — for the next digest (a %s device)", t.name, summary[:80],
@@ -1367,9 +1370,9 @@ class DevWatch:
         if not notify:
             return
         emoji = {"critical": "🔴", "warning": "🟡"}.get(sev, "⚪")
-        self.on_alert(f"{emoji} <b>DEVICE LOG</b> {time.strftime('%H:%M:%S')} — <b>{_html(label(t.name, t.ip))}</b>\n"
+        self.on_alert(f"{emoji} <b>DEVICE LOG</b> {time.strftime('%H:%M:%S')} — {blabel(t.name, t.ip)}\n\n"
                       + (f"🦉 {_html(summary)}" if summary else "something unusual in its log")
-                      + f"\n<i>from {len(batch)} new log line(s)</i>", f"devlog:{t.ip}")
+                      + f"\n<i>from {plural(len(batch), 'new log line')}</i>", f"devlog:{t.ip}")
 
     # --- the digest ------------------------------------------------------------------------------
     def digest_news(self) -> list:

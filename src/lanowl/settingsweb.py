@@ -1303,7 +1303,7 @@ class SettingsRoutes:
             rec = getattr(self.a, "_on_event", None)        # in the Timeline with every other line it sent
             if callable(rec):
                 import json
-                rec("telegram", None, json.dumps({"channel": "digest", "text": line[:1500], "to": ["telegram"]},
+                rec("telegram", None, json.dumps({"channel": "digest", "text": line[:20000], "to": ["telegram"]},
                                                  ensure_ascii=False))
         else:
             log.warning("setup: the Telegram line was not sent (%s): %s", str(j.get("description") or "?")[:120], line)
@@ -1370,15 +1370,15 @@ def _switches(cfg: dict) -> dict:
 
 
 def setup_line(devs: list, cfg_router: bool, chat: bool, ip: str) -> str:
-    """The setup's Telegram line: what it set, in one sentence."""
+    """The setup's Telegram message: the header, then what it set and what happens next."""
     n = len(devs)
     nl = sum(1 for d in devs if d.get("credentials"))
     bits = [f"{n} device{'' if n == 1 else 's'}" + (f" ({nl} with a login)" if nl else "")] if n else []
     bits += ["the router's DHCP list"] if cfg_router else []
     bits += ["this chat"] if chat else []
     where = f" ({html.escape(ip)})" if ip else ""
-    return (f"🦉 <b>lanowl is set up</b> from the dashboard{where}: " + (", ".join(bits) or "its files")
-            + ". It restarts now, then watches them.")
+    return (f"🦉 <b>lanowl is set up</b> from the dashboard{where}\n\n" + (", ".join(bits) or "its files")
+            + ".\nIt restarts now, then watches them.")
 
 
 def arp_nets(cfg: dict) -> list:

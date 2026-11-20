@@ -14,13 +14,14 @@ top — which of those numbers deserve the owner's attention, and why.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Optional
 
 from . import wanexplain
 from .model import wan_links
 from .pause import overlaps
-from .report import _html, format_model_off, format_paused, human_duration, label
+from .report import _html, blabel, format_model_off, format_paused, human_duration, label, plural
 from .sweep import offline_mode_ips
 
 _DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -186,9 +187,29 @@ def compute_facts(state, inv, wanwatch=None, hostlog=None, discovery: Optional[d
     return facts
 
 
+_IPV4 = r"(?:\d{1,3}\.){3}\d{1,3}"
+_ITEM = re.compile(rf"^• (?:(.+?) \(({_IPV4})\)|({_IPV4}))(?=:|$| )")
+
+
+def _line_html(line: str) -> str:
+    """One plain line of a section as Telegram HTML. A "• " line that opens with a device —
+    "• Name (192.168.10.x): what", or a bare address — gets the name in bold; the rest is
+    escaped as written."""
+    m = _ITEM.match(line)
+    if m and m.group(3):
+        return f"• <b>{m.group(3)}</b>{_html(line[m.end():])}"
+    if m:
+        return f"• <b>{_html(m.group(1))}</b> ({m.group(2)}){_html(line[m.end():])}"
+    return _html(line)
+
+
 def format_weekly(facts: dict, narrative: Optional[str]) -> str:
-    """The message. The numbers are always there; the model's note is on top when it wrote one."""
-    lines = [f"📅 <b>Week in review</b> · {facts.get('period', '')}"]
+    """The message. The numbers are always there; the model's note is on top when it wrote one.
+
+    Blocks with a blank line between: the header, the owl's note, the numbers, then each
+    section of `facts["updates"]` (a list of plain lines per section — updates, the security
+    review, configurations — or a bare line), then what the owner does by hand."""
+    lines = [f"📅 <b>Week in review</b> · {facts.get('period', '')}", ""]
     if narrative:
         lines += ["🦉 " + _html(narrative.strip()), ""]      # the model's note: the owl's mark
     lines.append("<b>Numbers</b>")
@@ -199,7 +220,7 @@ def format_weekly(facts: dict, narrative: Optional[str]) -> str:
                 if lw is not None else "")
         longest = f", longest {w['main_longest']}" if w.get("main_longest") else ""
         name = str(w.get("main_name") or "Main link")
-        lines.append(f"🌐 {name[:1].upper() + name[1:]}: {w['main_drops']} drop(s), {w['main_down_total']} down"
+        lines.append(f"🌐 {name[:1].upper() + name[1:]}: {plural(w['main_drops'], 'drop')}, {w['main_down_total']} down"
                      f"{longest}{cmp_}")
     nia = w.get("no_internet_at_all") or {}
     since = f" (tracked since {w['blackouts_tracked_since']})" if w.get("blackouts_tracked_since") else ""
@@ -209,9 +230,10 @@ def format_weekly(facts: dict, narrative: Optional[str]) -> str:
     d = facts.get("devices") or {}
     if d.get("watched"):
         worst = (d.get("worst_uptime") or [None])[0]
-        tail = (f"; worst {worst['device']} {worst['uptime_pct']}% · {worst['outages']} outage(s)"
-                if worst else "")
-        lines.append(f"📟 Devices: {d['at_or_above_99_5_pct']}/{d['watched']} at ≥99.5%{tail}")
+        lines.append(f"📟 Devices: {d['at_or_above_99_5_pct']}/{d['watched']} at ≥99.5%")
+        if worst:        # its own line: the worst one, its name first
+            lines.append(f"• {blabel(worst['device'])}: {worst['uptime_pct']}% · "
+                         f"{plural(worst['outages'], 'outage')} (the worst)")
     if facts.get("paused_by_owner"):
         lines.append(format_paused(facts["paused_by_owner"]))
     if facts.get("model_off"):
@@ -219,7 +241,7 @@ def format_weekly(facts: dict, narrative: Optional[str]) -> str:
     m = facts.get("messages_sent") or {}
     if m:
         cs = f" (since {m['counted_since']})" if m.get("counted_since") else ""
-        lines.append(f"✉️ Sent: {m.get('alerts', 0)} alert(s), {m.get('digests', 0)} digest(s){cs}")
+        lines.append(f"✉️ Sent: {plural(m.get('alerts', 0), 'alert')}, {plural(m.get('digests', 0), 'digest')}{cs}")
     n = facts.get("new_on_network") or {}
     if n.get("count"):
         lines.append(f"🆕 New on the network: {n['count']}"
@@ -227,21 +249,26 @@ def format_weekly(facts: dict, narrative: Optional[str]) -> str:
                         if n.get("with_random_mac") else ""))
     lc = facts.get("log_checks") or {}
     if lc.get("triaged"):
-        lines.append(f"🔎 Log checks: {lc['triaged']} batch(es) read, "
+        lines.append(f"🔎 Log checks: {plural(lc['triaged'], 'batch')} read, "
                      f"{len(lc.get('problems') or [])} worth reporting")
     for h in facts.get("public_hosts") or []:
         nz = h.get("last_24h") or {}
         if nz.get("attempts"):
-            lines.append(f"🛡️ {h['host']}: {nz['attempts']:,} failed passwords from "
+            lines.append(f"🛡️ {blabel(h['host'])}: {nz['attempts']:,} failed passwords from "
                          f"{nz['sources']} addresses in 24h")
     se = facts.get("security_events") or {}                       # seclog.py
     if se.get("raised_this_week") or se.get("still_open"):
         lines.append(f"🛡️ Security events from the logs: {se.get('raised_this_week', 0)} this week"
                      + (f", {len(se['still_open'])} still open on the Security tab"
                         if se.get("still_open") else ", all handled"))
-    lines += [_html(x) for x in facts.get("updates") or []]      # updates.py
-    for b in facts.get("by_hand") or []:                          # Actions.by_hand
-        lines.append(_html(f"🔁 By hand, again and again: {b['action']}"
-                           + (f" — {b['device']}" if b.get("device") else "")
-                           + f", {b['n']}× in 30 days. A standing order could do it for you: ask."))
+    for sec in facts.get("updates") or []:                        # updates.py, exposure.py, reviews…
+        sec = [sec] if isinstance(sec, str) else sec
+        lines += ["", *[_line_html(x) for x in sec]]
+    by_hand = facts.get("by_hand") or []                          # Actions.by_hand
+    if by_hand:
+        lines += ["", "🔁 By hand, again and again:"]
+        for b in by_hand:
+            who = f"{blabel(b['device'])}: " if b.get("device") else ""
+            lines.append(f"• {who}{_html(b['action'])}, {b['n']}× in 30 days")
+        lines.append("A standing order could do it for you: ask.")
     return "\n".join(lines)

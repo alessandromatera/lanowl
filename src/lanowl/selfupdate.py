@@ -340,8 +340,8 @@ class SelfUpdate:
         r = await updater_call("update")
         if r.get("ok"):
             who = f" (asked from {_html(by)})" if by else ""
-            self._tell(f"{self.ICON} <b>lanowl is updating</b> to {_html(self.latest_version())}{who}: it restarts "
-                       "in a minute; the old one comes back if the new one does not answer in 3 minutes")
+            self._tell(f"{self.ICON} <b>lanowl is updating</b> to {_html(self.latest_version())}{who}\n\n"
+                       "It restarts in a minute.\nThe old one comes back if the new one does not answer in 3 minutes.")
         return r
 
     def start_auto(self, now: float):
@@ -354,8 +354,8 @@ class SelfUpdate:
             self.rec["auto_error"] = "" if r.get("ok") else str(r.get("error") or "the updater refused")[:300]
             self._save()
             if r.get("ok"):
-                self._tell(f"{self.ICON} <b>lanowl is updating by itself</b> to {_html(v)} ({_html(self.at)}): "
-                           "it restarts in a minute; the old one comes back if the new one does not answer in 3 minutes")
+                self._tell(f"{self.ICON} <b>lanowl is updating by itself</b> to {_html(v)} ({_html(self.at)})\n\n"
+                           "It restarts in a minute.\nThe old one comes back if the new one does not answer in 3 minutes.")
         asyncio.ensure_future(go())
 
     # --- the clock ---------------------------------------------------------------------------
@@ -413,7 +413,7 @@ class SelfUpdate:
         elif d.get("state") == "rolled_back":
             why = str(d.get("reason") or "")[:700]
             self._tell(f"↩️ <b>lanowl update rolled back</b>: the old one runs again"
-                       + (f" ({_html(frm)})" if frm else "") + ("\nthe new one's last log lines:\n<pre>"
+                       + (f" ({_html(frm)})" if frm else "") + ("\n\nthe new one's last log lines:\n<pre>"
                                                               + _html(why) + "</pre>" if why else ""))
         else:
             self._tell(f"{self.ICON} <b>lanowl update did not start</b>: {_html(str(d.get('reason') or '')[:300])}")

@@ -65,7 +65,8 @@ from typing import Optional
 from . import probes
 from .checks import PASSIVE, CheckError, Checks, KEEP_OUT, _exec, parse_nmap_xml  # noqa: F401 (tests patch A._exec)
 from .reboot import Rebooter
-from .report import PROPOSAL_MARK, _html, label
+from .report import PROPOSAL_MARK, _html, blabel, label, plural
+from .reviews import MODEL_MAX
 from .sinks import TelegramRejected, telegram_call, telegram_direct, telegram_edit
 from .model import on_main_lan, on_own_network, scan_choice
 
@@ -154,6 +155,33 @@ def _from_words(who) -> str:
 
 def _hm(ts: float) -> str:
     return time.strftime("%H:%M", time.localtime(ts))
+
+
+def _cut(text: str, n: int) -> str:
+    """The text cut to n characters, without half a quote: Telegram refuses markup that is
+    left open, and a quote is what the owl's reasons are in."""
+    if len(text) <= n:
+        return text
+    text = text[:n]
+    if text.count("<blockquote") > text.count("</blockquote>"):
+        text = text.rsplit("<blockquote", 1)[0].rstrip()
+    return text
+
+
+def _gist(text: str, n: int = 300) -> str:
+    """The owl's reason on a card that would not fit Telegram whole: cut at a word with "…" (the
+    dashboard has it whole). Only ever the reason: a card's command, risks and check stay whole."""
+    t = " ".join(str(text or "").split())
+    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _fit(base: str, room: int) -> str:
+    """The alert above the cards, cut at a line to leave them the room they need. A line of
+    lanowl's carries its tags whole, so a cut at a line leaves no tag open."""
+    if len(base) <= room:
+        return base
+    cut = base.rfind("\n", 0, max(room - 2, 0))
+    return (base[:cut] if cut > 0 else "").rstrip() + "\n…"
 
 
 def _after_reboot(gen: int, default: str, on: Optional[bool]) -> Optional[bool]:
@@ -428,7 +456,7 @@ class Actions:
         now = time.time()
         p = {"id": None, "action": str(args.get("action") or "").strip(),
              "ip": str(args.get("ip") or "").strip(),
-             "reason": " ".join(str(args.get("reason") or "").split())[:300],
+             "reason": " ".join(str(args.get("reason") or "").split())[:MODEL_MAX],      # the owl's, whole
              "via": src["via"], "ts": now, "args": {}, "risk": [], "mode": self.mode}
         if src.get("owner"):
             p["owner"] = True
@@ -1118,7 +1146,7 @@ class Actions:
                       and x.get("status") == "pending"), None)
         if p is None:
             goal = " ".join(str(args.get("reason") or args.get("goal") or
-                                src.get("question") or "").split())[:300]
+                                src.get("question") or "").split())[:MODEL_MAX]       # the owl's goal, whole
             n = plan["args"]
             focus = next((x for x in (n.get("device"), n.get("target")) if x and self.a.inv.get(x)), "")
             p = {"id": None, "action": "investigate", "ip": focus, "reason": goal or "investigate",
@@ -1347,7 +1375,7 @@ class Actions:
         o = p["outcome"]
         if p["ip"] not in self.rebootable():
             o["reboot_by_hand"] = True
-            o["result"] = f"{o.get('result', '')} — reboot it yourself"
+            o["result"] = f"{o.get('result', '')}\n→ Reboot it yourself"
             return None
         cur = next((x for x in self.items if x["ip"] == p["ip"] and x["action"] == "reboot"
                     and x.get("status") in ("pending", "running")), None)
@@ -1362,7 +1390,7 @@ class Actions:
                 r = {"refused": "the proposal failed"}
             if not r.get("proposal") or r.get("refused"):
                 o["reboot_by_hand"] = True
-                o["result"] = f"{o.get('result', '')} — reboot it yourself"
+                o["result"] = f"{o.get('result', '')}\n→ Reboot it yourself"
                 return None
             cur = made = self._get(r["proposal"])
         else:
@@ -1371,7 +1399,7 @@ class Actions:
             return None
         o["reboot_pid"] = cur["id"]
         # said once and kept: true later too, when the reboot has run (the page says where it stands)
-        o["result"] = f"{o.get('result', '')} — Reboot #{cur['id']} proposed"
+        o["result"] = f"{o.get('result', '')}\n→ Reboot #{cur['id']} proposed"
         return made["id"] if made else None
 
     async def _run(self, p: dict, chk: dict) -> dict:
@@ -1431,9 +1459,9 @@ class Actions:
                     now_r = int(rows[0][0])
                     peers = [int(r[1]) for r in rows[1:] if len(r) == 2]
                     back = sum(1 for t in peers if t and now_r - t < 40)
-                    result += f"; {back} of {len(peers)} peers handshook again within 20 s"
+                    result += f"\n{back} of {len(peers)} peers handshook again within 20 s"
                 except (IndexError, ValueError):
-                    result += "; could not read the peers' handshakes"
+                    result += "\nCould not read the peers' handshakes"
             return {"ok": state == "active", "ran": True, "result": result,
                     **({} if state == "active" else
                        {"error": f"{unit}.service is {state} after the restart"})}
@@ -1455,8 +1483,9 @@ class Actions:
                    else self.a.updates.ros_upgrade_run)
             res = await run(p["ip"], p.get("name") or p["ip"], chk)
             if words:
+                # its own line: what the update did, then what was kept safe first
                 key = "result" if res.get("ok") else "error"
-                res[key] = f"{res.get(key, '')} · {words}"
+                res[key] = f"{res.get(key, '')}\n{cap_first(words)}"
             return res
 
         if action == "device_command":
@@ -1502,10 +1531,12 @@ class Actions:
         icon = {"done": "✅", "failed": "⚠️", "skipped": "⏭"}.get(p["status"], "•")
         what = o.get("result") or o.get("error") or o.get("check") or ""
         src = _from_words(p.get("decided_from"))
+        # the header (and which browser), then the result on lines of its own: what ran,
+        # what was kept safe first, what comes next
         return (f"{icon} <b>Approved on the dashboard</b> — #{p['id']} "
-                f"{_html(CATALOG[p['action']])}, {_html(label(p.get('name'), p['ip']))}\n"
-                + (f"<i>from {_html(src)}</i>\n" if src else "")
-                + f"{_html(what)}")
+                f"{_html(CATALOG[p['action']])}, {blabel(p.get('name'), p['ip'])}"
+                + (f"\n<i>from {_html(src)}</i>" if src else "")
+                + f"\n\n{_html(what)}")
 
     def tick(self, now: Optional[float] = None):
         """Expire what nobody answered. Called every sweep and before any decision."""
@@ -1564,7 +1595,8 @@ class Actions:
         if st == "done" and o.get("dry_run"):
             return f"approved on {by} at {_hm(p['decided_ts'])} — DRY RUN, nothing was executed"
         if st == "done":
-            return f"approved on {by} at {_hm(p['decided_ts'])} and RUN: {o.get('result', '')}"
+            result = " · ".join((o.get("result") or "").split("\n"))     # one sentence here
+            return f"approved on {by} at {_hm(p['decided_ts'])} and RUN: {result}"
         if st == "failed":
             return (f"approved on {by} at {_hm(p['decided_ts'])}, "
                     f"{'ran but ' if o.get('ran') else ''}FAILED: {o.get('error', '')}")
@@ -1579,65 +1611,73 @@ class Actions:
         return str(st)
 
     def _session_block(self, p: dict, alone: bool, tight: bool = False) -> str:
+        """The session as blocks with a blank line between: the head (and the owl's goal, quoted),
+        what it asks to run, where it stands, the checks it ran, the owl's findings."""
         st, o = p["status"], p.get("outcome") or {}
         by = _VIA.get(p.get("decided_by"), "")
-        focus = f" — {_html(label(p.get('name'), p['ip']))}" if p.get("ip") else ""
-        lines = [f"🔎 <b>{'' if alone else '#' + str(p['id']) + ' '}Investigation session</b>{focus}"]
+        focus = f" — {blabel(p.get('name'), p['ip'])}" if p.get("ip") else ""
+        head = [f"🔎 <b>{'' if alone else '#' + str(p['id']) + ' '}Investigation session</b>{focus}"]
         if p.get("reason"):
-            lines.append(f"<i>Goal (model): {_html(p['reason'])}</i>")
+            head.append(f"<blockquote>Goal (model): {_html(_gist(p['reason']) if tight else p['reason'])}</blockquote>")
+        plan, status = [], []
         planned = (p.get("args") or {}).get("planned") or []
         dry = p.get("mode", SHADOW) != LIVE
         if st == "pending":
             if planned:
-                lines.append("Wants to run: " + "; ".join(_html(x) for x in planned))
-            lines.append(f"Up to {p.get('max', self.sess_checks)} read-only checks in "
-                         f"{p.get('minutes', self.sess_min):g} min, from the catalog only. A "
-                         "restart or reboot still asks you separately.")
-            lines.append(f"⏳ Waiting for you until {_hm(p['expires'])} · <i>approving opens the "
-                         f"session{' (dry run: nothing is executed)' if dry else ''}</i>")
+                plan.append("Wants to run:")
+                plan += [f"• {_html(x)}" for x in planned]
+            plan.append(f"Up to {p.get('max', self.sess_checks)} read-only checks in "
+                        f"{p.get('minutes', self.sess_min):g} min, from the catalog only. A "
+                        "restart or reboot still asks you separately.")
+            status.append(f"⏳ Waiting for you until {_hm(p['expires'])} · <i>approving opens the "
+                          f"session{' (dry run: nothing is executed)' if dry else ''}</i>")
         elif st == "open":
-            lines.append(f"🟢 <b>Open</b> until {_hm(p['until'])} — approved on {by} · "
-                         f"{p.get('used', 0)}/{p.get('max')} checks")
+            status.append(f"🟢 <b>Open</b> until {_hm(p['until'])} — approved on {by} · "
+                          f"{p.get('used', 0)}/{p.get('max')} checks")
         elif st == "done":
-            lines.append(f"⏹ {_html(cap_first(self._status_words(p)))}")
+            status.append(f"⏹ {_html(cap_first(self._status_words(p)))}")
         elif st == "rejected":
-            lines.append(f"✖️ Rejected on {by} at {_hm(p['decided_ts'])}")
+            status.append(f"✖️ Rejected on {by} at {_hm(p['decided_ts'])}")
         elif st == "expired":
-            lines.append(f"⌛ Expired unanswered at {_hm(p['expires'])}")
-        steps = p.get("steps") or []
+            status.append(f"⌛ Expired unanswered at {_hm(p['expires'])}")
+        steps, ran = p.get("steps") or [], []
         shown = steps[-(4 if tight else STEPS_SHOWN):]
         if len(steps) > len(shown):
-            lines.append(f"<i>…{len(steps) - len(shown)} earlier checks on the dashboard</i>")
+            ran.append(f"<i>…{plural(len(steps) - len(shown), 'earlier check')} on the dashboard</i>")
         for x in shown:
-            lines.append(f"{'✓' if x.get('ok') else '✗'} {_html(x.get('label', ''))} — "
-                         f"{_html(str(x.get('summary', ''))[:90 if tight else 160])}")
+            ran.append(f"{'✓' if x.get('ok') else '✗'} {_html(x.get('label', ''))} — "
+                       f"{_html(str(x.get('summary', ''))[:90 if tight else 160])}")
+        said = []
         if p.get("findings"):
             f = p["findings"]
             n = 400 if tight else 1500
             f = f if len(f) <= n else f[:n].rstrip() + " […]"
-            lines.append(f"🦉 <b>Findings</b> (the owl, {_hm(p['findings_ts'])}):\n{_html(f)}")
+            said.append(f"🦉 <b>Findings</b> (the owl, {_hm(p['findings_ts'])}):\n{_html(f)}")
         elif p.get("findings_error"):
-            lines.append(f"⚠️ {_html(p['findings_error'])}")
+            said.append(f"⚠️ {_html(p['findings_error'])}")
         elif st == "open":
-            lines.append("⏳ <i>The owl is investigating…</i>")
-        return "\n".join(lines)
+            said.append("⏳ <i>The owl is investigating…</i>")
+        return "\n\n".join("\n".join(b) for b in (head, plan, status, ran, said) if b)
 
     def _block(self, p: dict, alone: bool, tight: bool = False) -> str:
+        """One proposal as blocks with a blank line between: the head with the device in bold,
+        the command and why (the owl's reason quoted), the risks and the check, where it stands."""
         if p.get("action") == "investigate":
             return self._session_block(p, alone, tight)
-        who = _html(label(p.get("name"), p["ip"]))
-        lines = [f"{PROPOSAL_MARK} <b>{'' if alone else '#' + str(p['id']) + ' '}{_html(CATALOG[p['action']])}"
-                 f"</b> — {who}",
-                 f"<code>{_html(p.get('command') or '')}</code>"]
+        head = [f"{PROPOSAL_MARK} <b>{'' if alone else '#' + str(p['id']) + ' '}{_html(CATALOG[p['action']])}"
+                f"</b> — {blabel(p.get('name'), p['ip'])}"]
+        what = [f"<code>{_html(p.get('command') or '')}</code>"]
         if p.get("owner"):
-            lines.append(f"<i>Asked by you on {_VIA.get(p['via'], p['via'])}</i>")
+            what.append(f"<i>Asked by you on {_VIA.get(p['via'], p['via'])}</i>")
         elif p.get("after"):
-            lines.append(f"<i>{_html(p['reason'])}</i>")      # lanowl's words, not the owl's
+            what.append(f"<i>{_html(p['reason'])}</i>")      # lanowl's words, not the owl's
         elif p.get("reason"):
-            lines.append(f"<i>Why (model): {_html(p['reason'])}</i>")
-        lines += [f"⚠️ {_html(r)}" for r in p.get("risk") or []]
+            why = _gist(p["reason"]) if tight else p["reason"]
+            what.append(f"<blockquote>Why (model): {_html(why)}</blockquote>")
+        checked = [f"⚠️ {_html(r)}" for r in p.get("risk") or []]
         if p.get("check"):
-            lines.append(f"Checked: {_html(p['check'])}")
+            checked.append(f"Checked: {_html(p['check'])}")
+        lines: list = []                                   # where it stands
         st, o = p["status"], p.get("outcome") or {}
         by = _VIA.get(p.get("decided_by"), "")
         dry = p.get("mode", SHADOW) != LIVE
@@ -1658,12 +1698,16 @@ class Actions:
             lines.append(f"✅ <b>Approved</b> on {by} at {_hm(p['decided_ts'])} — <b>dry run, "
                          f"nothing was executed</b>. At approval: {_html(o.get('check', ''))}")
         elif st == "done":
-            lines.append(f"✅ <b>Done</b> — approved on {by} at {_hm(p['decided_ts'])}: "
-                         f"{_html(o.get('result', ''))}")
+            # a result of several lines (what ran, what was kept safe, what comes next) starts
+            # under the head, one fact a line
+            res = str(o.get("result") or "")
+            lines.append(f"✅ <b>Done</b> — approved on {by} at {_hm(p['decided_ts'])}:"
+                         + ("\n" if "\n" in res else " ") + _html(res))
             lines += [f"<code>{_html(x)}</code>" for x in (o.get("lines") or [])[:25]]
         elif st == "failed":
-            lines.append(f"⚠️ <b>Failed</b> — approved on {by} at {_hm(p['decided_ts'])}: "
-                         f"{_html(o.get('error', ''))}")
+            err = str(o.get("error") or "")
+            lines.append(f"⚠️ <b>Failed</b> — approved on {by} at {_hm(p['decided_ts'])}:"
+                         + ("\n" if "\n" in err else " ") + _html(err))
         elif st == "skipped":
             lines.append(f"⏭ Approved on {by} at {_hm(p['decided_ts'])}, but not run: "
                          f"{_html(o.get('check', ''))}")
@@ -1671,7 +1715,7 @@ class Actions:
             lines.append(f"✖️ Rejected on {by} at {_hm(p['decided_ts'])}")
         elif st == "expired":
             lines.append(f"⌛ Expired unanswered at {_hm(p['expires'])}")
-        return "\n".join(lines)
+        return "\n\n".join("\n".join(b) for b in (head, what, checked, lines) if b)
 
     def _compose(self, m: dict) -> tuple:
         """(text, reply_markup) for one message that carries proposals."""
@@ -1684,8 +1728,12 @@ class Actions:
         alone = not key and len(ps) == 1
         text = "\n\n".join([x for x in (base, head) if x] + [self._block(p, alone) for p in ps])
         if len(text) > 3900:              # Telegram's limit is 4096; a session can grow past it
-            text = "\n\n".join([x for x in (base, head) if x] +
-                                [self._block(p, alone, tight=True) for p in ps])[:4000]
+            # the cards first: each one's command, risks and check whole (only the owl's reason
+            # shortened), then the alert above them cut to the room left — never the card a
+            # button approves (security check 2026-11-20: a long reason pushed the card out)
+            cards = "\n\n".join([x for x in (head,) if x] + [self._block(p, alone, tight=True) for p in ps])
+            base = _fit(base, 3900 - len(cards) - 2) if base else ""
+            text = _cut("\n\n".join([x for x in (base, cards) if x]), 4000)
         rows = []
         for p in ps:
             sfx = "" if alone else f" #{p['id']}"
@@ -1756,7 +1804,7 @@ class Actions:
                 p["tg"] = ids[0]
         # it got here because Telegram delivered it; the webhook too when it queued its copy
         self.a._sent_log = (self.a._sent_log + [{"ts": time.time(), "channel": "action",
-                                                 "text": text[:1500],
+                                                 "text": text[:20000],
                                                  "to": ["telegram"] + (["webhook"] if webhook else [])}])[-80:]
         self._save()
 
