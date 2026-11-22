@@ -63,9 +63,9 @@ Then:
 
 - the file as it was is kept, in lanowl's state (`settings-versions`, the last 30 of each
   file);
-- Telegram gets one line: which file, from which address, what changed (the first three
-  changes, and how many more). It goes to the chat lanowl runs with, so a save that points
-  `telegram.chat_id` somewhere else is still heard where you are;
+- Telegram gets a short message: which file, from which address, then what changed, a change
+  a line (the first three, and how many more). It goes to the chat lanowl runs with, so a save
+  that points `telegram.chat_id` somewhere else is still heard where you are;
 - nothing runs differently yet. Settings says "Saved, not running yet" and the gear has a
   blue dot until lanowl restarts.
 
@@ -89,7 +89,7 @@ missing.
 - **Public key**: lanowl's own, with the line that adds it to a machine's `authorized_keys`.
 
 The changes say
-"login routers: password replaced", never a value; Telegram gets one line
+"login routers: password replaced", never a value; Telegram gets a short message
 naming the login or token, and History keeps the file as it was (mode 600). lanowl reads the
 new file at once: no restart. A token set in the environment (`LANOWL_TG_TOKEN`) says so and
 is changed there.
@@ -252,7 +252,7 @@ Settings, as **Add from the router's list**.
    three files, in words, never a value: `secrets.yaml` (the logins and the tokens),
    `config.yaml` (the router, the chat, Home Assistant's address, the features switched on),
    `inventory.yaml` (the example's devices out, its comments kept; a dynamic address gets its
-   MAC). One button writes them, and lanowl restarts and watches them; Telegram gets one line
+   MAC). One button writes them, and lanowl restarts and watches them; Telegram gets a short message
    saying what was set up, sent with the bot and the chat this step wrote.
 
 The welcome's time zone is in use at once (the log, the digests and the page read local time

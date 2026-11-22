@@ -58,12 +58,18 @@ The proposal shows what will run, the owl's reason, the result of its check, and
 
 ```text
 📜 Reboot the device — Cam Garage (192.168.88.23)
+
 Home Assistant: button.press button.garage_cam_plug_restart
-Why (model): dark since 13:35 while the other four cameras answer; its plug can power-cycle it
+▎ Why (model): dark since 13:35 while the other four cameras answer; its plug can power-cycle it
+
 Checked: through Home Assistant's button.garage_cam_plug_restart
+
 ⏳ Waiting for you until 14:28 · approving runs it
 [ ✅ Approve ] [ ✖️ Reject ]
 ```
+
+The owl's reason is a quote (the ▎ line). However long it or the alert above it, the card keeps
+its command, risks and check whole: the reason is shortened first, then the alert.
 
 When you approve, the check runs again (the network may have moved on), then the action,
 one at a time, and the same message is edited with what happened. A proposal nobody answers
@@ -89,9 +95,12 @@ device kind's read-only list comes to you first, with the command itself:
 
 ```text
 📜 Run a command — Barn Switch (192.168.88.7)
+
 /interface ethernet reset-counters ether3
-Why (model): its error counters add up months of history; reset, they show whether errors still grow
+▎ Why (model): its error counters add up months of history; reset, they show whether errors still grow
+
 ⚠️ Not on the read-only list — ‘reset-counters’ changes something. It may CHANGE Barn Switch; it runs as admin over ssh. Read the command before you approve.
+
 ⏳ Waiting for you until 10:05 · approving runs it
 [ ✅ Approve ] [ ✖️ Reject ]
 ```

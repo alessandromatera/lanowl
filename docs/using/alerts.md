@@ -87,12 +87,17 @@ there is something new to say**:
 ```text
 ⚪ lanowl digest — DEGRADED
 26/27 up · WAN OK
+
 🦉 Hoo. Cam Garage (192.168.88.23) is down and needs you.
+
 🟠 Cam Garage (192.168.88.23): unreachable (icmp) — since 13:35:00
-   ↳ Stopped answering at 13:35; the four other cameras on the same PoE switch answer, so
-     not the switch. Its DHCP lease is still bound: it lost power or hung. → Power-cycle it
-     with its smart plug; if it stays dark, check the cable at the garage end.
+▎ Stopped answering at 13:35; the four other cameras on the same PoE switch answer, so
+▎ not the switch. Its DHCP lease is still bound: it lost power or hung.
+→ Power-cycle it with its smart plug; if it stays dark, check the cable at the garage end.
 ```
+
+Each block is apart from the next, the device's name is in bold, and the owl's cause is a quote
+(the ▎ lines) with its advice on the → line under it. The owl's words arrive whole.
 
 When the audit ran checks of its own, the digest ends with them: "The audit looked for itself",
 then a 🪶 line for each, ✗ for one that failed.
@@ -126,7 +131,7 @@ device, the next digest.
 | It is back at its usual speed | 🟢 **LINK BACK**, with how long it was slower — only if you were told it dropped. A port slower for a week runs at its new speed: that is its usual from then on |
 | The same port drops and comes back twice in a week | The second LINK BACK says the device behind it changes the link by itself; then nothing more about that port until a month passes with no change |
 | Its log shows something that is not normal, on a critical device | 🟡 or 🔴 **DEVICE LOG**: one 🦉 text from the owl, with the device's own words. Nothing for the first `quiet_days` (7): kept on the Timeline instead |
-| The same, on any other device | A line under **Device logs** in the next digest: the owl's newest note on it, and how many since the last digest. It never sends a digest by itself: one still waiting at 08:00 goes with the first digest after it |
+| The same, on any other device | A block under **Device logs** in the next digest: the device's name in bold, the owl's newest note on it under it, and how many since the last digest. It never sends a digest by itself: one still waiting at 08:00 goes with the first digest after it |
 
 One event is one block in a digest: when a device's open issue and its log note are about the same
 thing, the digest shows the owl's line once, under the issue, and the owl's opening summary does not

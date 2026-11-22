@@ -18,7 +18,7 @@ Write-only: a password or a token goes in from the page, and no page shows it ag
   device or `config.yaml` still names the login, and says which.
 
 Each save, from a logged-in browser, says what changes
-by name ("login routers: password replaced"), Telegram gets one line naming the login or token,
+by name ("login routers: password replaced"), Telegram gets a short message naming the login or token,
 and the file as it was is kept in lanowl's state (mode 600, the last 30 versions): History can
 put it back. A value set in the environment (`LANOWL_TG_TOKEN`, below) is not changed from
 the page: it says where it comes from.
