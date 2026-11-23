@@ -182,13 +182,16 @@ def model_name(cfg: dict) -> str:
 def think_setting(cfg: dict):
     """config.yaml's `model.think`, one for every call: False, True (the model's own default
     level) or the name of a level the model lists (Ollama's /api/show: low, medium, xhigh…).
-    Not set: True. YAML reads on/off/yes/no as true/false; quoted, they mean the same here."""
+    Not set: True. YAML reads on/off/yes/no as true/false; quoted, they mean the same here.
+    "none" is not off: some models list it as a level of their own and Ollama reads it, so it
+    is sent as the word "none" (a model that does not list it gets its default, like any
+    other level it does not list)."""
     t = model_cfg(cfg).get("think", True)
     if isinstance(t, str):
         s = t.strip().lower()
         if s in ("", "true", "on", "yes"):
             return True
-        if s in ("false", "off", "no", "none"):
+        if s in ("false", "off", "no"):
             return False
         return s
     return True if t is None else bool(t)

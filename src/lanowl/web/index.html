@@ -4009,10 +4009,22 @@ function renderAll() {
   else if (S.sheetProp != null) renderSheet();
 }
 
-let busy = false, lastOk = 0;
+let busy = false, lastOk = 0, swOn = null;   // swOn: the model switch as the last state said (null: none seen yet)
 function applyState(d) {
   NOW = d.now || Date.now() / 1000; gotAt = Date.now(); lastOk = Date.now();
   S.d = d;
+  // The model switch changed, from here or from anywhere else (/model on on Telegram): what Settings
+  // loaded before is stale (the model's thinking levels), so it is read again, and The model
+  // is redrawn once it is here. Unsaved edits are in ST.edits and stay.
+  const on = (d.model_switch || {}).on;
+  if (swOn !== null && typeof on === "boolean" && on !== swOn && ST.data) {
+    const prev = ST.data;
+    setData(true).then(D => {
+      if (!D || D.ok === false) ST.data = prev;       // not answered: keep what was there
+      else if (S.tab === "set" && S.setp === "set/s/model") renderSet();
+    }).catch(() => {});
+  }
+  if (typeof on === "boolean") swOn = on;
   renderAll();
   if (!draftsBack) restoreDrafts();
 }

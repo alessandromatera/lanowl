@@ -214,7 +214,8 @@ class LlmAgent:
         # agent sends — audit, questions, weekly review, log triages. None = no memory.
         self.memory = None
         # The owner's switch (Auditor.set_model). While off, every call returns
-        # None at once and Ollama is asked nothing, whichever caller forgot to check; `cut()`
+        # None at once and Ollama is asked nothing (but the model's listing, think_levels, for
+        # Settings), whichever caller forgot to check; `cut()`
         # makes the calls in flight return None too. None is a model that failed, and every
         # caller already carries on without one.
         self.off = False

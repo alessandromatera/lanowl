@@ -693,7 +693,8 @@ class Auditor:
     def set_model(self, on: bool, by: str, now: Optional[float] = None) -> dict:
         """Switch the local model on or off. `by`: dashboard | telegram.
 
-        Off: Ollama is asked nothing — no audits, no diagnosis on alerts, no cause lines in the
+        Off: Ollama is asked nothing but the model's listing for Settings (/api/show: its
+        thinking levels; nothing is loaded) — no audits, no diagnosis on alerts, no cause lines in the
         digest, no weekly note, no security review, no log triage, no answers. Whatever it is
         doing stops at once and ends as a model that failed (LlmAgent.cut), the model is
         unloaded from the model server, and the Ollama check is no longer probed, so stopping
@@ -713,6 +714,9 @@ class Auditor:
         if on:
             self._model_off = None
             self.agent.off = False
+            # a listing that failed while it was off (Ollama stopped too) waits no 10 minutes:
+            # the first call asks the model's thinking levels again
+            self.agent._think_tried = 0.0
             text = (f"🦉 <b>The owl is awake</b> — local model on{src}\n\n<i>Audits, diagnoses, answers and reviews are "
                     f"back. The first one loads the model, so it takes longer.</i>")
         else:

@@ -273,8 +273,11 @@ class SettingsRoutes:
         s = self.s
         from .model import model_set
         agent = getattr(self.a, "agent", None)
-        if agent is not None and not agent.off and model_set(self.a.cfg):
-            await agent.think_levels()         # Settings offers the model's own thinking levels
+        # Settings offers the model's own thinking levels. /api/show is a listing — nothing is
+        # loaded, no GPU used — so it is asked even while the owner's switch has the model off;
+        # only --no-llm (no model for this run at all) skips it.
+        if agent is not None and not self.a._no_llm_cli and model_set(self.a.cfg):
+            await agent.think_levels()
         out = {"ok": True, **s.view(), **s.values(),
                "secrets": {**secrets_view(self.a.cfg, self.a.inv), "file": s.files["secrets"].status(),
                            "base": digest(s.files["secrets"].read())},
