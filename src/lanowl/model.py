@@ -199,6 +199,22 @@ def think_words(t) -> str:
     return "off" if t is False else "on (the model's default level)" if t is True else f"level {t}"
 
 
+def temperature_setting(cfg: dict) -> Optional[float]:
+    """config.yaml's `model.temperature`: None is `auto` (also a missing key or null): the model's
+    own, so no `temperature` is sent and Ollama applies the sampling the model lists. A number
+    from 0 to 2 (not a bool) is sent on every call. Anything else is read as auto here, and
+    `--check` says it is wrong."""
+    t = model_cfg(cfg).get("temperature")
+    if isinstance(t, bool) or not isinstance(t, (int, float)):
+        return None
+    return float(t) if 0 <= t <= 2 else None
+
+
+def temperature_words(t: Optional[float]) -> str:
+    """A `temperature_setting` in words."""
+    return "the model's own" if t is None else f"{t:g}"
+
+
 def model_set(cfg: dict) -> bool:
     """Is there a model to ask? Only when config.yaml has a `model:` section (or
     LANOWL_MODEL_URL gives one): a new install has none, and the owl is off — nothing is
@@ -226,10 +242,14 @@ def model_report(cfg: dict) -> tuple:
     if not model_set(cfg) and "ollama" not in (cfg or {}) and (cfg or {}).get("model") is None:
         lines.append(f"Model: {NO_MODEL} (or `model:` in config.yaml)")
         return "\n".join(lines), bad
-    lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where} · thinking {think_words(think_setting(cfg))}")
+    lines.append(f"Model: {provider} · {model_name(cfg)} at {url}{where} · thinking {think_words(think_setting(cfg))}"
+                 f" · temperature {temperature_words(temperature_setting(cfg))}")
     if not isinstance(m.get("think", True), (bool, str)) and m.get("think") is not None:
         row("✗", "model.think", "false, true (the model's default) or one of the model's levels "
                                 "(Settings → The model lists them)")
+    t = m.get("temperature")
+    if t is not None and temperature_setting(cfg) is None and not (isinstance(t, str) and t.strip().lower() == "auto"):
+        row("✗", "model.temperature", "auto (the model's own) or a number from 0 to 2")
     if "ollama" in (cfg or {}):
         row("✗", "config.yaml", "`ollama:` is not read any more: rename it `model:`, and its "
                                 "`model:` key `name:`")

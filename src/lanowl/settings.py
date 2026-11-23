@@ -38,7 +38,7 @@ import time
 from typing import Optional
 
 from . import access, schema
-from .yamledit import EditError, apply, load
+from .yamledit import EditError, apply, expected, load
 
 log = logging.getLogger("lanowl.settings")
 
@@ -52,6 +52,7 @@ DEVICE_ORDER = ["ip", "name", "mac", "group", "criticality", "role", "note", "si
                 "expect_offline", "debounce_fails", "scan", "kind", "credentials", "manage", "restart",
                 "logs", "reboot", "upgrade", "backup", "checks"]
 DEVICE_QUOTED = ("name", "note", "role", "about", "risk")
+TEMPERATURE_RESET = " (back to the model's own: the model changed)"     # said beside the change
 
 
 def digest(text: str) -> str:
@@ -141,6 +142,23 @@ def think_field(value, info: Optional[dict]) -> dict:
         choices.append(v)
         labels[v] = f"{v} — not one of this model's levels: its default is used" if levels else v
     return {"type": "choice", "value": v, "choices": choices, "labels": labels}
+
+
+def temperature_field(value, info: Optional[dict]) -> dict:
+    """`model.temperature` as a choice between the model's own (auto) and a number of the owner's
+    (0 to 2). The model's own says its number when /api/show listed one (agent.think_levels'
+    `temperature`), that it listed none, or nothing while the model is not known yet. `value` is
+    the file's: "auto" or a number as it reads; anything else stays as it is, for the page to
+    replace. `labels` has the two choices, "auto" and "custom"."""
+    from .model import temperature_words
+    own = "the model's own"
+    if info:
+        t = info.get("temperature")
+        own += f" ({temperature_words(t)})" if isinstance(t, (int, float)) else " (not in its listing: Ollama's default)"
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        value = "auto"
+    return {"type": "temp", "value": value,
+            "labels": {"auto": own, "custom": "a number of my own"}, "min": 0, "max": 2}
 
 
 def _check_word(c) -> str:
@@ -471,11 +489,38 @@ class Settings:
         locked = self.locked(ops) if name == "config" else []
         if locked:
             return {"ok": False, "error": locked[0], "base": base}
+        reset = self._temperature_reset(old, ops) if name == "config" else []
         try:
-            new = apply(old, ops, **self._style(name))
+            new = apply(old, ops + reset, **self._style(name))
         except EditError as e:
             return {"ok": False, "error": f"{NAMES[name]}: {e}", "base": base}
-        return self._planned(name, old, new, base, secrets_text, config_text)
+        p = self._planned(name, old, new, base, secrets_text, config_text)
+        if reset and p["ok"]:
+            p["changes"] = [c + TEMPERATURE_RESET if c.startswith("model.temperature ") and c.endswith(" → auto") else c
+                            for c in p["changes"]]
+        return p
+
+    @staticmethod
+    def _temperature_reset(old: str, ops: list) -> list:
+        """A save that gives `model.name` another value puts a number in `model.temperature` back
+        to auto: a temperature that suited one model is not a choice made for the next. Not when
+        the same save touches the temperature itself. Done here, in the plan, so that the preview
+        shows it and every client gets it."""
+        from .model import model_name
+        if any(list(op["path"][:2]) == ["model", "temperature"] or list(op["path"]) == ["model"] for op in ops):
+            return []
+        try:
+            was = load(old) or {}
+            now = expected(was, ops)
+        except Exception:                  # `apply` says what is wrong with the file or the ops
+            return []
+        if not isinstance(was, dict) or not isinstance(now, dict):
+            return []
+        m = now.get("model")
+        t = m.get("temperature") if isinstance(m, dict) else None
+        if isinstance(t, bool) or not isinstance(t, (int, float)) or model_name(was) == model_name(now):
+            return []
+        return [{"op": "set", "path": ["model", "temperature"], "value": "auto"}]
 
     def _planned(self, name: str, old: str, new: str, base: str, secrets_text: Optional[str] = None,
                  config_text: Optional[str] = None) -> dict:
@@ -715,6 +760,9 @@ class Settings:
                     if fd["path"] == ["model", "think"]:
                         fd.update(think_field(fd["value"] if fd["source"] == "file" else None,
                                               getattr(getattr(self.a, "agent", None), "think_info", None)))
+                    if fd["path"] == ["model", "temperature"]:
+                        fd.update(temperature_field(fd["value"] if fd["source"] == "file" else None,
+                                                    getattr(getattr(self.a, "agent", None), "think_info", None)))
                     if fd["hash"]:
                         fd["value"] = bool(fd["value"])
                     if fd["type"] == "yaml" and fd["source"] == "file":

@@ -56,6 +56,11 @@ refused try is a "login failure" line in the router's log.
 - Answers that stop half-way, or audits "abandoned after 900s": a slow model for the timeouts
   (`model.request_timeout_s`, `cadence.llm_max_wall_s`). A log line saying the context peak was
   within 10% of `num_ctx` means the model was reading a truncated prompt: raise `num_ctx`.
+- "the model repeated itself" in the log, or in the answer's failure text: its thinking or its
+  answer went round the same passage, so lanowl stopped the call, asked once more within the
+  call's own time, and gave up on the second. Leave `model.temperature` on `auto` (some
+  thinking models loop at a low one), or try another model
+  ([the model](../setup/model.md)).
 - Is it switched off, or is no model set? `/model` says. With no `model:` section in
   `config.yaml` the owl is off on purpose: Settings → The model sets where Ollama runs.
 

@@ -29,7 +29,7 @@ model:
   keep_alive: "10m"
   request_timeout_s: 300
   max_tool_iters: 10
-  temperature: 0.2
+  temperature: auto
   persona: "owl"
 ```
 
@@ -41,7 +41,14 @@ model:
 | `keep_alive` | How long the model stays loaded after a call. `0` frees the memory at once. |
 | `request_timeout_s` | The longest one call may take. |
 | `max_tool_iters` | The most tool calls in one audit. |
+| `temperature` | How freely the model picks its next word, in its reasoning as in its answers. `auto` (the default) is the model's own: the value its maker lists in Ollama, which **Settings → The model** shows. A number from 0 to 2 is sent with every call instead. Switching the model in Settings puts it back to `auto`. Some thinking models repeat themselves without end at a low temperature and never answer, so leave it on `auto` unless you have a reason. |
 | `persona` | The voice of its prose: `owl` (the owl's voice, opening with its call, "Hoo.", on Telegram), or `""` for plain prose. |
+
+**A model going round in circles.** lanowl watches each call as the model writes. When its
+thinking or its answer repeats the same passage again and again, lanowl stops the call at once,
+asks once more within that call's own time (`request_timeout_s`), and says so in the log: "the
+model repeated itself". If it keeps happening, leave `temperature` on `auto` or try another
+model.
 
 **Which model.** Any Ollama model with tool calling works. A larger model reasons better; a
 27–35B model on a machine with 32–64 GB of memory is comfortable.

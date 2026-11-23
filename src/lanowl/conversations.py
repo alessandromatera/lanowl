@@ -177,6 +177,10 @@ def apply_event(t: dict, inv, kind: str, *args):
         if len(t["steps"]) < MAX_STEPS:
             t["steps"].append({"ts": time.time(), "text": describe_tool(args[0], args[1], inv)})
         t.update(phase="checking", draft="", think="")
+    elif kind == "reset":
+        # the model went round in circles (agent.ModelRepeated): what it wrote is dropped, and
+        # it is asked once more — or the answer fails with nothing of that loop kept
+        t.update(phase="thinking", draft="", think="")
 
 
 def chat_title(q: str) -> str:
@@ -435,7 +439,9 @@ class Conversations:
         if text:
             self._finish(t, "done", text)
         else:
-            self._finish(t, "failed", error="No answer — the model did not respond in time.")
+            # the model going round in circles says so, instead of a time it did not run out of
+            why = self.a.agent.last_repeated or "the model did not respond in time"
+            self._finish(t, "failed", error=f"No answer — {why}.")
         c["updated"] = time.time()
         self._save()
 

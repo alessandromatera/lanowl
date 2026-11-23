@@ -838,8 +838,10 @@ class Chat:
                                   + ("🦉 " + _html(text) + ("\n\n<i>Stopped.</i>" if live.stopped
                                                             else "") + live.checks()
                                      if text else
-                                     "The model did not finish a report — the checks it ran are "
-                                     "on the session's message."))
+                                     "The model did not finish a report"
+                                     + (f" ({_html(self.a.agent.last_repeated)})"
+                                        if self.a.agent.last_repeated else "")
+                                     + " — the checks it ran are on the session's message."))
         finally:
             await live.close()
         return text
@@ -891,8 +893,9 @@ class Chat:
                 await self._reply(chat_id, self._off_text(True))
             else:
                 rep = self.a._last_report
-                await self._reply(chat_id, "🤷 I couldn't work that out (the model did not answer "
-                                           "in time). Here is what I know for certain:\n\n"
+                why = self.a.agent.last_repeated or "the model did not answer in time"
+                await self._reply(chat_id, f"🤷 I couldn't work that out ({_html(why)}). "
+                                           "Here is what I know for certain:\n\n"
                                   + (format_digest(rep, title="Right now") if rep else ""))
         finally:
             await live.close()
@@ -953,7 +956,8 @@ class Chat:
         text = await self.answer(question)
         self.a.mqtt.publish("answer", {"q": question, "a": text or (
             "(no answer — the local model is off)" if self.a.no_llm else
-            "(no answer — the model did not respond in time)"), "ts": time.time()}, retain=True)
+            f"(no answer — {self.a.agent.last_repeated or 'the model did not respond in time'})"),
+            "ts": time.time()}, retain=True)
 
     # --- the Telegram conversation ---------------------------------------------
     def _tg_history(self, chat_id: str, now: Optional[float] = None) -> list:

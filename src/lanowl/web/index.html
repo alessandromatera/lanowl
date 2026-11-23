@@ -926,6 +926,8 @@ html.modal{overflow:hidden}
 .fsw{position:relative}
 .fsw::after{content:"";position:absolute;right:13px;top:50%;width:7px;height:7px;margin-top:-6px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(45deg);pointer-events:none}
 .fsel{padding-right:32px}
+.ftn{margin-top:8px}
+.ftn[hidden]{display:none}
 .funit{display:flex;align-items:center;gap:8px}
 .funit .fin{flex:1}
 .funit span{color:var(--ink2);font-size:14px;white-space:nowrap}
@@ -4618,7 +4620,16 @@ function fieldHtml(f) {
       <label class="sw"><input type="checkbox" id="${id}" data-k="${esc(k)}" data-t="bool"${on ? " checked" : ""}${lock ? " disabled" : ""}><span></span></label></div>`;
   }
   let ctl;
-  if (f.choices) {
+  if (f.type === "temp") {
+    // the model's own (auto), or a number of the owner's: its box sits right under the choice, shown for the number only
+    const bad = !!(e && e.bad), custom = typeof v === "number" || bad, lb = f.labels || {};
+    const num = bad ? String(e.value) : typeof v === "number" ? String(v) : f.source === "file" && typeof f.value === "number" ? String(f.value) : "";
+    ctl = `<div class="fsw"><select class="fsel" id="${id}" data-k="${esc(k)}" data-t="temp"${lock ? " disabled" : ""}>
+      <option value="auto"${custom ? "" : " selected"}>${esc(lb.auto || "the model's own")}</option>
+      <option value="custom"${custom ? " selected" : ""}>${esc(lb.custom || "a number of my own")}</option></select></div>
+      <div class="ftn"${custom ? "" : " hidden"}><input class="fin" type="number" min="${f.min ?? 0}" max="${f.max ?? 2}" step="0.1" inputmode="decimal" data-k="${esc(k)}" data-t="temp"
+        value="${esc(num)}" placeholder="0 to 2" aria-label="${esc(f.label)}: a number from 0 to 2" autocomplete="off"${lock ? " disabled" : ""}></div>`;
+  } else if (f.choices) {
     ctl = `<div class="fsw"><select class="fsel" id="${id}" data-k="${esc(k)}" data-t="choice"${lock ? " disabled" : ""}>` +
       (v === null ? `<option value="" selected>${esc("default" + (ex ? " (example: " + ex + ")" : ""))}</option>` : "") +
       f.choices.map(c => `<option value="${esc(String(c))}"${v === c ? " selected" : ""}>${esc((f.labels || {})[String(c)] ?? (c === "" ? "(none)" : String(c)))}</option>`).join("") + `</select></div>`;
@@ -4734,6 +4745,15 @@ function parseField(t, raw, f) {
   }
   return raw;
 }
+// The temperature's two controls as one value: "auto" (the model's own) or the number in the box. A key that is not
+// in the file stays so while it is on auto. A box left empty or with no number in it is `bad`: said when the changes are checked.
+function tempValue(el, f) {
+  const fld = el.closest(".fld"), sel = fld.querySelector("select"), box = fld.querySelector(".ftn"), num = box.querySelector("input");
+  box.hidden = sel.value !== "custom";
+  if (sel.value !== "custom") return {v: f.source === "default" ? undefined : "auto", bad: false};
+  const raw = num.value.trim(), n = raw === "" || num.validity.badInput ? NaN : +raw;
+  return isFinite(n) ? {v: n, bad: false} : {v: raw, bad: true};
+}
 function onField(el) {
   const k = el.dataset.k, f = (ST.cur || {fields: []}).fields.find(x => x.path && pkey(x.path) === k);
   if (!f) return;
@@ -4742,14 +4762,15 @@ function onField(el) {
     const orig = f.source === "default" ? "" : (f.text || "");
     if (el.value.trim() === orig.trim()) delete ST.edits[k]; else ST.edits[k] = {path: f.path, yaml: true, text: el.value};
   } else {
-    let v;
-    try { v = parseField(t, t === "bool" ? el.checked : el.value, f); } catch (e) { v = el.value; }
+    let v, bad = false;
+    if (t === "temp") ({v, bad} = tempValue(el, f));
+    else try { v = parseField(t, t === "bool" ? el.checked : el.value, f); } catch (e) { v = el.value; }
     const orig = f.source === "default" ? undefined : f.value;
     if (t === "choice" && el.value === "" && f.source === "default") v = undefined;
     // `was`: the file's value it was made against (checkKept)
     if (v === undefined) { if (f.source === "default") delete ST.edits[k]; else ST.edits[k] = {path: f.path, del: true, was: orig}; }
     else if (sameV(v, orig) || (f.source === "default" && t === "bool" && v === !!f.example && false)) delete ST.edits[k];
-    else ST.edits[k] = {path: f.path, value: v, was: orig};
+    else ST.edits[k] = {path: f.path, value: v, was: orig, ...(bad ? {bad: true} : {})};
   }
   const fld = el.closest(".fld");
   if (fld) {
@@ -4776,6 +4797,7 @@ function badEdits() {
     const f = ((ST.cur || {}).fields || []).find(x => x.path && pkey(x.path) === pkey(e.path));
     if (!f || e.del || e.yaml) continue;
     if ((f.type === "int" || f.type === "float") && typeof e.value !== "number") return `${f.label} is a number`;
+    if (f.type === "temp" && (e.bad || (typeof e.value === "number" && !(e.value >= 0 && e.value <= 2)))) return `${f.label}: a number from 0 to 2`;
   }
   return "";
 }
@@ -6072,7 +6094,7 @@ document.addEventListener("change", e => {
   const el = e.target;
   if (S.sheetSet && el.dataset.dk && el.tagName === "SELECT") { onDevField(el); return; }
   if (S.tab !== "set") return;
-  if (el.dataset.k && (el.dataset.t === "bool" || el.dataset.t === "choice")) onField(el);
+  if (el.dataset.k && (el.dataset.t === "bool" || el.dataset.t === "choice" || el.dataset.t === "temp")) onField(el);
   else if (el.dataset.dk && el.tagName === "SELECT") onDevField(el);
   else if (el.dataset.pip && el.tagName === "SELECT") onPick(el);
   else if (el.dataset.sf && el.tagName === "SELECT") onSiteField(el, true);

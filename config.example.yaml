@@ -30,7 +30,7 @@ model:
   keep_alive: "10m"                 # how long the model stays loaded after a call
   request_timeout_s: 300
   max_tool_iters: 10
-  temperature: 0.2
+  temperature: auto                 # auto: the model's own (its Ollama listing); or a number from 0 to 2, sent on every call
   persona: "owl"                    # the voice of the model's prose: "owl" (opens with "Hoo."), or "" for none
 
 # --- Telegram: alerts out, questions in ---------------------------------------------------

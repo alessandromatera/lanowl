@@ -1583,7 +1583,8 @@ class Auditor:
         if llm is None:
             d["result"] = ("the model was switched off mid-audit — the deterministic report stood"
                            if self.no_llm else
-                           "the model gave no assessment (timed out or failed) — the deterministic report stood")
+                           (self.agent.last_repeated or "the model gave no assessment (timed out or failed)")
+                           + " — the deterministic report stood")
         else:
             d.update(health=llm.get("overall_health"), summary=llm.get("summary"),
                      issues=[{"device": label(i.get("device"), i.get("ip")),
