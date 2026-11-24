@@ -104,8 +104,8 @@ def asked(n: dict) -> bool:
 
 
 class Memory:
-    def __init__(self, auditor):
-        self.a = auditor
+    def __init__(self, lanowl):
+        self.a = lanowl
         self.notes: list = []
         self._next = 1
         self._turn: Optional[dict] = None     # the owner's conversation turn in progress

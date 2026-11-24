@@ -671,7 +671,7 @@ Never "nothing needs you" here: the event is told."""
 class DevWatch:
     """The rounds, the port records, the log triage. Its own task (`run`), like hostlog.py: an ssh
     login to a wedged box must not stall the sweep or the WAN watcher."""
-    a: object                                   # the Auditor
+    a: object                                   # main.Lanowl
     on_alert: Callable[..., None]
     agent: Optional[object] = None
     llm_busy: Optional[Callable[[], bool]] = None

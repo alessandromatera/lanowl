@@ -328,17 +328,17 @@ def device_info(a, ip: str) -> dict:
 
 
 class Dashboard:
-    def __init__(self, auditor):
-        self.a = auditor
-        w = auditor.cfg.get("web") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        w = lanowl.cfg.get("web") or {}
         self.enabled = bool(w.get("enabled", False)) and web is not None
         self.host = str(w.get("host", "0.0.0.0"))
         self.port = int(w.get("port", 8088))
         self.allowed_hosts = {str(h).lower() for h in (w.get("allowed_hosts") or [])}
-        self.login = getattr(auditor, "login", None)     # login.py; None only in tests
+        self.login = getattr(lanowl, "login", None)     # login.py; None only in tests
         self._login_lock = asyncio.Lock()
         self._runner = None
-        self.chats = Conversations(auditor)
+        self.chats = Conversations(lanowl)
         self.settings_routes = SettingsRoutes(self)     # Settings, devices, the first run
         self._hist = (0.0, None)     # the Devices table's history: (when, body)
         self._hist_lock = asyncio.Lock()

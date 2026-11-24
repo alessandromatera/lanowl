@@ -1,6 +1,6 @@
 """Diagnostics the model can run inside an investigation session the owner approved.
 
-A network auditor needs more than pings when something is going wrong. One button opens a
+lanowl needs more than pings when something is going wrong. One button opens a
 short window (actions.session) in which the model runs checks from this catalog on its own,
 reads each output and decides the next, the way a person at a terminal would. Anything that CHANGES something is not here:
 restarts and reboots are actions (actions.py) and keep their own button even inside
@@ -288,9 +288,9 @@ WHERE_WORDS = {"here": "from here", "lan": "from the LAN host", "vps": "from the
 
 
 class Checks:
-    def __init__(self, auditor):
-        self.a = auditor
-        self.cfg = auditor.cfg
+    def __init__(self, lanowl):
+        self.a = lanowl
+        self.cfg = lanowl.cfg
         c = (self.cfg.get("actions") or {}).get("checks") or {}
         self.deny_extra = c.get("deny_groups") or {}          # {check: [groups]} on top of CATALOG
         self.lan_nets = main_lans(self.cfg)

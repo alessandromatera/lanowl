@@ -97,11 +97,11 @@ def report(cfg: dict) -> tuple:
 
 
 class Shell:
-    def __init__(self, auditor, audit: bool = False):
+    def __init__(self, lanowl, audit: bool = False):
         """The owner's shell, or with `audit` the hourly audit's offline one."""
-        self.a = auditor
+        self.a = lanowl
         self.audit = audit
-        c = auditor.cfg.get("shell") or {}
+        c = lanowl.cfg.get("shell") or {}
         ca = c.get("audit") or {}
         self.enabled = bool(c.get("enabled", False)) and (not audit or bool(ca.get("enabled", False)))
         self.sock = str(ca.get("socket") or "/run/sandbox-offline/exec.sock") if audit else \
@@ -124,7 +124,7 @@ class Shell:
         self._task: Optional[asyncio.Future] = None
         self.log: list = []
         try:
-            rec = auditor.state.load_record(self.record) or {}
+            rec = lanowl.state.load_record(self.record) or {}
             self.log = [x for x in rec.get("log") or [] if isinstance(x, dict)][-KEEP:]
         except Exception:
             log.warning("shell: record unreadable, starting empty", exc_info=True)

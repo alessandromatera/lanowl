@@ -469,7 +469,7 @@ def apply(cfg: dict, inv, access, plans: list, profiles: dict) -> list:
 
 # --- running a profile's operation -----------------------------------------------------------
 class Kinds:
-    """The profiles and the plans, for the feature modules at run time (`auditor.kinds`)."""
+    """The profiles and the plans, for the feature modules at run time (`lanowl.kinds`)."""
 
     def __init__(self, profiles: Optional[dict] = None, plans: Optional[list] = None,
                  problems: Optional[list] = None):

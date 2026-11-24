@@ -353,7 +353,7 @@ class WanWatcher:
 
     _gate: Optional[AlertGate] = None
     _stop: bool = False
-    # Auditor.resume_alerts wires this to SQLite; None (tests, `--once`) = nothing is saved
+    # Lanowl.resume_alerts wires this to SQLite; None (tests, `--once`) = nothing is saved
     persist: Optional[Callable[[dict], None]] = None
     # (kind, value, detail, ts) -> None. Every main-link outage, blackout and blip, and every
     # log-triage verdict, for the weekly review.
@@ -1000,7 +1000,7 @@ class WanWatcher:
         if self.agent is None or not stamped:
             return
         if self.model_on is not None and not self.model_on():
-            # switched off (Auditor.set_model): back on, it adopts the buffer as it is then
+            # switched off (Lanowl.set_model): back on, it adopts the buffer as it is then
             # rather than replaying the hours it was off
             self._triage_mark = None
             return

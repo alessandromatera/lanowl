@@ -213,9 +213,9 @@ def read_last(path: str = "") -> dict:
 class SelfUpdate:
     ICON = "⬆️"
 
-    def __init__(self, auditor):
-        self.a = auditor
-        c = (auditor.cfg.get("self_update") or {}) if isinstance(auditor.cfg.get("self_update"), dict) else {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = (lanowl.cfg.get("self_update") or {}) if isinstance(lanowl.cfg.get("self_update"), dict) else {}
         self.check_on = bool(c.get("check", True))
         self.auto = bool(c.get("auto", False))
         self.at = str(c.get("at") or "04:00")
@@ -224,7 +224,7 @@ class SelfUpdate:
         self.version = __version__
         self._task: Optional[asyncio.Task] = None
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("selfupdate: record unreadable, starting empty", exc_info=True)
             self.rec = {}

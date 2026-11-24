@@ -425,20 +425,20 @@ def describe_secrets(old, new) -> list:
 
 
 class Settings:
-    def __init__(self, auditor, cfg_path: str, inv_path: str):
-        self.a = auditor
+    def __init__(self, lanowl, cfg_path: str, inv_path: str):
+        self.a = lanowl
         self.files = {"config": ConfigFile(cfg_path), "inventory": ConfigFile(inv_path),
-                      "secrets": ConfigFile(access.secrets_path(auditor.cfg))}
+                      "secrets": ConfigFile(access.secrets_path(lanowl.cfg))}
         self.at_start = {k: digest(f.read()) for k, f in self.files.items()}
         self.running = {k: running_digest(k, self.files[k].read()) for k in RESTART}
         for f in self.files.values():
             f.writable_at_start = f.status()["writable"]
         self.started = time.time()
-        db = ((auditor.cfg.get("state") or {}).get("db_path")) or "lanowl_state.sqlite"
+        db = ((lanowl.cfg.get("state") or {}).get("db_path")) or "lanowl_state.sqlite"
         self.dir = os.path.join(os.path.dirname(os.path.abspath(db)), "settings-versions")
         self._example = None
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("settings: record unreadable, starting empty", exc_info=True)
             self.rec = {}

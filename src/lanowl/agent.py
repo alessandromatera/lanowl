@@ -208,12 +208,12 @@ class LlmAgent:
         # What the LAST audit or question says if it failed because the model repeated itself
         # (ModelRepeated's words), "" if it did not: for the places that tell the owner "no
         # answer", which is not the timeout it used to look like. Audits and questions take the
-        # model one at a time (Auditor.model_turn), so one slot will do.
+        # model one at a time (Lanowl.model_turn), so one slot will do.
         self.last_repeated = ""
         # memory.py, wired by the orchestrator: its notes end EVERY system prompt this
         # agent sends — audit, questions, weekly review, log triages. None = no memory.
         self.memory = None
-        # The owner's switch (Auditor.set_model). While off, every call returns
+        # The owner's switch (Lanowl.set_model). While off, every call returns
         # None at once and Ollama is asked nothing (but the model's listing, think_levels, for
         # Settings), whichever caller forgot to check; `cut()`
         # makes the calls in flight return None too. None is a model that failed, and every

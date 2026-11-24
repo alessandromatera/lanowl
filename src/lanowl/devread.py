@@ -190,8 +190,8 @@ def pick_lines(text: str, search: str, limit: int, newest: bool) -> tuple:
 
 
 class DeviceReads:
-    def __init__(self, auditor):
-        self.a = auditor
+    def __init__(self, lanowl):
+        self.a = lanowl
         self._turn: Optional[dict] = None
 
     # --- what can be read -------------------------------------------------------

@@ -55,9 +55,9 @@ class Review:
     TITLE = ""
     ICON = "•"
 
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get(self.NAME) or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get(self.NAME) or {}
         self.c = c
         self.enabled = bool(c.get("enabled", False))
         self.at = str(c.get("at") or "")                  # daily at this time...
@@ -65,7 +65,7 @@ class Review:
         self.timeout_s = float(c.get("model_timeout_s", 600))
         self._task: Optional[asyncio.Task] = None
         try:
-            self.rec = auditor.state.load_record(self.NAME) or {}
+            self.rec = lanowl.state.load_record(self.NAME) or {}
         except Exception:
             log.warning("%s: record unreadable, starting empty", self.NAME, exc_info=True)
             self.rec = {}

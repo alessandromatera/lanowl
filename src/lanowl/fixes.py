@@ -67,13 +67,13 @@ def sig(f: dict) -> str:
 
 
 class Fixes:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("fixes") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("fixes") or {}
         self.enabled = bool(c.get("enabled", False))
         self.timeout_s = float(c.get("model_timeout_s", 600))
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("fixes: record unreadable, starting empty", exc_info=True)
             self.rec = {}

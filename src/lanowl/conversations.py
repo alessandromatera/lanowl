@@ -16,7 +16,7 @@ list of old answers only grows. So the Ask tab is:
     up on the laptop.
 
 Still the same model, the same read-only tools and the same queue as Telegram
-(Auditor.model_turn): one question at a time, the audit first. Telegram shows the same work
+(Lanowl.model_turn): one question at a time, the audit first. Telegram shows the same work
 as it happens, in a message deleted when the answer arrives (chat.LiveReply).
 """
 from __future__ import annotations
@@ -65,12 +65,12 @@ _RECORDS = {
     "audits": "the audits", "pauses": "the pauses", "discovery": "the new devices",
     "devices_seen": "every device ever seen", "scan": "the network scan",
     "shell": "the sandbox's commands", "conversations": "earlier questions",
-    "auditor_log": "lanowl's own log", "sites": "the sites", "services": "the services",
+    "lanowl_log": "lanowl's own log", "sites": "the sites", "services": "the services",
     "slow_changes": "what is slowly changing", "config_changes": "the configuration changes",
     "fixes": "the fixes the owl wrote", "scorecard": "the owl's track record",
 }
 _SPANNED = {"actions", "telegram", "log_checks", "audits", "pauses", "conversations",
-            "auditor_log", "config_changes", "scorecard"}       # the topics that take hours=
+            "lanowl_log", "config_changes", "scorecard"}       # the topics that take hours=
 
 
 def describe_tool(name: str, args: dict, inv) -> str:
@@ -193,8 +193,8 @@ def chat_title(q: str) -> str:
     return str(q or "").strip()[:90]
 
 class Conversations:
-    def __init__(self, auditor):
-        self.a = auditor
+    def __init__(self, lanowl):
+        self.a = lanowl
         self._convs: dict[str, dict] = {}
         self._tasks: dict[str, asyncio.Future] = {}     # turn id -> the task answering it
         self._restore()
@@ -316,7 +316,7 @@ class Conversations:
 
     def stop_all(self, why: str) -> int:
         """Every answer being written or waiting, stopped: the model switched off
-        (Auditor.set_model). Returns how many."""
+        (Lanowl.set_model). Returns how many."""
         n = 0
         for c in self._convs.values():
             for t in c["turns"]:

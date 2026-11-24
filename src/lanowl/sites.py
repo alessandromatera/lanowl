@@ -196,9 +196,9 @@ def ip_in_watch(rec: dict, ip: str) -> bool:
 
 
 class Sites:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("sites") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("sites") or {}
         self.every_s = float(c.get("dhcp_every_min", 30)) * 60
         self.sites = []
         for s in c.get("list") or []:
@@ -208,7 +208,7 @@ class Sites:
                 log.warning("sites: bad network in %s — left out", s.get("key"))
                 continue
             router = str(s.get("router") or "")
-            dev = auditor.inv.get(router) if router else None
+            dev = lanowl.inv.get(router) if router else None
             # the router's kind, from the inventory unless the site names it (kinds.py)
             kind = str(s.get("kind") or "") or {"mikrotik": "routeros", "openwrt": "openwrt"}.get(
                 str(dev.attrs.get("kind") or "") if dev is not None else "", "")
@@ -224,13 +224,13 @@ class Sites:
         # the monthly scan: the same day as the vulnerability scan (updates.py)
         sc = c.get("scan") or {}
         self.scan_on = bool(sc.get("enabled", True))
-        self.scan_day = int(sc.get("day") or ((auditor.cfg.get("updates") or {}).get("scan") or {}).get("day") or 1)
+        self.scan_day = int(sc.get("day") or ((lanowl.cfg.get("updates") or {}).get("scan") or {}).get("day") or 1)
         self.scan_at = str(sc.get("at") or "05:00")
         self.scan_secs = int(sc.get("seconds") or 30)
         self._scan_task: Optional[asyncio.Task] = None
-        self.new_window_s = float((auditor.cfg.get("discovery") or {}).get("new_window_h", 24)) * 3600
+        self.new_window_s = float((lanowl.cfg.get("discovery") or {}).get("new_window_h", 24)) * 3600
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("sites: record unreadable, starting empty", exc_info=True)
             self.rec = {}

@@ -18,7 +18,7 @@ device's open incident without a "back online" — it is off on purpose, not fix
 pause and resume is said on Telegram. The dashboard has no login, and a pause nobody hears
 about would be the quietest way to blind the monitor to the alarm or the cameras.
 
-Pure bookkeeping, no I/O: the Auditor persists `dump()` in the SQLite `records` table and
+Pure bookkeeping, no I/O: lanowl persists `dump()` in the SQLite `records` table and
 writes each pause and resume to `events`, which is where `intervals()` reads history from.
 """
 from __future__ import annotations

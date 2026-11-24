@@ -777,8 +777,8 @@ SPEC_PARAMS = {"type": "object", "properties": {
 
 
 class DeviceCommands:
-    def __init__(self, auditor):
-        self.a = auditor
+    def __init__(self, lanowl):
+        self.a = lanowl
         self._turn: Optional[dict] = None
         self._outputs: dict = {}            # proposal id -> the approved command's output
 

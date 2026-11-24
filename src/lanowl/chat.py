@@ -15,7 +15,7 @@ the owner asks it things, on lanowl's own bot:
     /pause    stop watching a device switched off on purpose (pause.py)
     /resume   watch it again;  /paused  what is paused
     /memory   the model's notes (memory.py); /remember and /forget change them directly
-    /model    the owner's switch for the local model: /model off, /model on (Auditor.set_model)
+    /model    the owner's switch for the local model: /model off, /model on (Lanowl.set_model)
     /password the dashboard's password (login.py), the same way
     /new      start a new conversation
     anything else is a question, answered by the model with the same read-only tools
@@ -318,9 +318,9 @@ def _stack(items: list) -> str:
 
 
 class Chat:
-    def __init__(self, auditor):
-        self.a = auditor
-        self.cfg = auditor.cfg
+    def __init__(self, lanowl):
+        self.a = lanowl
+        self.cfg = lanowl.cfg
         self.answering = 0          # answers being written now (a restart stops them: Settings says so)
         q = (self.cfg.get("telegram", {}) or {}).get("chat") or {}
         self.max_wall_s = float(q.get("answer_max_wall_s", 420))
@@ -333,7 +333,7 @@ class Chat:
         self._tg: dict = {}       # chat_id -> {"turns": [{"q", "a", "ts"}]}
         self._live: dict = {}     # Stop button key -> the LiveReply it stops
         try:
-            rec = auditor.state.load_record(TG_RECORD) or {}
+            rec = lanowl.state.load_record(TG_RECORD) or {}
             self._tg = {str(k): v for k, v in (rec.get("chats") or {}).items()
                         if isinstance(v, dict)}
         except Exception:
@@ -489,7 +489,7 @@ class Chat:
             text += "\n⚠️ I could not delete your message with the password: delete it yourself."
         await self._reply(chat_id, text)
 
-    # --- the local model's switch (Auditor.set_model) ---------------------------------
+    # --- the local model's switch (Lanowl.set_model) ---------------------------------
     def model_command(self, arg: str) -> str:
         """/model · /model on · /model off. The owner's own switch: no model involved."""
         a = self.a
@@ -917,7 +917,7 @@ class Chat:
 
     def _about_message(self, mid: int) -> list:
         """What lanowl knows of one of its own messages, by its id: the incidents it announced
-        (Auditor._alert_msgs, kept two days) and the proposals on it (Actions.msgs)."""
+        (Lanowl._alert_msgs, kept two days) and the proposals on it (Actions.msgs)."""
         a, out = self.a, []
         try:
             open_keys = a._open_incident_keys()

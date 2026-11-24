@@ -100,7 +100,7 @@ WATCHER_OWNED_KINDS = ("wan", "wan-path")
 NO_LLM_KINDS = ("wan", "wan-path")
 
 
-class Auditor:
+class Lanowl:
     def __init__(self, cfg, inv, mqtt, state, tracker, executor, agent, no_llm=False,
                  no_telegram=False, kinds=None):
         self.cfg = cfg
@@ -2258,22 +2258,22 @@ async def _amain(args):
              sum(1 for st in resumed.values() if st["confirmed"] is False))
     executor = ToolExecutor(cfg, inv, mqtt, state)
     agent = LlmAgent(cfg, executor)
-    auditor = Auditor(cfg, inv, mqtt, state, tracker, executor, agent, no_llm=args.no_llm,
+    lanowl = Lanowl(cfg, inv, mqtt, state, tracker, executor, agent, no_llm=args.no_llm,
                       no_telegram=args.no_telegram, kinds=kinds)
     if not args.once:
-        auditor.resume_alerts()
+        lanowl.resume_alerts()
 
     try:
         if args.once:
-            await auditor.once(run_llm=not args.no_llm)
+            await lanowl.once(run_llm=not args.no_llm)
         else:
-            await auditor.loop()
+            await lanowl.loop()
     finally:
         from . import routeros
         await routeros.shared(cfg).stop()      # a clean logout, not a dropped socket
         mqtt.stop()
         state.close()
-    return "restart" if auditor.restart_asked else ""
+    return "restart" if lanowl.restart_asked else ""
 
 
 def checks_report(inv) -> tuple:

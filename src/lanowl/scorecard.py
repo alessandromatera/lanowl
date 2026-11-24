@@ -72,13 +72,13 @@ def _hm(ts: float) -> str:
 
 
 class Scorecard:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("scorecard") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("scorecard") or {}
         self.enabled = bool(c.get("enabled", False))
         self.max_per_day = int(c.get("max_per_day", 12))
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("scorecard: record unreadable, starting empty", exc_info=True)
             self.rec = {}

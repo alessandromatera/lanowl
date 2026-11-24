@@ -174,9 +174,9 @@ def report(cfg: dict, inv, acc) -> tuple:
 
 
 class Backups:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("backups") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("backups") or {}
         self.enabled = bool(c.get("enabled", False))
         self.day = int(c.get("day", 1))
         self.at = str(c.get("at", "03:00"))
@@ -200,7 +200,7 @@ class Backups:
         self._lock = asyncio.Lock()          # one backup at a time, scheduled or before an update
         self.current = ""                    # the machine being backed up now, for the page
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("backups: record unreadable, starting empty", exc_info=True)
             self.rec = {}

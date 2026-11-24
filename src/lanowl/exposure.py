@@ -274,9 +274,9 @@ def clip(text: str, n: int = FACTS_MAX) -> str:
 
 
 class Exposure:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("exposure") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("exposure") or {}
         self.enabled = bool(c.get("enabled", False))
         self.hosts = [dict(h) for h in (c.get("hosts") or []) if h.get("ip") and h.get("via")]
         self.page_from = str(c.get("page_from") or "")
@@ -289,7 +289,7 @@ class Exposure:
         self.timeout_s = float(c.get("model_timeout_s", 900))
         self._task: Optional[asyncio.Task] = None
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("exposure: record unreadable, starting empty", exc_info=True)
             self.rec = {}

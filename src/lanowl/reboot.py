@@ -96,8 +96,8 @@ def fmt_s(s: Optional[float]) -> str:
 
 
 class Rebooter:
-    def __init__(self, auditor, cfg: dict):
-        self.a = auditor
+    def __init__(self, lanowl, cfg: dict):
+        self.a = lanowl
         self.devices = {}
         for ip, v in (cfg.get("devices") or {}).items():
             v = dict(v or {})
@@ -106,7 +106,7 @@ class Rebooter:
             else:
                 log.warning("reboot: %s has no known way (via: %r) — left out", ip, v.get("via"))
         self.hold_s = float(cfg.get("hold_min", 5)) * 60
-        ha = (auditor.cfg.get("access") or {})
+        ha = (lanowl.cfg.get("access") or {})
         self.ha_url = str(ha.get("ha_url") or "").rstrip("/")
 
     # --- what can be rebooted --------------------------------------------------

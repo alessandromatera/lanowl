@@ -220,9 +220,9 @@ def parse_vulners(xml_text: str, min_cvss: float = CVSS_PAGE) -> dict:
 
 
 class Updates:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("updates") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("updates") or {}
         self.enabled = bool(c.get("enabled", False))
         self.at = str(c.get("at", "06:30"))
         self.hosts = [dict(h) for h in (c.get("hosts") or []) if h.get("ip") and h.get("via")]
@@ -231,11 +231,11 @@ class Updates:
         self.scan_day = int(s.get("day", 1))
         self.scan_at = str(s.get("at", "04:00"))
         self.scan_top = int(s.get("top_ports", 100))
-        self.scan_deny = scan_deny(auditor.cfg)
+        self.scan_deny = scan_deny(lanowl.cfg)
         self._task: Optional[asyncio.Task] = None
         self._scan_task: Optional[asyncio.Task] = None
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("updates: record unreadable, starting empty", exc_info=True)
             self.rec = {}

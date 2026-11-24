@@ -215,9 +215,9 @@ SSHD_KEYS = ("port|permitrootlogin|passwordauthentication|pubkeyauthentication|k
 
 
 class Cves:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("cves") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("cves") or {}
         # again after each morning's security review, with its fresh facts
         self.after_review = bool(c.get("after_review", True))
         # machines the security review does not read, whose sshd settings the check reads
@@ -226,7 +226,7 @@ class Cves:
         self._task: Optional[asyncio.Task] = None
         self._nvd_at = 0.0
         try:
-            self.rec = auditor.state.load_record(RECORD) or {}
+            self.rec = lanowl.state.load_record(RECORD) or {}
         except Exception:
             log.warning("cves: record unreadable, starting empty", exc_info=True)
             self.rec = {}

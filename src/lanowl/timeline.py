@@ -78,7 +78,7 @@ def _to(m: dict) -> dict:
 
 
 def _key_ip(key: str) -> str:
-    """An issue key is kind:ip:group:device (main.Auditor._key); only `down` keys name an
+    """An issue key is kind:ip:group:device (main.Lanowl._key); only `down` keys name an
     outage the logbook knows."""
     parts = str(key).split(":")
     return parts[1] if len(parts) >= 4 and parts[0] == "down" else ""

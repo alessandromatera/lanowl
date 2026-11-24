@@ -226,9 +226,9 @@ async def _http_get(url: str, timeout_s: float = 6.0) -> Optional[int]:
 
 
 class Actions:
-    def __init__(self, auditor):
-        self.a = auditor
-        c = auditor.cfg.get("actions") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        c = lanowl.cfg.get("actions") or {}
         self.switched_on = bool(c.get("enabled", False))     # config.yaml
         mode = str(c.get("mode", SHADOW))
         if mode not in (SHADOW, LIVE):
@@ -246,8 +246,8 @@ class Actions:
         self.sess_checks = int(sess.get("max_checks", 15))
         self.audit_checks = int(sess.get("audit_checks", 4))     # PASSIVE ones, per audit
         self.sess_day = int(sess.get("max_per_day", 8))
-        self.checks = Checks(auditor)
-        self.reboot = Rebooter(auditor, self.cat.get("reboot") or {})
+        self.checks = Checks(lanowl)
+        self.reboot = Rebooter(lanowl, self.cat.get("reboot") or {})
         self._check_lock = asyncio.Lock()    # one check at a time, whichever turn asks
         self.items: list = []
         # Telegram messages that carry proposals: str(message_id) -> {"key": the incident it
@@ -337,7 +337,7 @@ class Actions:
     @contextlib.contextmanager
     def source(self, via: str, **kw):
         """The model turn in progress may propose, on behalf of `via` (telegram | dashboard |
-        audit). Turns take the model one at a time (Auditor.model_turn), so one slot will do.
+        audit). Turns take the model one at a time (Lanowl.model_turn), so one slot will do.
         Outside such a block the tool is not even offered: the weekly review, the log
         triages and MQTT questions cannot propose anything. `asked=True`: the owner's own
         question, whose checks run at once; `ran`: a list each one is appended to."""

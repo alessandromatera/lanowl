@@ -113,8 +113,8 @@ class Drift(FindingsReview):
     ICON = "📉"
     DIGEST = ("high",)        # a "warning" stays on Now and in the weekly review
 
-    def __init__(self, auditor):
-        super().__init__(auditor)
+    def __init__(self, lanowl):
+        super().__init__(lanowl)
         self.at = self.at or "07:15"
 
     def anchor(self, f: dict, facts: dict) -> str:

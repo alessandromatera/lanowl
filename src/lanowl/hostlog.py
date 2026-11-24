@@ -824,7 +824,7 @@ class HostLogWatcher:
         the model was busy stay unexplained and are offered again on the next poll, exactly
         as the router's separate triage watermark does."""
         if self.agent is None or (self.model_on is not None and not self.model_on()):
-            return                                    # none, or switched off (Auditor.set_model)
+            return                                    # none, or switched off (Lanowl.set_model)
         t = self._tcfg()
         if not t.get("enabled", True):
             return
@@ -880,7 +880,7 @@ class HostLogWatcher:
         if runs:
             # said, not filtered: the model still judges every sudo line — only it knows WHEN
             # lanowl itself was the one using sudo (exposure.py, daily)
-            bits.append("THE AUDITOR ITSELF, on this host: " + "; ".join(
+            bits.append("LANOWL ITSELF, on this host: " + "; ".join(
                 f"{time.strftime('%H:%M:%S', time.localtime(a))}–"
                 f"{time.strftime('%H:%M:%S', time.localtime(b))} {what}" for a, b, what in runs)
                 + f" — logged in from {self.observer_ip}. Sudo lines in that window whose command "

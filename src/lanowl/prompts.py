@@ -763,7 +763,7 @@ def build_qa_context(question: str, report: Optional[dict], wan_note: str = "",
                      audit_at: float = 0.0, replying_to: str = "", replied: str = "") -> str:
     """Everything cheap the model should not have to call a tool for: the inventory with
     live state, what is open, the last 24h of ups and downs, and the WAN in one sentence.
-    `audit`: the last audit's own words (Auditor._last_llm_report's llm), made at `audit_at`.
+    `audit`: the last audit's own words (Lanowl._last_llm_report's llm), made at `audit_at`.
     `replying_to`: the owl's own question the QUESTION answers (owl_question), said beside it.
     `replied`: the Telegram message the QUESTION replies to (Chat.replied), right before it."""
     import time as _t

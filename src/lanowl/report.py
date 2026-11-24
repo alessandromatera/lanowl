@@ -197,7 +197,7 @@ def build_report(snapshot: Snapshot, inv: Inventory, down_ips: set,
                                 f"{_DEGRADED_PREFIX}{', '.join(failed)}", kind="degraded"))
 
     # 3b) the model server: a service of lanowl's own host, not an inventory device
-    #     (see Auditor._probe_ollama). Without it every audit quietly falls back to the
+    #     (see Lanowl._probe_ollama). Without it every audit quietly falls back to the
     #     deterministic report, and this is the one thing that says so. Debounced like a
     #     device — main keeps it in the tracker under OLLAMA_KEY, so down_ips has it once
     #     it is confirmed. When the model's host is an inventory device of its own and THAT
@@ -1125,7 +1125,7 @@ def format_digest(report: dict, now: Optional[float] = None,
     paused = report.get("paused") or []
     if paused:
         blocks.append(format_paused(paused, now))
-    # the same for the local model switched off (Auditor.set_model): silence by choice
+    # the same for the local model switched off (Lanowl.set_model): silence by choice
     if report.get("model_off"):
         blocks.append(format_model_off(report["model_off"], now))
     # what the audit looked at by itself (passive checks, its offline shell),

@@ -88,7 +88,7 @@ TOPICS = {
              "and the exit code, and the sandbox's isolation check",
     "conversations": "earlier questions and answers, on the dashboard and on Telegram "
                      "(search=, hours=)",
-    "auditor_log": "lanowl's own log file: what it did and decided, warnings and errors — "
+    "lanowl_log": "lanowl's own log file: what it did and decided, warnings and errors — "
                    "digests held back, audit timings, a watcher failing (search=, hours=, "
                    "level=WARNING for warnings and errors only)",
     "sites": "every site — the main one, the VPN hub, the remote ones: each one's devices "
@@ -114,7 +114,7 @@ TOPICS = {
 SPEC = {"type": "function", "function": {
     "name": "lanowl_records",
     "description": (
-        "Read the AUDITOR's OWN records — what it knows, did, decided and sent, everything its "
+        "Read lanowl's OWN records — what it knows, did, decided and sent, everything its "
         "dashboard shows. Read-only, instant, no load on any device. Use it whenever the "
         "question is about lanowl itself or anything it keeps: never say you do not know "
         "before looking here. Topics: "
@@ -127,7 +127,7 @@ SPEC = {"type": "function", "function": {
                                                    "days)"},
         "search": {"type": "string", "description": "words to match, case-insensitive; "
                                                     "several with '|'"},
-        "level": {"type": "string", "description": "auditor_log only: WARNING = warnings and "
+        "level": {"type": "string", "description": "lanowl_log only: WARNING = warnings and "
                                                    "errors only"},
         "limit": {"type": "integer", "description": "at most this many entries (default 40)"},
     }, "required": ["topic"]}}}
@@ -186,8 +186,8 @@ def _clip(obj) -> str:
 
 
 class Records:
-    def __init__(self, auditor):
-        self.a = auditor
+    def __init__(self, lanowl):
+        self.a = lanowl
 
     def spec(self) -> dict:
         return SPEC
@@ -631,7 +631,7 @@ class Records:
                 "kept": "the dashboard keeps its last 20 conversations; Telegram its last 6 "
                         "exchanges per chat (6 hours idle or /new starts over)"}
 
-    def _auditor_log(self, since, limit, search, level, **_):
+    def _lanowl_log(self, since, limit, search, level, **_):
         path = str((self.a.cfg.get("logging") or {}).get("file") or "")
         if not path:
             return "lanowl writes no log file (logging.file)"

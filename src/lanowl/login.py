@@ -108,9 +108,9 @@ def _hm(ts: float) -> str:
 
 
 class Login:
-    def __init__(self, auditor):
-        self.a = auditor
-        w = auditor.cfg.get("web") or {}
+    def __init__(self, lanowl):
+        self.a = lanowl
+        w = lanowl.cfg.get("web") or {}
         self.on = bool(w.get("login", True))
         self.cfg_raw = str(w.get("password_hash") or "").strip()
         self.cfg_hash = self.cfg_raw if valid_hash(self.cfg_raw) else ""

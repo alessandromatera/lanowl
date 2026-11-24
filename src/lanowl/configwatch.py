@@ -232,8 +232,8 @@ class ConfigWatch(Review):
     TITLE = "What changed"
     ICON = "⚙️"             # configuration, as a Settings save says it (no wrench: owner 10-11)
 
-    def __init__(self, auditor):
-        super().__init__(auditor)
+    def __init__(self, lanowl):
+        super().__init__(lanowl)
         self.machines = [dict(m) for m in (self.c.get("machines") or [])
                          if m.get("ip") and m.get("via") in ("routeros", "key", "sudo", "profile")]
         self.timeout_s = float(self.c.get("model_timeout_s", 900))
