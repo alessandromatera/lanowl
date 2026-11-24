@@ -141,7 +141,10 @@ says what the updater is and what it is allowed to do.
 changed, from which address, and whether the file had been edited on the host before it.
 **Undo** puts a file back as it was before the latest save; older ones say **Restore**, and
 the sheet lists everything that goes back with it. An undo is a save like any other: the
-changes, the confirm, a line on Telegram, then Restart.
+changes, the confirm, a line on Telegram, then Restart. A removal writes two files,
+`inventory.yaml` and `secrets.yaml`: Undo or Restore on either puts both back as they were, so
+the device comes back with its login (its ssh host key is learned again at the next
+connection).
 
 ## Devices
 
@@ -176,7 +179,12 @@ A save that sets the device's own login writes `secrets.yaml` too: the sheet lis
 changes.
 
 Anything else a device has in the file is kept as it is. **Remove from inventory.yaml** takes
-it out, through the same sheet and confirm.
+it out, through the same sheet and confirm. What is its own goes with it: its login, when no
+other device uses it (one still in use stays, and the sheet says who uses it), its line in
+`secrets.yaml`'s `devices:` list, and its ssh host key. The sheet lists each, and Telegram gets
+one message for all of it. Its rows on Security go at the next restart, and an outage still
+open for it ends then without a "back online". Its history stays: the Timeline, past alerts,
+what the owl said about it.
 
 **Watch**, on the Devices tab's list of what a site's DHCP sees, asks its name and writes the
 device into `inventory.yaml` (the same sheet), and lanowl pings it at once: it is on the page

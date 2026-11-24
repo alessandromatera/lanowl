@@ -26,6 +26,7 @@ import re
 import time
 from typing import Optional
 
+from .gone import say
 from .report import MODEL_MAX, _html, blabel, label  # noqa: F401 (MODEL_MAX: imported from here too)
 
 log = logging.getLogger("lanowl.reviews")
@@ -219,7 +220,33 @@ class FindingsReview(Review):
             self.rec["reviewed"] = time.time()
             self._forget_gone()
         self.rec["last_done"] = time.time()
+        self.drop_gone()
         self._save()
+
+    def watched(self) -> Optional[set]:
+        """The anchors the review still looks at (a review's own); None: no list, nothing dropped."""
+        return None
+
+    def drop_gone(self) -> bool:
+        """A device the review no longer looks at (taken out of the inventory) takes its findings
+        and the owner's dismissals of them with it (gone.py)."""
+        watched = self.watched()
+        if watched is None:
+            return False
+        r = self.rec
+        lost = [f for f in r["findings"] if f.get("anchor") and f["anchor"] not in watched]
+        gone = {f["anchor"] for f in lost}
+        r["findings"] = [f for f in r["findings"] if f not in lost]
+        for k in list(r["dismissed"]) + list(r.get("told") or []):
+            anchor = k.split(":")[1] if k.count(":") >= 2 else ""
+            if anchor and anchor not in watched:
+                r["dismissed"].pop(k, None)
+                r["told"] = [t for t in r.get("told") or [] if t != k]
+                gone.add(anchor)
+        if gone:
+            say(log, self.NAME, gone, "looked at")
+            self._save()
+        return bool(gone)
 
     def _forget_gone(self):
         keys = {f["key"] for f in self.rec["findings"]}

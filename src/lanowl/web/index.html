@@ -4824,6 +4824,8 @@ function planHtml(p, fname) {
     `<div class="dlab">${esc(fname)}<span>${n} change${n === 1 ? "" : "s"}</span></div>` +
     `<ul class="chl">${ch.slice(0, CHG_SHOWN).map(c => `<li>${esc(c)}</li>`).join("") || "<li>no change</li>"}${n > CHG_SHOWN ? `<li class="more">and ${n - CHG_SHOWN} more</li>` : ""}</ul>`;
 }
+// what a removal does besides the changes: a login kept, the ssh host key forgotten, a secrets.yaml left as it is
+const notesHtml = p => (p.notes || []).map(n => `<p class="fine" style="margin:6px 4px 0">${esc(n)}</p>`).join("");
 function openSet(title, body, go, opts) {
   ST.sheet = {go, opts: opts || {}};
   put("set-in", `<div class="shd"><div class="grab"></div><div class="shd-row"><h2>${esc(title)}</h2><button class="x" type="button" data-sact="sclose" aria-label="Close">${ic("x")}</button></div></div>
@@ -5039,7 +5041,7 @@ async function setHistory() {
   H.forEach(x => { if (!(x.file in latest)) latest[x.file] = x.id; });
   let h = back("set", "Settings") + setHead("History", "Every save from the dashboard, the newest first. The file as it was before each one is kept: the last 30 of each.");
   h += H.length ? `<div class="list">` + H.map(x => `<div class="row" style="align-items:flex-start"><span class="rt"><span class="rn" style="white-space:normal">${esc((x.changes || []).slice(0, 3).join("; ") || "no change")}${(x.changes || []).length > 3 ? esc(` and ${x.changes.length - 3} more`) : ""}</span>
-      <span class="rs" style="white-space:normal">${esc(how[x.how] || "")}${esc(clock(x.ts))} · ${esc(FNAME[x.file] || x.file)}${x.from ? " · from " + esc(x.from) : ""}${x.hand ? " · edited on the host before it" : ""}</span></span>
+      <span class="rs" style="white-space:normal">${esc(how[x.how] || "")}${esc(clock(x.ts))} · ${esc(FNAME[x.file] || x.file)}${x.from ? " · from " + esc(x.from) : ""}${x.hand ? " · edited on the host before it" : ""}${((H.find(y => y.id === x.with) || {}).file) ? " · saved with " + esc(FNAME[H.find(y => y.id === x.with).file]) : ""}</span></span>
       ${x.kept ? `<button class="rowbtn" type="button" data-sact="undo" data-id="${esc(x.id)}">${latest[x.file] === x.id ? "Undo" : "Restore"}</button>` : `<span class="rv">not kept</span>`}</div>`).join("") + `</div>`
     : `<div class="list"><div class="empty">Nothing saved from the dashboard yet.</div></div>`;
   put("set", `<div class="setw">${h}</div>`);
@@ -5047,12 +5049,13 @@ async function setHistory() {
 async function undoSheet(id) {
   const p = await post("/api/settings/restore", {id, preview: true}).catch(() => ({ok: false}));
   if (!p.ok) { toast(p.error || "That version is not kept any more."); return; }
-  const fname = FNAME[p.file] || p.file;
-  openSet(`Put ${fname} back`, planHtml(p, fname) + `<p class="fine" style="margin:10px 4px 0">The file as it was before that save — and everything saved after it goes back with it.</p>`, async () => {
-    const r = await saveCall("/api/settings/restore", {id, base: p.base});
-    if (r.ok) { await setData(true); ST.devs = null; renderSet(); refresh(); toast(p.file === "secrets" ? "Put back: in use now." : "Put back. Restart lanowl to apply."); }
+  const fname = FNAME[p.file] || p.file, w = p.with;
+  openSet(w ? `Put ${fname} and ${FNAME[w.file] || w.file} back` : `Put ${fname} back`, planHtml(p, fname) + (w ? planHtml(w, FNAME[w.file] || w.file) : "") +
+    `<p class="fine" style="margin:10px 4px 0">${w ? "Both files as they were before that save: they were saved together" : "The file as it was before that save"} — and everything saved after it goes back with it.</p>`, async () => {
+    const r = await saveCall("/api/settings/restore", {id, base: p.base, ...(w ? {wbase: w.base} : {})});
+    if (r.ok) { await setData(true); ST.devs = null; renderSet(); refresh(); toast(p.file === "secrets" && !w ? "Put back: in use now." : "Put back. Restart lanowl to apply."); }
     return r;
-  }, {label: "Put it back", blocked: (p.problems || []).length > 0});
+  }, {label: "Put it back", blocked: (p.problems || []).length > 0 || ((w || {}).problems || []).length > 0});
 }
 
 // -- Secrets: set, replaced, never shown --
@@ -5545,16 +5548,17 @@ async function devReview(remove) {
   const p = await post("/api/settings/device", {...body, preview: true}).catch(() => ({ok: false, error: "lanowl did not answer."}));
   if (!p.ok) { toast(p.error || "That cannot be saved."); return; }
   openSet(remove ? `Remove ${S2.orig.name || S2.orig.ip}?` : p.secrets ? "Save the device and its login" : "Save to inventory.yaml",
-    planHtml(p, "inventory.yaml") + (p.secrets ? planHtml(p.secrets, "secrets.yaml") : ""), async () => {
+    planHtml(p, "inventory.yaml") + (p.secrets ? planHtml(p.secrets, "secrets.yaml") : "") + notesHtml(p), async () => {
     const r = await saveCall("/api/settings/device", {...body, base: p.base, ...(p.secrets ? {sbase: p.secrets.base} : {})});
     if (r.ok) {
       const inSheet = ST.devIn === "sheet";
       ST.dev = null; dsave("dev", null); await devData(true); await setData(true);
       if (inSheet) { S.sheetSaved = S.sheet; devSetClose(); } else setNav("set/devices");
-      refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply.");
+      refresh(); toast((remove ? "Removed" : "Saved") + ". Restart lanowl to apply." + (r.warning ? " " + r.warning : ""));
     }
     return r;
-  }, {blocked: (p.problems || []).length > 0 || ((p.secrets || {}).problems || []).length > 0, label: remove ? "Remove it" : "Save"});
+  }, {blocked: (p.problems || []).length > 0 || ((p.secrets || {}).problems || []).length > 0, label: remove ? "Remove it" : "Save",
+      ...(remove ? {note: "Its login (unless another device uses it) and its ssh host key go with it, its rows on Security at the restart. Its history stays. Telegram gets one line."} : {})});
   return V;
 }
 async function migrateSheet() {

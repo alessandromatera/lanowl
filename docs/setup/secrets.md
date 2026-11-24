@@ -130,7 +130,9 @@ after a few failures, and it never offers its key to a password login.
 A device's host key is trusted the first time lanowl connects and remembered on the state
 volume. A device that makes a new host key at every boot is listed in
 `access.hostkey_any`. Old devices (RouterOS 6, OpenWrt's dropbear) offer only older key types;
-lanowl accepts those as a fallback, never in preference to modern ones.
+lanowl accepts those as a fallback, never in preference to modern ones. Removing a device in
+Settings forgets its host key and takes its `devices:` line, and its login unless another
+device still uses it.
 
 ## Checking
 

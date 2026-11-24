@@ -33,6 +33,7 @@ from typing import Optional
 
 from . import kinds, probes
 from .checks import _exec
+from .gone import drop_rows, managed, say
 from .model import on_own_network, scan_deny, scan_state
 from .reboot import fmt_s, proc_uptime, routeros_field
 from .report import _html, label, plural
@@ -59,6 +60,9 @@ SECURITY_PAGE_S = 2 * 86400        # ...and a security update not installed afte
 LISTS_STALE_S = 7 * 86400          # apt's lists older than this: "no updates" means nothing
 CVSS_PAGE = 7.0
 SECURITY_WORDS = re.compile(r"security|CVE-\d|vulnerab", re.I)
+# a finding's key names its machine: err:<ip>, port:<ip>:<port>, ros:<ip>:<version>, ... (a Home
+# Assistant update's, ha:<entity>, names none)
+KEY_IP = re.compile(r"^(?:err|reboot|secupd|lists|upd|ros|fw|port|cve):([^:]+)")
 ROS_FW_SETTLE_S = 10               # /system routerboard upgrade writes it now; the reboot runs it
 APT_WATCH_S = 30                   # a running apt upgrade's latest line, read this often (the page)
 # vulners matches the version a service announces. Two ways that is known to be wrong,
@@ -252,6 +256,37 @@ class Updates:
         except Exception as e:
             log.warning("updates: record not saved: %s", e)
 
+    def drop_gone(self) -> bool:
+        """A machine this no longer reads (taken out of the inventory, or its `updates` switched
+        off) takes its rows with it: what it read, when each update was first seen, the owner's
+        dismissals and what was announced. The open ports, the scan's matches and the CVE
+        announcements go with an address that is neither a device of the inventory (a site's
+        watched ones included) nor a machine read here (gone.py)."""
+        hosts = {h["ip"] for h in self.hosts} | managed(self.a.inv, "updates")
+        known = hosts | {d.ip for d in self.a.inv.devices}
+        r = self.rec
+        gone = set(drop_rows(r["hosts"], hosts)) | set(drop_rows(r["first_seen"], hosts))
+        gone |= set(drop_rows(r["ports"], known)) | set(drop_rows(r["announced_cve"], known))
+        gone |= set(drop_rows(r["scan"].get("found") or {}, known))
+        keys = list(r["dismissed"]) + list(r["announced"])
+        lost = [k for k in keys if not self._watching(k, hosts, known)]
+        for k in lost:
+            r["dismissed"].pop(k, None)
+        r["announced"] = [k for k in r["announced"] if k not in lost]
+        gone |= {m.group(1) for k in lost if (m := KEY_IP.match(k))}
+        if gone:
+            say(log, "updates", gone)
+            self._save()
+        return bool(gone)
+
+    def _watching(self, key: str, hosts: set, known: set) -> bool:
+        """Does a dismissal or an announced key still belong to a machine here? A port's and a
+        CVE's go with the inventory, the rest with the machines read."""
+        if key.startswith("ha:"):
+            return any(h.get("kind") == "homeassistant" for h in self.rec["hosts"].values())
+        m = KEY_IP.match(key)
+        return m is None or m.group(1) in (known if key.startswith(("port:", "cve:")) else hosts)
+
     # --- when -------------------------------------------------------------------
     @staticmethod
     def _today_at(hhmm: str, now: float) -> float:
@@ -319,6 +354,7 @@ class Updates:
             self.rec["hosts"][h["ip"]] = r
         self._track_first_seen()
         self.rec["ports"] = await self._insecure_ports()
+        self.drop_gone()
         findings = self.findings()
         self._prune_dismissed(findings)
         await self._announce(findings)

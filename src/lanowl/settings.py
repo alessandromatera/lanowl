@@ -16,6 +16,10 @@ save goes like this:
 
 Undo puts a file back as it was before a save, the same way: diff, confirm, Telegram.
 
+A device taken out of inventory.yaml takes what is its own with it: its login when nothing left
+names it, its line in secrets.yaml's `devices:` map and its ssh host key — one preview, one
+Telegram message, the two files saved together (Undo puts both back). See `Settings.removal`.
+
 secrets.yaml is written the same way, and is WRITE-ONLY: a password or a token goes in from the
 page and never comes back out. Its diff shows each value as dots ("(new)" where it changes),
 its changes say "login routers: password replaced", the Telegram line names the login, and
@@ -220,19 +224,42 @@ def _site_words(old, new) -> list:
     return out
 
 
+def _by_ip(raw) -> dict:
+    """inventory.yaml's devices (its parsed data) by address."""
+    devs = raw.get("devices") if isinstance(raw, dict) else None
+    return {str(d.get("ip")): d for d in (devs if isinstance(devs, list) else []) if isinstance(d, dict)}
+
+
+def _moved(od: dict, nd: dict) -> dict:
+    """new address -> old address, for a device that kept its name and changed its address: it
+    moved, it was not added and removed."""
+    by_name = {str(d.get("name")): ip for ip, d in od.items()}
+    return {ip: by_name[str(d.get("name"))] for ip, d in nd.items()
+            if ip not in od and str(d.get("name")) in by_name and by_name[str(d.get("name"))] not in nd}
+
+
+def gone_devices(old, new) -> list:
+    """[(ip, device)] of the devices `old` (inventory.yaml's data) has and `new` has not — one that
+    only moved to another address is not gone."""
+    od, nd = _by_ip(old), _by_ip(new)
+    moved = set(_moved(od, nd).values())
+    return [(ip, d) for ip, d in od.items() if ip not in nd and ip not in moved]
+
+
+def _users_words(users: list) -> str:
+    """"AP-2 uses it", "AP-2, Cam-3 use it", "AP-2, Cam-3 and 2 more use it"."""
+    shown = ", ".join(users[:2]) + (f" and {len(users) - 2} more" if len(users) > 2 else "")
+    return f"{shown} {'uses' if len(users) == 1 else 'use'} it"
+
+
 def describe(name: str, old, new) -> list:
     """What changed, in words: "model.name qwen3:30b → qwen3:32b", "NVR: criticality high →
     critical", "TV (192.168.88.60) added". Never a hash's value."""
     out = []
     if name == "inventory":
         o, n = old or {}, new or {}
-        od = {str(d.get("ip")): d for d in (o.get("devices") or []) if isinstance(d, dict)}
-        nd = {str(d.get("ip")): d for d in (n.get("devices") or []) if isinstance(d, dict)}
-        by_name = {str(d.get("name")): ip for ip, d in od.items()}
-        moved = {}
-        for ip, d in nd.items():
-            if ip not in od and str(d.get("name")) in by_name and by_name[str(d.get("name"))] not in nd:
-                moved[ip] = by_name[str(d.get("name"))]
+        od, nd = _by_ip(o), _by_ip(n)
+        moved = _moved(od, nd)
         for ip, d in nd.items():
             was = od.get(moved.get(ip, ip))
             label = str(d.get("name") or ip)
@@ -479,10 +506,11 @@ class Settings:
         return out
 
     def plan(self, name: str, ops: list, text: Optional[str] = None, secrets_text: Optional[str] = None,
-             config_text: Optional[str] = None) -> dict:
+             config_text: Optional[str] = None, inventory_text: Optional[str] = None) -> dict:
         """What a save would do, without doing it: {"ok", "base", "text", "diff", "changes",
         "problems"}; {"ok": False, "error"} when it cannot be done. `secrets_text`: the
-        secrets.yaml the same save writes first (the setup), for --check's rules."""
+        secrets.yaml the same save writes first (the setup), for --check's rules;
+        `inventory_text`: the inventory.yaml it has written before it (a removal's)."""
         f = self.files[name]
         old = f.read() if text is None else text
         base = digest(old)
@@ -494,7 +522,7 @@ class Settings:
             new = apply(old, ops + reset, **self._style(name))
         except EditError as e:
             return {"ok": False, "error": f"{NAMES[name]}: {e}", "base": base}
-        p = self._planned(name, old, new, base, secrets_text, config_text)
+        p = self._planned(name, old, new, base, secrets_text, config_text, inventory_text)
         if reset and p["ok"]:
             p["changes"] = [c + TEMPERATURE_RESET if c.startswith("model.temperature ") and c.endswith(" → auto") else c
                             for c in p["changes"]]
@@ -523,7 +551,7 @@ class Settings:
         return [{"op": "set", "path": ["model", "temperature"], "value": "auto"}]
 
     def _planned(self, name: str, old: str, new: str, base: str, secrets_text: Optional[str] = None,
-                 config_text: Optional[str] = None) -> dict:
+                 config_text: Optional[str] = None, inventory_text: Optional[str] = None) -> dict:
         import difflib
         if name == "secrets":            # never a value: dots, "(new)" where one changes
             a, b = mask(old), mask(new, old)
@@ -536,12 +564,13 @@ class Settings:
         diff = [ln if "password_hash" not in ln or not ln.startswith(("+", "-"))
                 else ln.split("password_hash")[0] + "password_hash: (hidden)" for ln in diff]
         return {"ok": True, "base": base, "text": new, "diff": diff, "changes": changes,
-                "problems": self.problems(name, new, secrets_text, config_text)}
+                "problems": self.problems(name, new, secrets_text, config_text, inventory_text)}
 
     def problems(self, name: str, new: str, secrets_text: Optional[str] = None,
-                 config_text: Optional[str] = None) -> list:
+                 config_text: Optional[str] = None, inventory_text: Optional[str] = None) -> list:
         """The ✗ lines `lanowl --check` gives with the new file that it does not give now.
-        `config_text`: the config.yaml the same save writes too (the setup), as it will be."""
+        `config_text`, `inventory_text`: the config.yaml or inventory.yaml the same save writes too
+        (the setup's, a removal's), as it will be."""
         from .main import check_report
         from .model import config_from, inventory_from
         try:
@@ -553,6 +582,8 @@ class Settings:
                 texts[name] = new
             if config_text is not None and name != "config":
                 texts["config"] = config_text
+            if inventory_text is not None and name != "inventory":
+                texts["inventory"] = inventory_text
             after = self._check(texts, config_from, inventory_from, check_report, secrets_text)
         except Exception as e:           # a check that crashes must not hide the reason
             log.warning("settings: check failed", exc_info=True)
@@ -615,6 +646,136 @@ class Settings:
         log.warning("settings: %s %s from %s: %s", NAMES[name], how, ip or "?", "; ".join(p["changes"])[:300])
         return {"ok": True, "id": entry["id"], "changes": p["changes"], "base": entry["after"]}
 
+    # --- taking a device out of the inventory: what goes with it ---------------------------------
+    # "Removing a device removes everything from that device": its login when nothing else names
+    # it, its line in secrets.yaml's `devices:` map and its ssh host key. Its history stays, and its
+    # live rows go at the restart (gone.py). Only the device form's Remove and a save of
+    # inventory.yaml come here; the first-run setup, an undo and the migration write what they write.
+    def removal(self, old: str, new: str) -> dict:
+        """What leaves with the devices that inventory.yaml's text `new` no longer has (`old` is the
+        text before it): {"gone": [(ip, name)], "sops": secrets.yaml's operations, "notes": what the
+        preview says besides the changes, "stay": why secrets.yaml is left as it is ("" when it is
+        written), "keys": the addresses whose ssh host key is there}. Nothing gone, nothing else."""
+        gone = gone_devices(load(old), load(new))
+        out = {"gone": [(ip, str(d.get("name") or ip)) for ip, d in gone], "sops": [], "notes": [],
+               "stay": "", "keys": []}
+        if not gone:
+            return out
+        sops, out["notes"], out["stay"] = self._secret_ops(gone, new)
+        if sops:
+            st = self.files["secrets"].status()
+            if st["writable"]:
+                out["sops"] = sops
+            else:
+                out["stay"] = WHY[st["why"]].format(name="secrets.yaml")
+        if out["stay"]:
+            out["notes"].append("the login stays in secrets.yaml: " + out["stay"])
+        path = access.known_hosts_file(self.a.cfg)
+        out["keys"] = [ip for ip, _ in out["gone"] if access.hostkey_known(path, ip)]
+        many = len(out["gone"]) > 1
+        names = dict(out["gone"])
+        out["notes"] += [(f"{names[ip]}: " if many else "") + "its ssh host key is forgotten" for ip in out["keys"]]
+        return out
+
+    def _secret_ops(self, gone: list, new: str) -> tuple:
+        """(operations, notes, why not) for secrets.yaml when the devices `gone` [(ip, device)] leave:
+        the line of each in its `devices:` map, and the login each used when nothing left names it
+        (login_users, on the inventory as it will be). A login still named stays, and says by whom."""
+        import yaml
+        from .model import config_from, inventory_from
+        from .settingsweb import login_users
+        try:
+            raw = load(self.files["secrets"].read()) or {}
+        except yaml.YAMLError:
+            return [], [], "secrets.yaml does not parse"
+        raw = raw if isinstance(raw, dict) else {}
+        devs = raw.get("devices") if isinstance(raw.get("devices"), dict) else {}
+        logins = raw.get("logins") if isinstance(raw.get("logins"), dict) else {}
+        ops = [{"op": "del", "path": ["devices", ip]} for ip, _ in gone if ip in devs]
+        used = [d.get("credentials") for _, d in gone] + [devs.get(ip) for ip, _ in gone]
+        names = [n for n in dict.fromkeys(str(x) for x in used if x) if n in logins]
+        if not names:
+            return ops, [], ""
+        try:
+            inv = inventory_from(load(new), self.files["inventory"].path)
+        except (KeyError, TypeError, AttributeError):
+            return [], [], "inventory.yaml could not be read"
+        cfgs = [self.a.cfg]          # what runs now, and what a restart will run
+        try:
+            cfgs.append(config_from(load(self.files["config"].read()) or {}, self.files["config"].path))
+        except yaml.YAMLError:
+            pass
+        after, users = expected(raw, ops), {}          # secrets.yaml as the devices' lines go
+        for cfg in cfgs:
+            for n, who in login_users(cfg, inv, after).items():
+                users.setdefault(n, []).extend(w for w in who if w not in users.get(n, []))
+        kept = []
+        for n in names:
+            if users.get(n):
+                kept.append(f"login {n} kept: {_users_words(users[n])}")
+            else:
+                ops.append({"op": "del", "path": ["logins", n]})
+        return ops, kept, ""
+
+    def plan_inventory(self, ops: list, text: Optional[str] = None) -> dict:
+        """plan("inventory", ops) and, when a device leaves, what goes with it: "secrets" (the plan
+        of secrets.yaml's own changes, as the page shows it) and "notes" (a login kept, its ssh host
+        key forgotten, a secrets.yaml that stays as it is)."""
+        old = self.files["inventory"].read() if text is None else text
+        p = self.plan("inventory", ops, old)
+        if not p["ok"]:
+            return p
+        rm = self.removal(old, p["text"])
+        if not rm["gone"]:
+            return p
+        p["notes"] = rm["notes"]
+        if rm["sops"]:
+            sp = self.plan("secrets", rm["sops"], inventory_text=p["text"])
+            sp.pop("text", None)
+            p["secrets"] = sp
+            if not sp["ok"]:
+                p.update(ok=False, error=sp.get("error"))
+        return p
+
+    def save_inventory(self, ops: list, base: str, sbase: str = "", ip: str = "") -> dict:
+        """save("inventory", ops) for a change that may take devices out. Then: inventory.yaml is
+        written first (a login left over is harmless, a device without its login is broken), then
+        secrets.yaml — `sbase`: its digest as the page read it — then the ssh host keys, and one
+        Telegram message for all of it. A secrets.yaml that cannot be written leaves the removal
+        standing, with a warning; the two saves are linked, so an undo puts both back."""
+        old = self.files["inventory"].read()
+        p = self.plan("inventory", ops, old) if digest(old) == base else {"ok": False}
+        rm = self.removal(old, p["text"]) if p["ok"] else {"gone": []}
+        if not rm["gone"]:
+            return self.save("inventory", ops, base, ip)
+        r = self.save("inventory", ops, base, ip, tell=False)
+        if not r["ok"]:
+            return r
+        why, rs = rm["stay"], None
+        if rm["sops"]:
+            rs = self.save("secrets", rm["sops"], sbase or digest(self.files["secrets"].read()), ip, tell=False)
+            if rs["ok"]:
+                self._link(r["id"], rs["id"])
+                r["secrets"] = {"id": rs["id"], "changes": rs["changes"]}
+            else:
+                why = rs.get("error") or "it could not be written"
+        path, names = access.known_hosts_file(self.a.cfg), dict(rm["gone"])
+        forgot = [k for k in rm["keys"] if access.forget_hostkey(path, k)]
+        r["forgot"] = forgot
+        self._tell(self.entry(r["id"]), self.entry(rs["id"]) if rs and rs["ok"] else None,
+                   tuple(f"ssh host key of {names[k]} ({k}) forgotten" for k in forgot))
+        if why:
+            r["warning"] = "the login stayed in secrets.yaml: " + why
+        return r
+
+    def _link(self, a: int, b: int):
+        """Two saves made together: each names the other, so an undo of either puts both files back."""
+        for x, y in ((a, b), (b, a)):
+            e = self.entry(x)
+            if e is not None:
+                e["with"] = y
+        self._save()
+
     def _keep(self, name: str, text: str) -> str:
         os.makedirs(self.dir, mode=0o700, exist_ok=True)
         fn = f"{name}-{time.strftime('%Y%m%d-%H%M%S')}-{digest(text)[:6]}.yaml"
@@ -640,22 +801,27 @@ class Settings:
         except Exception as e:
             log.warning("settings: record not saved: %s", e)
 
-    def _tell(self, e: dict):
+    def _tell(self, e: dict, other: Optional[dict] = None, extra: tuple = ()):
         """One Telegram message: which file, how, from where, what. It goes to the chat lanowl
-        runs with now — so a save that moves the alerts to another chat is still heard here."""
-        fname = NAMES[e["file"]]
-        ch = e["changes"]
+        runs with now — so a save that moves the alerts to another chat is still heard here.
+        `other`: the save made with this one (a removal's secrets.yaml, an undo of both): one
+        message names both files. `extra`: lines that are no file's change (an ssh host key
+        forgotten)."""
+        fname = NAMES[e["file"]] + (f" and {NAMES[other['file']]}" if other else "")
+        ch = list(e["changes"]) + list(other["changes"] if other else []) + list(extra)
+        cap = SHOWN * 2 if other or extra else SHOWN
         # the header, a blank line, then the changes: one a line (owner, 2026-11-20: readability)
-        rows = [html.escape(c) for c in ch[:SHOWN]]
+        rows = [html.escape(c) for c in ch[:cap]]
         if len(rows) > 1:
             rows = [f"• {r}" for r in rows]
-        if len(ch) > SHOWN:
-            rows.append(f"…and {len(ch) - SHOWN} more, in Settings → History")
+        if len(ch) > cap:
+            rows.append(f"…and {len(ch) - cap} more, in Settings → History")
         shown = "\n".join(rows)
         where = f" ({html.escape(e['from'])})" if e.get("from") else ""
-        head = {"save": f"{'🔑' if e['file'] == 'secrets' else '⚙️'} <b>{fname} changed</b> from the dashboard{where}",
+        key = "🔑" if e["file"] == "secrets" and not other else "⚙️"
+        head = {"save": f"{key} <b>{fname} changed</b> from the dashboard{where}",
                 "restore": f"⚙️ <b>{fname} put back</b> {html.escape(e.get('note') or '')}, from the dashboard{where}",
-                "setup": f"{'🔑' if e['file'] == 'secrets' else '⚙️'} <b>{fname} written</b> by the first-run setup{where}",
+                "setup": f"{key} <b>{fname} written</b> by the first-run setup{where}",
                 "watch": f"⚙️ <b>{fname} changed</b> by Watch on the dashboard{where}"}.get(e["how"], fname)
         try:
             self.a._emit_telegram("digest", head + ("\n\n" + shown if shown else ""))
@@ -673,22 +839,88 @@ class Settings:
         except (OSError, KeyError):
             return None
 
-    def restore_plan(self, sid) -> dict:
+    def _pair(self, sid) -> tuple:
+        """([(entry, the file as it was before it)], error): the save, and the one made with it (a
+        removal's two files). A version that is not kept is an error, and nothing is put back."""
         e = self.entry(sid)
         text = self._version(e) if e else None
         if text is None:
-            return {"ok": False, "error": "that version is not kept any more"}
-        old = self.files[e["file"]].read()
-        p = self._planned(e["file"], old, text, digest(old))
-        return {**p, "file": e["file"]}
+            return [], "that version is not kept any more"
+        pair = [(e, text)]
+        if e.get("with") is not None:
+            w = self.entry(e["with"])
+            wtext = self._version(w) if w else None
+            if wtext is None:
+                return [], (f"it was saved together with {NAMES[w['file']] if w else 'another file'}, whose "
+                            "old version is not kept any more: nothing is put back")
+            pair.append((w, wtext))
+        return pair, ""
 
-    def restore(self, sid, base: str, ip: str = "") -> dict:
-        e = self.entry(sid)
-        text = self._version(e) if e else None
-        if text is None:
-            return {"ok": False, "error": "that version is not kept any more"}
+    def _restore_plans(self, pair: list) -> list:
+        """What putting each file of `pair` back would do; an inventory.yaml is checked with the
+        secrets.yaml that goes back with it."""
+        sec = next((t for e, t in pair if e["file"] == "secrets"), None)
+        out = []
+        for e, text in pair:
+            old = self.files[e["file"]].read()
+            p = self._planned(e["file"], old, text, digest(old), sec if e["file"] == "inventory" else None)
+            out.append({**p, "file": e["file"]})
+        return out
+
+    def restore_plan(self, sid) -> dict:
+        pair, err = self._pair(sid)
+        if err:
+            return {"ok": False, "error": err}
+        first, *rest = self._restore_plans(pair)
+        if rest:
+            rest[0].pop("text", None)
+            first["with"] = rest[0]
+        return first
+
+    def restore(self, sid, base: str, ip: str = "", wbase: str = "") -> dict:
+        """Put a file back as it was before a save — and, when that save was made with another (a
+        removal's), both. `wbase`: the digest of the other, as the page read it."""
+        pair, err = self._pair(sid)
+        if err:
+            return {"ok": False, "error": err}
+        e = pair[0][0]
         note = "as it was before the " + time.strftime("%d/%m %H:%M", time.localtime(e["ts"])) + " save"
-        return self.save(e["file"], [], base, ip, how="restore", text=text, note=note)
+        if len(pair) == 1:
+            return self.save(e["file"], [], base, ip, how="restore", text=pair[0][1], note=note)
+        other = pair[1][0]["file"]
+        if not wbase:          # as `base`: no digest, no write — the other file is never put back unseen
+            return {"ok": False, "why": "changed", "error": f"{NAMES[other]} changed since this page "
+                                                             "read it: look at it again, then put it back"}
+        bases = {e["file"]: base, other: wbase}
+        return self._restore_pair(pair, bases, ip, note)
+
+    def _restore_pair(self, pair: list, bases: dict, ip: str, note: str) -> dict:
+        """Both files as they were, or neither: every file, base and ✗ is checked before the first
+        write. secrets.yaml goes first: a device must never name a login that is not there."""
+        for p in self._restore_plans(pair):
+            name = p["file"]
+            st = self.files[name].status()
+            if not st["writable"]:
+                return {"ok": False, "why": st["why"], "error": WHY[st["why"]].format(name=NAMES[name])}
+            if p["base"] != bases[name]:
+                return {"ok": False, "why": "changed", "error": f"{NAMES[name]} changed since this page "
+                                                                 "read it: look at it again, then put it back"}
+            if p["problems"]:
+                return {"ok": False, "why": "check", "error": "lanowl --check would say: " + "; ".join(p["problems"]),
+                        "problems": p["problems"]}
+        done = {}
+        for e, text in sorted(pair, key=lambda x: x[0]["file"] != "secrets"):
+            r = self.save(e["file"], [], bases[e["file"]], ip, how="restore", text=text, note=note, tell=False)
+            if not r["ok"]:
+                late = " ".join(f"{NAMES[f]} was put back already." for f in done)
+                return {**r, "error": f"{r.get('error')} {late}".strip()}
+            done[e["file"]] = r
+        if all(r.get("id") for r in done.values()):
+            self._link(*[r["id"] for r in done.values()])
+        made = sorted((self.entry(r["id"]) for r in done.values() if r.get("id")), key=lambda x: x["file"] != "inventory")
+        if made:
+            self._tell(made[0], made[1] if len(made) > 1 else None)
+        return {**done[pair[0][0]["file"]], "ok": True}
 
     # --- what the page shows -------------------------------------------------------------
     def pending(self) -> dict:
@@ -715,7 +947,7 @@ class Settings:
         self.running[name] = running_digest(name, text)
 
     def history(self) -> list:
-        return [{k: s.get(k) for k in ("id", "ts", "file", "how", "from", "changes", "note", "hand")}
+        return [{k: s.get(k) for k in ("id", "ts", "file", "how", "from", "changes", "note", "hand", "with")}
                 | {"kept": os.path.exists(os.path.join(self.dir, s["before"]))}
                 for s in reversed(self.rec["saves"])]
 

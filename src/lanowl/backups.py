@@ -53,6 +53,7 @@ from typing import Optional
 
 from . import access
 from .checks import _exec
+from .gone import drop_rows, managed, say
 from .reboot import routeros_field
 from .report import _html, blabel
 
@@ -215,6 +216,20 @@ class Backups:
             self.a.state.save_record(RECORD, self.rec)
         except Exception as e:
             log.warning("backups: record not saved: %s", e)
+
+    def drop_gone(self) -> bool:
+        """A machine this no longer backs up (taken out of the inventory, or its `backup` switched
+        off) takes its row with it: its last backup, and the "getting old" it was announced for.
+        The backups on the store are the owner's: never touched (gone.py)."""
+        known = {m["ip"] for m in self.machines} | managed(getattr(self.a, "inv", None), "backup")
+        gone = set(drop_rows(self.rec["machines"], known))
+        stale = [k for k in self.rec["announced"] if k.partition(":")[2] not in known]
+        self.rec["announced"] = [k for k in self.rec["announced"] if k not in stale]
+        gone |= {k.partition(":")[2] for k in stale}
+        if gone:
+            say(log, "backups", gone, "backed up")
+            self._save()
+        return bool(gone)
 
     # --- who is who ------------------------------------------------------------
     def name(self, m: dict) -> str:
@@ -725,6 +740,7 @@ class Backups:
 
     async def _run(self, ms: list, kind: str):
         results = [(m, await self.backup(m, kind)) for m in ms]
+        self.drop_gone()
         self._save()
         bad = [(m, r) for m, r in results if not r["ok"]]
         if kind == "daily":

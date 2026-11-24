@@ -1012,6 +1012,22 @@ class Lanowl:
         self._persist_alerts = True
         log.info("resumed the alert record: %d incident(s), %d announced, %d told by digest, "
                  "%d WAN episode(s)", n, len(self.gate.announced_keys()), len(self._told), w)
+        self._drop_gone()
+
+    def _drop_gone(self):
+        """At the start, once everything is built (the sites' watched devices are in the inventory
+        now): each feature drops the live rows of a machine it no longer works from — a device the
+        owner took out of the inventory leaves Security here (gone.py). Updates first: the CVE
+        check reads which machines the scan still matches."""
+        for name in ("updates", "cves", "exposure", "configwatch", "backups", "devwatch", "drift"):
+            mod = getattr(self, name, None)       # a test's Lanowl may be half built
+            if mod is not None:
+                mod.drop_gone()
+        # an incident still open for a device that is gone ends without a "back online": the
+        # gate restored it, and its issue will never come back to close it the usual way
+        self._forget(lambda i: i.get("kind") in ("down", "degraded") and bool(i.get("ip"))
+                     and not self.inv.owns(i["ip"], str(i.get("device") or "")),
+                     "devices no longer in the inventory")
 
     def _save_alert_record(self):
         if not self._persist_alerts:

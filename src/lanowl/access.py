@@ -50,7 +50,9 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import re
 import stat
+import subprocess
 import tempfile
 from typing import NamedTuple, Optional
 
@@ -265,13 +267,52 @@ def ssh_key(cfg: dict) -> str:
     return os.environ.get(KEY_ENV, "").strip() or shared(cfg).data()["ssh_key"]
 
 
+def known_hosts_file(cfg: dict) -> str:
+    """lanowl's own known_hosts, on the state volume: `access.known_hosts`."""
+    return str(((cfg or {}).get("access") or {}).get("known_hosts") or "known_hosts_devices")
+
+
+_HOST = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+
+def hostkey_known(path: str, host: str) -> bool:
+    """Does the known_hosts file at `path` hold a key for `host`? ssh-keygen reads hashed entries
+    too. lanowl never passes a port, so the host is only ever the bare address."""
+    if not _HOST.match(host) or not os.path.exists(path):
+        return False
+    try:
+        r = subprocess.run(["ssh-keygen", "-F", host, "-f", path], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
+def forget_hostkey(path: str, host: str) -> bool:
+    """Take `host`'s key out of the known_hosts file at `path` (trust on first use learns it again
+    if the address comes back), and the .old copy ssh-keygen leaves. Whether a key was there; a
+    failure is logged, never raised: a device is out of the inventory whatever this does."""
+    if not hostkey_known(path, host):
+        return False
+    try:
+        r = subprocess.run(["ssh-keygen", "-R", host, "-f", path], capture_output=True, timeout=10)
+        if r.returncode != 0:
+            log.warning("access: the ssh host key of %s was not forgotten (ssh-keygen %d)", host, r.returncode)
+            return False
+        if os.path.exists(path + ".old"):
+            os.remove(path + ".old")
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("access: the ssh host key of %s was not forgotten: %s", host, e)
+        return False
+    return True
+
+
 class Access:
     def __init__(self, cfg: dict, inventory=None):
         c = cfg.get("access") or {}
         self.file = shared(cfg)
         self.path = self.file.path
         self.hostkey_any = {str(x) for x in (c.get("hostkey_any") or [])}
-        self.known_hosts = str(c.get("known_hosts") or "known_hosts_devices")
+        self.known_hosts = known_hosts_file(cfg)
         self.inventory = inventory
         self._askpass: Optional[str] = None
 
@@ -387,7 +428,6 @@ def _public_key(path: str) -> str:
             return f.read().strip()
     except OSError:
         pass
-    import subprocess
     try:
         r = subprocess.run(["ssh-keygen", "-y", "-P", "", "-f", path], capture_output=True,
                            text=True, timeout=5)

@@ -38,6 +38,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 from .checks import _exec
+from .gone import drop_rows, managed, say
 
 try:
     import aiohttp  # type: ignore
@@ -51,6 +52,8 @@ log = logging.getLogger("lanowl.exposure")
 
 RECORD = "exposure"
 FACTS_MAX = 6000               # characters kept per machine
+# a finding's key, and the owner's dismissal of it, name their machine: exp:<ip>:<check>
+KEY = re.compile(r"^exp:([0-9a-fA-F.:]+):([a-z_]+)$")
 SEVERITIES = ("critical", "high", "warning", "info")
 
 # The checks the model names a problem with. The key of a finding is machine + check: stable
@@ -304,6 +307,35 @@ class Exposure:
             self.a.state.save_record(RECORD, self.rec)
         except Exception as e:
             log.warning("exposure: record not saved: %s", e)
+
+    def _outside_ips(self) -> set:
+        """The addresses the look from outside is about (the public host, each site's router):
+        the review may name them too."""
+        out = self.rec.get("outside") or {}
+        return {x.get("ip") for x in out.values() if isinstance(x, dict)} \
+            | {x.get("ip") for x in out.get("sites") or [] if isinstance(x, dict)}
+
+    def drop_gone(self) -> bool:
+        """A machine this no longer reviews (taken out of the inventory, or its `security`
+        switched off) takes its facts, its findings and the owner's dismissals of them with it
+        (gone.py). What the look from outside names stays: it is not a machine's."""
+        hosts = {h["ip"] for h in self.hosts} | managed(getattr(self.a, "inv", None), "security")
+        watched = hosts | self._outside_ips()
+        r = self.rec
+        gone = set(drop_rows(r["facts"], hosts))
+        gone |= {f.get("ip") for f in r["findings"] if f.get("ip") not in watched}
+        r["findings"] = [f for f in r["findings"] if f.get("ip") in watched]
+        for k in list(r["dismissed"]) + list(r["announced"]):
+            m = KEY.match(k)
+            if m and m.group(1) not in watched:
+                r["dismissed"].pop(k, None)
+                r["announced"] = [a for a in r["announced"] if a != k]
+                gone.add(m.group(1))
+        gone.discard(None)
+        if gone:
+            say(log, "exposure", gone, "reviewed")
+            self._save()
+        return bool(gone)
 
     # --- when ---------------------------------------------------------------------------
     @property
@@ -584,6 +616,7 @@ class Exposure:
         self.rec["last_done"] = time.time()
         self._prune_dismissed()
         await self._announce()
+        self.drop_gone()
         self._save()
         # each open finding's fix written out for the owner (fixes.py) — never run
         fx = getattr(self.a, "fixes", None)
@@ -639,9 +672,7 @@ class Exposure:
         a known severity — and one finding per machine + check (the worst, with the others'
         titles folded in)."""
         by: dict = {}
-        out = self.rec.get("outside") or {}
-        known = set(facts) | {x.get("ip") for x in out.values() if isinstance(x, dict)} \
-            | {x.get("ip") for x in out.get("sites") or [] if isinstance(x, dict)}
+        known = set(facts) | self._outside_ips()
         for f in raw:
             if not isinstance(f, dict):
                 continue
@@ -672,7 +703,7 @@ class Exposure:
     def dismiss(self, key: str, note: str = "") -> dict:
         """A finding of the last review — or, by its key (exp:<ip>:<check>), one the owner has
         already decided about that the last review did not raise."""
-        m = re.match(r"^exp:([0-9a-fA-F.:]+):([a-z_]+)$", str(key))
+        m = KEY.match(str(key))
         if not any(f["key"] == key for f in self.rec["findings"]) and not (m and m.group(2) in CHECKS):
             return {"ok": False, "error": "no such finding"}
         self.rec["dismissed"][key] = {"ts": time.time(), "note": " ".join(str(note).split())[:300],

@@ -31,6 +31,7 @@ import time
 import uuid
 from typing import Optional
 
+from .gone import drop_rows, managed, say
 from .records import scrub
 
 
@@ -243,6 +244,17 @@ class ConfigWatch(Review):
         return {"last": 0.0, "last_done": 0.0, "error": "", "told": [], "snap": {}, "changes": [],
                 "machines": {}, "summary": ""}
 
+    def drop_gone(self) -> bool:
+        """A machine this no longer compares (taken out of the inventory, or its `config` switched
+        off) takes its snapshot and its state with it: back on, its first snapshot is a baseline
+        again. What changed on it stays, as events (gone.py)."""
+        known = {m["ip"] for m in self.machines} | managed(getattr(self.a, "inv", None), "config")
+        gone = set(drop_rows(self.rec["snap"], known)) | set(drop_rows(self.rec["machines"], known))
+        if gone:
+            say(log, "configwatch", gone, "compared")
+            self._save()
+        return bool(gone)
+
     def due(self, now: float) -> bool:
         """Once a day, after the morning's update check — like the security review."""
         if not self.enabled or self.running:
@@ -319,6 +331,7 @@ class ConfigWatch(Review):
         self.rec["error"] = self.rec.get("error_model") or "" if changed else ""
         self.rec["last_done"] = time.time()
         self._prune()
+        self.drop_gone()
         self._save()
         log.info("configwatch: %d machine(s) read, %d changed, %d change(s) noted in %.0fs (%s)",
                  sum(1 for s in self.rec["machines"].values() if s.get("ok") and s.get("ts") == t0),
@@ -410,9 +423,6 @@ class ConfigWatch(Review):
         self.rec["changes"] = [c for c in self.rec["changes"] if c["ts"] >= cut]
         live = {c["id"] for c in self.rec["changes"]}
         self.rec["told"] = [k for k in self.rec.get("told") or [] if k in live]
-        known = {m["ip"] for m in self.machines}
-        for k in ("snap", "machines"):
-            self.rec[k] = {ip: v for ip, v in self.rec[k].items() if ip in known}
 
     def _logs_between(self, ip: str, since: float) -> list:
         """The log checks of this machine's log since the last snapshot: the router's for the

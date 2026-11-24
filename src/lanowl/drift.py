@@ -117,6 +117,9 @@ class Drift(FindingsReview):
         super().__init__(lanowl)
         self.at = self.at or "07:15"
 
+    def watched(self) -> set:
+        return {d.ip for d in self.a.inv.devices} | {"wan"}
+
     def anchor(self, f: dict, facts: dict) -> str:
         ip = str(f.get("ip") or "").strip()
         if ip.lower() == "wan":

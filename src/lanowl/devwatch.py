@@ -50,6 +50,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from .gone import drop_rows, say
 from .model import router_host
 from .prompts import CALL_SUMMARY
 from .records import kept_lines
@@ -792,7 +793,7 @@ class DevWatch:
         """The devices whose hour is up, one at a time; then the ports read again a minute after
         they looked slower."""
         now = time.time()
-        self._forget_removed()
+        self.drop_gone()
         for t in self.targets():
             if self._stop:
                 return
@@ -1062,12 +1063,24 @@ class DevWatch:
             sh.pop(k, None)
         return sh
 
-    def _forget_removed(self):
-        """A device taken out of the inventory takes its shapes (and its recurring events) with it."""
-        for ip, d in self.rec["dev"].items():
-            if (d.get("shapes") or d.get("events")) and self.a.inv.get(ip) is None:
-                d.pop("shapes", None)
-                d.pop("events", None)
+    def drop_gone(self) -> bool:
+        """A device taken out of the inventory takes its rows with it: what its rounds kept (the
+        log's place, what is routine, the recurring events) and the speeds its ports usually run
+        at. The main router's ports stay. The inventory is the list, not the devices read now: a
+        login missing for a moment (secrets.yaml being replaced) must not cost what took weeks to
+        learn (gone.py)."""
+        watched = {d.ip for d in self.a.inv.devices} | {router_host(self.a.cfg)}
+        gone = set(drop_rows(self.rec["dev"], watched))
+        ports = [k for k in self.rec["ports"] if k.partition("|")[0] not in watched]
+        for k in ports:
+            del self.rec["ports"][k]
+        gone |= {k.partition("|")[0] for k in ports}
+        for ip in [ip for ip in self._recheck if ip not in watched]:
+            del self._recheck[ip]
+        if gone:
+            say(log, "devwatch", gone, "watched")
+            self._save()
+        return bool(gone)
 
     def _learn(self, d: dict, batch: list, told: bool, now: float):
         """What a real verdict teaches: nothing worth telling adds one to the streak of every shape

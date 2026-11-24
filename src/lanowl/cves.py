@@ -34,6 +34,7 @@ import re
 import time
 from typing import Optional
 
+from .gone import drop_rows, managed, say
 from .report import label
 
 log = logging.getLogger("lanowl.cves")
@@ -241,6 +242,19 @@ class Cves:
         except Exception as e:
             log.warning("cves: record not saved: %s", e)
 
+    def drop_gone(self) -> bool:
+        """A machine the scan no longer matches anything on, and the update check no longer reads,
+        takes its verdicts and the packages it was judged by with it (gone.py). After
+        Updates.drop_gone: the scan's matches say which machines these are."""
+        U = self.a.updates
+        watched = set((U.rec.get("scan") or {}).get("found") or {}) | {h["ip"] for h in U.hosts} \
+            | managed(getattr(self.a, "inv", None), "updates")
+        gone = set(drop_rows(self.rec["verdicts"], watched)) | set(drop_rows(self.rec["hosts"], watched))
+        if gone:
+            say(log, "cves", gone, "judged")
+            self._save()
+        return bool(gone)
+
     # --- when ------------------------------------------------------------------------
     @property
     def running(self) -> bool:
@@ -311,6 +325,7 @@ class Cves:
                            "counts": counts, "running": False, "notes": notes[:10],
                            "model": not self.a.no_llm}
         self._prune()
+        self.drop_gone()
         self._save()
         log.info("cves: done in %.0fs — %s", time.time() - t0,
                  ", ".join(f"{n} {k}" for k, n in sorted(counts.items(), key=lambda kv: RANK.get(kv[0], 9))))

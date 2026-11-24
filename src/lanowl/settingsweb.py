@@ -7,14 +7,17 @@ login is the guard, and nothing asks the password again.
   GET  /api/settings              the forms with their values and sources, the files, the
                                   history, what waits for a restart, the secrets by name
   POST /api/settings/plan         {file, ops} -> the diff, the changes, --check's new ✗
-  POST /api/settings/save         {file, ops, base}
-  POST /api/settings/restore      {id, preview | base}
+  POST /api/settings/save         {file, ops, base, sbase?}: a change of inventory.yaml that
+                                  takes a device out takes its login, its secrets.yaml line and
+                                  its ssh host key with it (settings.py `removal`)
+  POST /api/settings/restore      {id, preview | base, wbase?}: wbase for the file saved with it
   POST /api/settings/password     {new} -> a new dashboard password (everyone out)
   POST /api/restart               Restart to apply
   GET  /api/settings/devices      inventory.yaml's devices, the kinds and what each can do,
                                   the logins by name, the devices watched in lanowl's state
   POST /api/settings/device       {ip | null, device | null, login?, preview | base + sbase,
-                                  how}: a device, and its own login (secrets.yaml)
+                                  how}: a device, and its own login (secrets.yaml); `device:
+                                  null` removes it, with what goes with it
   POST /api/settings/migrate      the devices watched in lanowl's state, into inventory.yaml
   POST /api/settings/mac          {ip}: the MAC the network gives it now, and where from
   POST /api/settings/secret       {op: login | token | remove, name, user?, how?, value?,
@@ -300,7 +303,7 @@ class SettingsRoutes:
         ops, err = _ops(body["ops"])
         if err:
             return self._j({"ok": False, "error": err}, 400)
-        p = self.s.plan(name, ops)
+        p = self.s.plan_inventory(ops) if name == "inventory" else self.s.plan(name, ops)
         p.pop("text", None)
         return self._j(p, 200 if p["ok"] else 409)
 
@@ -314,7 +317,11 @@ class SettingsRoutes:
             return self._j({"ok": False, "error": err}, 400)
         if any(tuple(o["path"][:2]) in schema.HASHES for o in ops):
             return self._j({"ok": False, "error": "the password has a button of its own"}, 400)
-        r = self.s.save(name, ops, str(body.get("base") or ""), request.remote or "")
+        if name == "inventory":      # a device that leaves takes its login and host key (settings.py)
+            r = self.s.save_inventory(ops, str(body.get("base") or ""), str(body.get("sbase") or ""),
+                                      request.remote or "")
+        else:
+            r = self.s.save(name, ops, str(body.get("base") or ""), request.remote or "")
         return self._j(r, 200 if r["ok"] else 409)
 
     async def restore(self, request):
@@ -324,7 +331,7 @@ class SettingsRoutes:
             p = self.s.restore_plan(sid)
             p.pop("text", None)
             return self._j(p, 200 if p.get("ok") else 409)
-        r = self.s.restore(sid, str(body.get("base") or ""), request.remote or "")
+        r = self.s.restore(sid, str(body.get("base") or ""), request.remote or "", str(body.get("wbase") or ""))
         r.pop("text", None)
         return self._j(r, 200 if r["ok"] else 409)
 
@@ -545,6 +552,14 @@ class SettingsRoutes:
         ops, err = self._device_ops(body, load(text) or {})
         if err:
             return self._j({"ok": False, "error": err}, 400)
+        if body.get("device") is None:        # Remove: the device, and what goes with it (settings.py)
+            if body.get("preview"):
+                p = self.s.plan_inventory(ops, text)
+                p.pop("text", None)
+                return self._j(p, 200 if p["ok"] else 409)
+            r = self.s.save_inventory(ops, str(body.get("base") or ""), str(body.get("sbase") or ""),
+                                      request.remote or "")
+            return self._j(r, 200 if r["ok"] else 409)
         if body.get("preview"):
             sp = self.s.plan("secrets", sops) if sops else None
             p = self.s.plan("inventory", ops, text, secrets_text=sp["text"] if sp and sp.get("ok") else None)
